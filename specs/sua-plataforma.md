@@ -1,4 +1,38 @@
-# Conector: Sua Plataforma de Leilão (medido com curl em 15/09/2026)
+# Conector: Sua Plataforma de Leilão
+
+> **CORREÇÃO 16/09/2026 — o contrato abaixo não reproduz mais.**
+> O `POST /ApiEngine/GetBusca/{pagina}/0/0` responde hoje **HTTP 200 com corpo
+> VAZIO** em todos os tenants testados (destak, gf, legis). Não é bloqueio: o
+> endpoint aceita a requisição e devolve nada.
+>
+> **O que funciona é `POST /ApiEngine/GetLotes/{pagina}/{qtd}`** — o mesmo que a
+> spec original havia descartado por lentidão. A lentidão foi contornada por um
+> achado novo: **a listagem vem ordenada com os lotes ATIVOS primeiro**. Medido
+> no destakleiloes (7.625 lotes no catálogo): página 1 só com aberto/aguardando,
+> página 5 já toda arrematada, página 20 toda encerrada. Parar na primeira
+> página sem nenhum ativo troca 39 requisições por tenant por 2 a 4.
+>
+> Outras divergências medidas hoje:
+> - **`Cidade`/`UF` não existem no `GetLotes`** (nem no item, nem no
+>   `GetLoteRealTime`). Só dá para extrair do título, quando o tenant usa o
+>   padrão "Casa em Diadema/SP". Quem não usa fica sem localização — lacuna
+>   declarada, não contornada.
+> - O status vem de `GetLoteRealTime[0].Lote_SubStatus_Label`, com os rótulos
+>   `Aberto para lance`, `Venda Direta`, `Aguardando início`, `Leilão
+>   arrematado`, `Leilão suspenso`, `Leilão encerrado`.
+> - `Lote` (o título) às vezes traz só o número do lote ("001") ou rótulo
+>   interno ("SIMULADOR") — descartados na entrada.
+>
+> O que a spec original acertou e continua valendo: `externalId` é POR TENANT
+> (prefixar com o host), os `ID_Categoria` não são estáveis entre tenants
+> (filtrar por rótulo), `LabelModalidade` em vez dos booleans `IsJudicial`, o
+> campo `Foto` já inclui a extensão, e a `Descricao` é onde mora a PII.
+>
+> Implementado em `src/connectors/suaplataforma.ts`.
+
+---
+
+# Levantamento original (medido com curl em 15/09/2026)
 
 Híbrido de `vlance.ts` (API JSON, sem HTML) e `soleon.ts` (`externalId` por tenant). ASP.NET atrás de Cloudflare.
 
