@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radar de Leilões — veículos em leilão no Brasil</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f6feb'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3EL%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/cartao.css">
+<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="/" aria-label="Voltar para a página inicial"><span class="dot"></span> Radar de Leilões</a>
+    <form class="searchbar" id="form">
+      <label for="q" class="sr-only">Buscar veículo por modelo</label>
+      <span class="spin" aria-hidden="true"></span>
+      <input id="q" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none" placeholder="Busque por modelo: t-cross, nivus, mercedes b 200, hb20…" autocomplete="off">
+      <button type="submit">Buscar</button>
+    </form>
+    <nav class="tabs" role="tablist" aria-label="Seções">
+      <button data-view="busca" class="on" role="tab" aria-selected="true" aria-controls="view-busca">Busca</button>
+      <button data-view="cobertura" role="tab" aria-selected="false" aria-controls="view-cobertura">Cobertura</button>
+      <button data-view="alertas" role="tab" aria-selected="false" aria-controls="view-alertas">
+        Alertas<span class="sino-badge" id="sinoBadge" hidden>0</span>
+      </button>
+    </nav>
+    <span class="ws-dot" id="wsdot"><i></i> ao vivo</span>
+  </div>
+</header>
+
+<main id="view-busca" class="layout">
+  <button class="filtros-toggle" id="filtrosToggle" aria-expanded="false" aria-controls="filtros">
+    <span>Filtros</span><span class="chev" aria-hidden="true">▾</span><span class="ativos" id="filtrosAtivos" hidden></span>
+  </button>
+  <aside id="filtros">
+    <h3>Filtros</h3>
+    <div class="f-group"><label for="assetType">Tipo de leilão</label>
+      <select id="assetType"><option value="">Todos</option><option value="veiculo">Veículo</option><option value="imovel">Imóvel</option></select>
+    </div>
+    <div class="f-group" id="grpPropertyType" hidden>
+      <label id="lblpropertyType">Tipo de imóvel</label>
+      <div class="multi" id="propertyTypeBox">
+        <button type="button" class="multi-botao" id="propertyTypeBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblpropertyType propertyTypeResumo">
+          <span id="propertyTypeResumo">Todos</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="propertyTypeLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group" id="grpVehicleType">
+      <label id="lblvehicleType">Tipo de veículo</label>
+      <div class="multi" id="vehicleTypeBox">
+        <button type="button" class="multi-botao" id="vehicleTypeBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblvehicleType vehicleTypeResumo">
+          <span id="vehicleTypeResumo">Todos</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="vehicleTypeLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group">
+      <label id="lblstatus">Situação</label>
+      <div class="multi" id="statusBox">
+        <button type="button" class="multi-botao" id="statusBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblstatus statusResumo">
+          <span id="statusResumo">Todas</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="statusLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group">
+      <label id="lbluf">Estado</label>
+      <div class="multi" id="ufBox">
+        <button type="button" class="multi-botao" id="ufBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lbluf ufResumo">
+          <span id="ufResumo">Todos</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="ufLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group" id="grpCity" hidden>
+      <label id="lblcity">Cidade</label>
+      <div class="multi" id="cityBox">
+        <button type="button" class="multi-botao" id="cityBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblcity cityResumo">
+          <span id="cityResumo">Todas</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="cityLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group">
+      <label id="lblsellerType">Origem do lote</label>
+      <div class="multi" id="sellerTypeBox">
+        <button type="button" class="multi-botao" id="sellerTypeBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblsellerType sellerTypeResumo">
+          <span id="sellerTypeResumo">Todas</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="sellerTypeLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group">
+      <label id="lblsourceId">Fonte</label>
+      <div class="multi" id="sourceIdBox">
+        <button type="button" class="multi-botao" id="sourceIdBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblsourceId sourceIdResumo">
+          <span id="sourceIdResumo">Todas</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="sourceIdLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <div class="f-group">
+      <label id="lblauctioneer">Leiloeiro</label>
+      <div class="multi" id="auctioneerBox">
+        <button type="button" class="multi-botao" id="auctioneerBtn"
+                aria-haspopup="listbox" aria-expanded="false" aria-labelledby="lblauctioneer auctioneerResumo">
+          <span id="auctioneerResumo">Todos</span><span class="chev" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-lista" id="auctioneerLista" role="listbox" aria-multiselectable="true" hidden></div>
+      </div>
+    </div>
+    <small class="f-nota">Nem toda fonte publica o leiloeiro; escolher um deixa de fora os lotes sem essa informação.</small>
+    <div class="f-group"><label id="lblPreco">Faixa de preço (R$)</label>
+      <div class="f-row"><input id="priceMin" type="number" placeholder="min" aria-label="Preço mínimo em reais"><input id="priceMax" type="number" placeholder="max" aria-label="Preço máximo em reais"></div>
+    </div>
+    <div class="f-group" id="grpAno"><label id="lblAno">Ano do modelo</label>
+      <div class="f-row"><input id="yearMin" type="number" placeholder="de" aria-label="Ano do modelo, de"><input id="yearMax" type="number" placeholder="até" aria-label="Ano do modelo, até"></div>
+    </div>
+    <div class="f-group"><label class="chk"><input type="checkbox" id="onlyWithDate"> Só com data de leilão</label></div>
+    <div class="f-group"><label class="chk"><input type="checkbox" id="onlyWithPhoto"> Só com foto</label></div>
+    <button class="btn-clear" id="clear">Limpar filtros</button>
+  </aside>
+
+  <section>
+    <div class="resultbar">
+      <div>
+        <div class="count"><b id="total">—</b> <span id="totalLabel">veículos</span></div>
+        <div class="interpreted" id="interpreted"></div>
+      </div>
+      <button class="btn-alerta" id="criarAlerta" type="button" title="Avisar quando surgir um lote novo para esta busca">
+        Criar alerta
+      </button>
+      <div class="f-group" style="margin:0;min-width:210px">
+        <label for="sort" class="sr-only">Ordenar resultados</label>
+        <select id="sort">
+          <option value="ending_soon">Encerra primeiro</option>
+          <option value="discount">Maior diferença para a avaliação</option>
+          <option value="price_asc">Menor lance</option>
+          <option value="price_desc">Maior lance</option>
+          <option value="recent">Adicionados recentemente</option>
+        </select>
+      </div>
+    </div>
+    <div class="barra-carga" id="barraCarga" aria-hidden="true"><i></i></div>
+    <div class="grid" id="grid"></div>
+    <div class="pager"><button id="prev">Anterior</button><span id="pageinfo" style="align-self:center;color:var(--fg-3)"></span><button id="next">Próxima</button></div>
+  </section>
+</main>
+
+<main id="view-alertas" class="layout" style="display:none;grid-template-columns:1fr">
+  <section>
+    <h1 class="page-head">Alertas</h1>
+    <p class="page-sub">Cada alerta guarda uma busca. Quando um lote novo entra no índice e casa com ela, você é avisado. O casamento usa o mesmo dicionário de marca e modelo da busca, então "volkswagen taos" não dispara por um "taos" solto numa descrição.</p>
+    <div id="permissaoPush"></div>
+    <h3 style="font-size:13px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px;margin-top:22px">Meus alertas</h3>
+    <div id="listaAlertas"></div>
+    <h3 style="font-size:13px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px;margin-top:26px">Lotes encontrados</h3>
+    <div id="listaHits"></div>
+  </section>
+</main>
+
+<main id="view-cobertura" class="layout" style="display:none;grid-template-columns:1fr">
+  <section>
+    <h1 class="page-head">Cobertura e saúde da coleta</h1>
+    <p class="page-sub">Cada fonte tem lacunas conhecidas. Leilão em pregão ao vivo não tem encerramento por lote, e a Copart só publica data para uma fração do estoque. Esta tela existe para a lacuna ficar visível em vez de virar campo vazio na busca.</p>
+    <div class="statgrid" id="stats"></div>
+    <h3 style="font-size:13px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px">Por fonte</h3>
+    <div class="table-wrap"><table class="report" id="bysource"></table></div>
+    <h3 style="font-size:13px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px;margin-top:26px">Últimas execuções de coleta</h3>
+    <div class="table-wrap"><table class="report" id="runs"></table></div>
+  </section>
+</main>
+
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+  <div class="scrim"></div>
+  <div class="panel" id="panel"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlgAlerta">
+  <form method="dialog" id="formAlerta">
+    <h3 id="dlgTitulo">Criar alerta</h3>
+    <p class="dlg-sub" id="dlgResumo"></p>
+    <label for="alertaLabel">Nome do alerta</label>
+    <input id="alertaLabel" required maxlength="80">
+    <fieldset>
+      <legend>Como quer ser avisado</legend>
+      <label class="chk"><input type="checkbox" id="canalSino" checked disabled> Sino aqui na plataforma</label>
+      <label class="chk"><input type="checkbox" id="canalPush"> Notificação no navegador</label>
+      <label class="chk"><input type="checkbox" id="canalEmail"> E-mail</label>
+      <input id="alertaEmail" type="email" placeholder="seu@email.com" hidden>
+    </fieldset>
+    <div class="dlg-acoes">
+      <button value="cancel" class="btn-sec">Cancelar</button>
+      <button value="ok" id="btnSalvarAlerta" class="btn-pri">Criar alerta</button>
+    </div>
+  </form>
+</dialog>
+<script src="/cartao.js"></script>
+<script src="/slug.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

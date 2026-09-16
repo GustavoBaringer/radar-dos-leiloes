@@ -1,0 +1,13 @@
+node_modules/
+
+# Segredos. O .env tem VAPID_PRIVATE, APP_SENHA e a URL do banco — o
+# .gitignore anterior só cobria .env.local e teria publicado os quatro.
+.env
+.env.*
+!.env.example
+
+# Chaves e certificados do TLS local
+certs/
+
+*.log
+.DS_Store

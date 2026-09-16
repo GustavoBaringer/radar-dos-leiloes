@@ -1,0 +1,33 @@
+/**
+ * O cartão de lote. Par visual do cartao.js: a busca e a landing usam os dois,
+ * e nenhuma das duas precisa da folha de estilo inteira da outra.
+ *
+ * As cores saem dos tokens do documento (--bg-2, --line, --fg…), então quem
+ * carrega este arquivo decide a paleta: no app vem do styles.css, na landing o
+ * landing.css remapeia os mesmos nomes para a paleta escura dela.
+ */
+.card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+.card.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{border-color:var(--live);box-shadow:0 0 0 3px rgba(163,113,247,.25)}100%{border-color:var(--line);box-shadow:none}}
+.thumb{position:relative;aspect-ratio:4/3;background:linear-gradient(135deg,var(--bg-3),var(--bg-2));overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb img.is-nopic{object-fit:contain;padding:6%;opacity:.85}
+.src{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.72);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;letter-spacing:.3px}
+.novo{position:absolute;top:8px;left:72px;background:var(--live);color:#120a1f;font-weight:700;border-radius:5px;padding:2px 7px;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase}
+.badge-doc{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.72);border-radius:6px;padding:3px 8px;font-size:11px;color:#ffcf8f;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rodape-foto{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:8px;align-items:center;pointer-events:none}
+.cred-foto{background:rgba(0,0,0,.72);border-radius:6px;padding:3px 8px;font-size:10.5px;color:#cfd9e5;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.disc{flex:0 0 auto;margin-left:auto;background:var(--ok);color:#06210c;font-weight:700;border-radius:6px;padding:3px 8px;font-size:12px}
+.card-body{padding:12px 13px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+.title{font-weight:600;line-height:1.32;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.meta{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--fg-3)}
+.bid{display:flex;align-items:baseline;gap:8px;margin-top:auto}
+.bid .v{font-size:19px;font-weight:700}
+.bid .lbl{font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.5px}
+.appraisal{font-size:12px;color:var(--fg-3);text-decoration:line-through}
+.suspect{font-size:11px;color:#ffcf8f;background:rgba(227,179,65,.12);border:1px solid rgba(227,179,65,.35);border-radius:6px;padding:2px 7px;align-self:flex-start}
+.when{display:flex;align-items:center;gap:6px;font-size:12px;padding-top:7px;border-top:1px solid var(--line);color:var(--fg-2)}
+.when.soon{color:var(--warn)}.when.hot{color:var(--hot);font-weight:600}
+.when.nodate{color:var(--fg-3);font-style:italic}

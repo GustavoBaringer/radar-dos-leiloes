@@ -1,0 +1,406 @@
+:root{
+  --bg:#0d1117; --bg-2:#151b23; --bg-3:#1c242e; --line:#263140;
+  --fg:#e7edf5; --fg-2:#b3c2d4; --fg-3:#8fa2b8;
+  --accent:#4da3ff; --accent-2:#1f6feb;
+  --ok:#3fb950; --warn:#e3b341; --hot:#f85149; --live:#a371f7;
+  --radius:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+a{color:var(--accent);text-decoration:none}
+button,input,select{font:inherit;color:inherit}
+
+header.top{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-inner{max-width:1400px;margin:0 auto;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;letter-spacing:-.2px;white-space:nowrap}
+.brand .dot{width:10px;height:10px;border-radius:3px;background:linear-gradient(135deg,var(--accent),var(--live))}
+.searchbar{flex:1;min-width:260px;display:flex;gap:8px}
+.searchbar input{flex:1;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;outline:none}
+.searchbar input:focus{border-color:var(--accent)}
+.searchbar{position:relative}
+.searchbar .spin{
+  position:absolute;right:112px;top:50%;transform:translateY(-50%);z-index:2;
+  width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:girar .7s linear infinite;display:none;pointer-events:none;
+}
+.searchbar.carregando .spin{display:block}
+@keyframes girar{to{transform:translateY(-50%) rotate(360deg)}}
+.grid.carregando{opacity:.45;transition:opacity .15s}
+.barra-carga{height:2px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:14px;display:none}
+.barra-carga.on{display:block}
+.barra-carga i{display:block;height:100%;width:35%;background:var(--accent);animation:desliza 1s ease-in-out infinite}
+@keyframes desliza{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
+@media (prefers-reduced-motion:reduce){
+  .searchbar .spin,.barra-carga i{animation:none}
+  .barra-carga i{width:100%}
+}
+.searchbar button{background:var(--accent-2);border:0;border-radius:var(--radius);padding:10px 18px;font-weight:600;cursor:pointer;color:#fff}
+.searchbar button:hover{background:var(--accent)}
+nav.tabs{display:flex;gap:4px}
+nav.tabs button{background:transparent;border:1px solid transparent;border-radius:8px;padding:7px 13px;color:var(--fg-2);cursor:pointer}
+nav.tabs button.on{background:var(--bg-3);color:var(--fg);border-color:var(--line)}
+.ws-dot{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-3)}
+.ws-dot i{width:8px;height:8px;border-radius:50%;background:var(--fg-3);display:inline-block}
+.ws-dot.on i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+
+.layout{max-width:1400px;margin:0 auto;padding:20px;display:grid;grid-template-columns:250px 1fr;gap:22px;align-items:start}
+.layout > section{min-width:0}
+aside{position:sticky;top:76px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+aside h3{margin:0 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--fg-3)}
+.f-group{margin-bottom:16px}
+.f-group label{display:block;font-size:12px;color:var(--fg-2);margin-bottom:5px}
+.f-group select,.f-group input{width:100%;background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 9px;outline:none}
+.f-row{display:flex;gap:8px}
+.f-group label.chk{display:flex;align-items:center;gap:8px;color:var(--fg-2);font-size:13px;cursor:pointer;margin-bottom:0}
+.f-group label.chk input{width:auto;flex:0 0 auto}
+.btn-clear{width:100%;background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--fg-2);cursor:pointer}
+.btn-clear:hover{border-color:var(--accent);color:var(--fg)}
+
+.resultbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.count{color:var(--fg-2)}.count b{color:var(--fg);font-size:17px}
+.interpreted{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--fg-3);min-width:0;overflow-wrap:anywhere}
+.pill{background:var(--bg-3);border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--fg-2);max-width:min(320px,60vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill.brand{border-color:#2d5b8e;color:#8fc4ff}
+.pill.model{border-color:#4a3a75;color:#c6a8ff}
+
+/* O cartão de lote vive em cartao.css: ele é usado pela busca E pela landing,
+   e a landing não pode carregar a folha inteira do app — .hero aqui é a foto
+   do drawer com altura fixa, e colidiu com o .hero da landing. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(266px,1fr));gap:16px}
+nav.tabs button:focus-visible,.pager button:focus-visible,.btn-clear:focus-visible,.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gallery img.is-nopic{object-fit:contain;background:var(--bg-3)}
+.hero .rodape-foto{left:12px;right:12px;bottom:12px}
+.hero .cred-foto{font-size:12px;padding:4px 10px}
+
+.pager{display:flex;gap:8px;justify-content:center;margin:26px 0 10px}
+.pager button{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:8px 16px;cursor:pointer;color:var(--fg-2)}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager button:not(:disabled):hover{border-color:var(--accent);color:var(--fg)}
+
+.drawer{position:fixed;inset:0;z-index:100;display:none}
+.drawer.open{display:block}
+.drawer .scrim{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+/* Metade da tela no desktop: a lista de 24 campos em coluna de 560px obrigava
+   a rolar duas telas para ver lance e data juntos. */
+.drawer .panel{position:absolute;right:0;top:0;bottom:0;width:50vw;min-width:520px;max-width:100vw;background:var(--bg);border-left:1px solid var(--line);overflow-y:auto;container-type:inline-size}
+@media (max-width:900px){.drawer .panel{width:100%;min-width:0}}
+/* O título fica fixo: rolando a ficha inteira o usuário perdia de vista qual lote está lendo. */
+.panel-top{position:sticky;top:0;z-index:2;display:flex;gap:14px;align-items:flex-start;
+  background:rgba(13,17,23,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:16px 22px 13px}
+.panel-top > div:first-child{flex:1;min-width:0}
+.panel-corpo{padding:0 22px 28px}
+.drawer h2{margin:0 0 8px;font-size:19px;line-height:1.3}
+.panel-sub{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg-2);white-space:nowrap}
+.pill.quieto{color:var(--fg-3)}
+.pill.soon{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+.pill.hot{color:var(--hot);border-color:color-mix(in srgb,var(--hot) 40%,var(--line))}
+.pill.nodate{color:var(--fg-3)}
+/* 44px de alvo de toque: o × de 32px era difícil de acertar no celular. */
+.close{flex:0 0 auto;background:var(--bg-3);border:1px solid var(--line);border-radius:9px;width:44px;height:44px;font-size:20px;cursor:pointer;color:var(--fg-2)}
+.close:hover{color:var(--fg);border-color:var(--accent)}
+
+/* O que decide a compra vem antes da ficha técnica. */
+.preco{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin:14px 0}
+.preco-lbl{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--fg-3)}
+/* clamp em vez de 30px fixo: num painel de 960px o valor parecia perdido. */
+.preco-v{font-size:clamp(26px,3.4cqi,34px);font-weight:700;letter-spacing:-.8px;line-height:1.15;margin-top:2px}
+.preco-desc{margin-top:5px;color:var(--fg-2)}
+.preco-desc b{color:var(--ok)}
+.preco-alerta{margin-top:9px;font-size:13px;color:var(--warn);border-left:3px solid var(--warn);padding-left:10px}
+.preco-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+.preco-chips span{display:flex;flex-direction:column;gap:1px;font-size:13px;min-width:92px}
+.preco-chips i{font-style:normal;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--fg-3)}
+
+.grp{margin-top:22px}
+.grp h3{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--fg-3);margin:0 0 9px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.sem-link{color:var(--fg-3);margin:14px 0 0}
+/* Metadado de coleta não compete com lance e data: fica recolhido. */
+.proc{margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+.proc summary{cursor:pointer;color:var(--fg-3);font-size:13px;list-style:revert}
+.proc summary:hover{color:var(--fg-2)}
+.proc .kv{margin-top:10px}
+.kv{display:grid;grid-template-columns:1fr;gap:9px 32px;margin:0;font-size:13.5px}
+.kv .par{display:grid;grid-template-columns:minmax(104px,150px) minmax(0,1fr);gap:16px}
+.kv dd{margin:0;overflow-wrap:anywhere}
+.kv dt{color:var(--fg-3)}
+.kv dd{margin:0}
+.hero{position:relative;margin:16px 0 8px;border-radius:10px;overflow:hidden;background:var(--bg-3);width:100%;height:clamp(230px,42vh,430px)}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero img.is-nopic{object-fit:contain;padding:8%}
+/* Fila única que rola: em grade, 18 fotos viravam três linhas de miniatura
+   entre a foto e o lance. */
+.gallery{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin:0 0 14px;scrollbar-width:thin}
+.gallery img{flex:0 0 62px;width:62px;aspect-ratio:1;object-fit:cover;border-radius:7px;cursor:pointer;border:2px solid transparent;transition:border-color .12s}
+.gallery img:hover{border-color:var(--fg-3)}
+.gallery img.on{border-color:var(--accent)}
+.hist{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:12px}
+.hist div{display:flex;justify-content:space-between;padding:7px 12px;font-size:13px;border-bottom:1px solid var(--line)}
+.hist div:last-child{border-bottom:0}
+/* No desktop o botão acompanha a coluna, não a largura inteira do painel. */
+.open-src{display:block;text-align:center;margin-top:2px;background:var(--accent-2);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600}
+
+.table-wrap{overflow-x:auto;border-radius:var(--radius);max-width:100%}
+table.report{width:100%;min-width:620px;border-collapse:collapse;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius)}
+table.report th,table.report td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+table.report th{background:var(--bg-3);color:var(--fg-2);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+table.report tr:last-child td{border-bottom:0}
+.tag-ok{color:var(--ok)}.tag-bad{color:var(--hot)}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px}
+.stat{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:15px}
+.stat .n{font-size:26px;font-weight:700}
+.stat .l{font-size:12px;color:var(--fg-3);margin-top:3px}
+.page-head{margin:0 0 6px;font-size:20px}
+.page-sub{color:var(--fg-3);margin:0 0 20px;font-size:13px;max-width:70ch}
+.empty{text-align:center;padding:60px 20px;color:var(--fg-3)}
+.skeleton{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);height:300px;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:.85}}
+/* z-index abaixo do drawer (100) não serve, senão o aviso some atrás dele;
+   mas a largura limitada impede que o aviso cubra a ficha do lote. */
+.toast{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;flex-direction:column;gap:8px;max-width:min(340px,calc(100vw - 36px));pointer-events:none}
+.toast div{background:var(--bg-3);border:1px solid var(--live);border-radius:9px;padding:10px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+
+/* No celular a lateral ocupava a primeira tela inteira: era preciso rolar
+   ~700px antes do primeiro cartão. Vira um painel recolhido por padrão. */
+.filtros-toggle{display:none}
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr}
+  aside{position:static}
+  .filtros-toggle{
+    display:flex;align-items:center;gap:8px;width:100%;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;color:var(--fg);font-weight:600;cursor:pointer;margin-bottom:12px;
+  }
+  .filtros-toggle .chev{margin-left:auto;transition:transform .18s;color:var(--fg-3)}
+  .filtros-toggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .filtros-toggle .ativos{
+    background:var(--accent-2);color:#fff;border-radius:999px;
+    font-size:11px;padding:1px 8px;font-weight:700;
+  }
+  aside[hidden]{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .filtros-toggle .chev{transition:none}
+}
+
+/* ---------- alertas ---------- */
+.btn-alerta{background:var(--bg-3);border:1px solid var(--line);border-radius:var(--radius);padding:9px 14px;color:var(--fg-2);cursor:pointer;white-space:nowrap}
+.btn-alerta:hover{border-color:var(--accent);color:var(--fg)}
+.sino-badge{display:inline-block;margin-left:6px;background:var(--hot);color:#fff;border-radius:999px;font-size:10.5px;padding:1px 6px;font-weight:700}
+/* Regra de autor com `display` explícito vence o [hidden] do user-agent: a
+   origem decide antes da especificidade. Sem esta linha o sino mostrava "0"
+   para sempre e o indicador perdia o sentido. */
+.sino-badge[hidden]{display:none}
+.alerta-item{display:flex;align-items:center;gap:10px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px}
+.alerta-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.alerta-txt b{font-size:15.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alerta-canais{font-size:12.5px;color:var(--fg-3)}
+.alerta-lotes{font-size:11.5px;color:var(--fg-3);white-space:nowrap}
+.alerta-item .ico{background:none;border:1px solid transparent;border-radius:8px;cursor:pointer;padding:6px 8px;font-size:15px;line-height:1;color:var(--fg-2)}
+.alerta-item .ico:hover{border-color:var(--line);background:var(--bg-3)}
+.alerta-item .ico:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:560px){
+  .alerta-lotes{display:none}
+}
+/* O lote encontrado usa o card da listagem; o que sobra é dizer QUAL alerta
+   disparou e quando — a lista antiga não tinha foto nem prazo. */
+.hit-novo{border-color:var(--live)}
+.hit-alerta{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:11.5px;color:var(--fg-3);padding-top:7px;border-top:1px solid var(--line)}
+.hit-termo{color:var(--live);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hit-quando{white-space:nowrap}
+.aviso{background:var(--bg-3);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:12px 15px;margin-bottom:12px;font-size:14px;color:var(--fg-2)}
+.aviso button{margin-left:10px;background:var(--accent-2);border:0;color:#fff;border-radius:7px;padding:6px 13px;cursor:pointer}
+dialog#dlgAlerta{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:440px;width:92vw}
+dialog#dlgAlerta::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{margin:0 0 6px;font-size:17px}
+.dlg-sub{font-size:13px;color:var(--fg-3);margin:0 0 16px}
+dialog label{display:block;font-size:12px;color:var(--fg-2);margin:12px 0 5px}
+dialog input[type=text],dialog input[type=email],dialog input:not([type]){width:100%;background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:9px;color:var(--fg)}
+dialog fieldset{border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:16px 0 0}
+dialog legend{font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px;padding:0 6px}
+dialog .chk{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13.5px;color:var(--fg)}
+dialog .chk input{width:auto}
+.dlg-acoes{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
+.btn-pri{background:var(--accent-2);border:0;color:#fff;border-radius:9px;padding:9px 16px;font-weight:600;cursor:pointer}
+.btn-sec{background:var(--bg-3);border:1px solid var(--line);color:var(--fg-2);border-radius:9px;padding:9px 16px;cursor:pointer}
+
+/* ---------- seleção múltipla (sem dependência externa) ---------- */
+.multi{position:relative}
+.multi-botao{width:100%;display:flex;align-items:center;gap:8px;text-align:left;
+  background:var(--bg-3);border:1px solid var(--line);border-radius:var(--radius);
+  padding:9px 11px;color:var(--fg);font-size:13.5px;cursor:pointer}
+.multi-botao:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.multi-botao .chev{margin-left:auto;color:var(--fg-3);transition:transform .15s}
+.multi-botao[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.multi-botao span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.multi-lista{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);
+  padding:6px;max-height:260px;overflow-y:auto;box-shadow:0 14px 30px rgba(0,0,0,.45)}
+.multi-lista label{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;
+  font-size:13.5px;color:var(--fg);cursor:pointer;margin:0}
+.multi-lista label:hover{background:var(--bg-3)}
+.multi-lista input{width:auto;margin:0;flex:0 0 auto}
+.multi-lista .conta{margin-left:auto;font-size:11px;color:var(--fg-3)}
+.multi-acoes{display:flex;gap:6px;padding:6px 3px 2px;border-top:1px solid var(--line);margin-top:5px}
+.multi-acoes button{flex:1;background:none;border:1px solid var(--line);border-radius:7px;
+  color:var(--fg-2);font-size:11.5px;padding:5px;cursor:pointer}
+.multi-acoes button:hover{border-color:var(--accent);color:var(--fg)}
+@media (prefers-reduced-motion:reduce){.multi-botao .chev{transition:none}}
+
+/* ---------------- landing e carrossel ---------------- */
+/* A marca virou link para a home; sem isto herdaria o azul de `a`. */
+a.brand{color:var(--fg)}
+a.brand:hover{color:var(--accent)}
+nav.tabs a{background:transparent;border:1px solid transparent;border-radius:8px;padding:7px 13px;color:var(--fg-2);text-decoration:none}
+nav.tabs a:hover{background:var(--bg-3);color:var(--fg)}
+
+.lp{max-width:1400px;margin:0 auto;padding:28px 20px 40px}
+.lp-hero{padding:22px 0 30px;border-bottom:1px solid var(--line);margin-bottom:28px}
+.lp-hero h1{font-size:30px;line-height:1.2;margin:0 0 10px;letter-spacing:-.6px}
+.lp-hero p{margin:0 0 22px;color:var(--fg-2);max-width:620px}
+.lp-cta{display:flex;gap:14px;flex-wrap:wrap}
+.cta{
+  display:flex;align-items:center;gap:14px;min-width:260px;flex:1 1 260px;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;color:var(--fg);transition:border-color .15s,transform .15s;
+}
+.cta:hover{border-color:var(--accent);transform:translateY(-2px)}
+.cta-ico{font-size:26px;line-height:1}
+.cta b{display:block;font-size:16px}
+.cta small{display:block;color:var(--fg-3);margin-top:2px}
+
+.lp-sec{margin-bottom:34px}
+.lp-sec-head{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.lp-sec-head h2{font-size:18px;margin:0;letter-spacing:-.3px;flex:1;min-width:180px}
+.lp-sec-head select{
+  background:var(--bg-2);border:1px solid var(--line);border-radius:8px;
+  padding:7px 10px;max-width:100%;
+}
+.lp-vertodos{white-space:nowrap}
+
+.carrossel{position:relative}
+.carr-trilho{
+  display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x proximity;
+  padding-bottom:6px;scrollbar-width:thin;
+}
+/* O card do carrossel é um <a>: sem isto o título herdava o azul de link e
+   virava texto de hiperlink dentro de um cartão que já é clicável inteiro. */
+.carr-item{flex:0 0 266px;scroll-snap-align:start;max-width:266px;color:var(--fg)}
+.carr-vazio{color:var(--fg-3);padding:22px 2px}
+.carr-nav{
+  position:absolute;top:38%;z-index:3;width:36px;height:36px;border-radius:50%;
+  background:rgba(13,17,23,.88);border:1px solid var(--line);color:var(--fg);
+  font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.carr-nav:hover{border-color:var(--accent)}
+.carr-nav.prev{left:-8px}
+.carr-nav.next{right:-8px}
+/* No toque a rolagem é o dedo; seta flutuando sobre o card só atrapalha. */
+@media (hover:none){.carr-nav{display:none}}
+
+.lp-rodape{border-top:1px solid var(--line);padding:20px;color:var(--fg-3);text-align:center}
+.lp-rodape p{max-width:640px;margin:0 auto}
+
+@media (max-width:640px){
+  .lp-hero h1{font-size:23px}
+  .carr-item{flex-basis:76vw;max-width:76vw}
+}
+
+.preco-desc .nota{color:var(--fg-3);font-size:12.5px}
+.preco-v.vazio{font-size:15px;font-weight:500;color:var(--fg-3);letter-spacing:0}
+
+/* Empilhado sempre: foto em cima, dados embaixo. Tentei foto de um lado e
+   dados do outro em painel largo e ficou pior — a coluna de dados vira uma
+   tira estreita e a foto fica pequena justamente onde havia espaço de sobra.
+   O que resolve o vão morto em tela larga é a LINHA, não a página: acima de
+   820px de painel cada linha carrega dois pares rótulo/valor.
+   Container query e não media query: o painel tem largura própria (50vw com
+   piso de 520px), então a janela não diz quanto espaço ele realmente tem. */
+@container (min-width:820px){
+  .kv{grid-template-columns:1fr 1fr}
+  /* Endereço e explicação de encerramento são longos: ocupam a linha inteira
+     em vez de quebrar em quatro linhas dentro de meia largura. */
+  .kv .par.largo{grid-column:1/-1}
+  .preco{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:28px}
+  .preco-lbl,.preco-v,.preco-desc,.preco-alerta{grid-column:1}
+  .preco-chips{grid-column:2;grid-row:1/span 3;margin:0;padding:0 0 0 26px;border-top:0;border-left:1px solid var(--line);flex-direction:column;gap:12px}
+}
+
+/* Título de 5 linhas no celular empurrava a foto quase para fora da tela.
+   Três linhas bastam para reconhecer o lote; o título inteiro continua no
+   atributo title e na página do leiloeiro. */
+@media (max-width:640px){
+  .drawer h2{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:17px}
+  .panel-top{padding:12px 16px 11px}
+  .panel-corpo{padding:0 16px 24px}
+}
+
+.f-nota{display:block;margin-top:5px;color:var(--fg-3);font-size:11.5px;line-height:1.35}
+
+.multi-vazio{margin:0;padding:10px 12px;color:var(--fg-3);font-size:12.5px}
+
+.report .th-nota{font-weight:400;text-transform:none;letter-spacing:0;color:var(--fg-3)}
+.report .col-nota{display:block;font-size:10.5px;color:var(--fg-3)}
+
+/* ---------------- landing de venda (SEO) ---------------- */
+.lp-eyebrow{margin:0 0 10px;color:var(--fg-3);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.lp-hero h1{font-size:clamp(26px,4.2vw,42px);max-width:22ch}
+.lp-hero .lp-sub{max-width:68ch}
+.lp-sub{font-size:16px;line-height:1.6}
+.lp-h2{font-size:22px;letter-spacing:-.3px;margin:0 0 6px}
+.lp-lead{color:var(--fg-2);max-width:70ch;margin:0 0 16px}
+
+/* Números medidos da base, não promessa de marketing: por isso ficam abaixo do CTA. */
+.lp-provas{display:flex;flex-wrap:wrap;gap:10px 34px;margin:26px 0 0;padding:0}
+.lp-provas div{min-width:104px}
+.lp-provas dt{font-size:26px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.lp-provas dd{margin:2px 0 0;color:var(--fg-3);font-size:12.5px}
+
+.lp-cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));margin-top:16px}
+.lp-card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.lp-card h3{margin:0 0 8px;font-size:15.5px;letter-spacing:-.2px}
+.lp-card p{margin:0;color:var(--fg-2);font-size:13.5px;line-height:1.6}
+
+/* Numerado porque é sequência de verdade: sem ler a fonte não há o que padronizar. */
+.lp-passos{counter-reset:p;list-style:none;margin:16px 0 0;padding:0;display:grid;gap:12px;
+           grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.lp-passos li{counter-increment:p;position:relative;padding:16px 18px 16px 52px;color:var(--fg-2);
+              background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);font-size:13.5px;line-height:1.6}
+.lp-passos li::before{content:counter(p);position:absolute;left:16px;top:15px;width:24px;height:24px;border-radius:7px;
+                      background:var(--accent-2);color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center}
+.lp-passos b{color:var(--fg)}
+
+.lp-ufs{display:flex;flex-wrap:wrap;gap:8px}
+.lp-uf{display:inline-flex;align-items:center;gap:7px;background:var(--bg-2);border:1px solid var(--line);
+       border-radius:999px;padding:7px 14px;color:var(--fg);font-size:13px}
+.lp-uf:hover{border-color:var(--accent)}
+.lp-uf b{font-variant-numeric:tabular-nums;color:var(--fg-3);font-weight:600;font-size:12px}
+
+.lp-planos{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));margin-top:16px;align-items:start}
+.lp-plano{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.lp-plano-destaque{border-color:var(--accent-2);box-shadow:0 0 0 1px var(--accent-2) inset}
+.lp-tag{margin:0 0 6px;color:var(--accent);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+.lp-plano h3{margin:0;font-size:16px}
+.lp-preco{margin:4px 0 14px;font-size:21px;font-weight:700;letter-spacing:-.4px}
+.lp-plano ul{margin:0 0 18px;padding-left:18px;color:var(--fg-2);font-size:13.5px;line-height:1.75}
+.lp-botao{display:inline-block;background:var(--accent-2);color:#fff;border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px}
+.lp-botao:hover{background:var(--accent);color:#fff}
+.lp-botao-2{background:transparent;border:1px solid var(--line);color:var(--fg)}
+.lp-botao-2:hover{background:var(--bg-3);border-color:var(--accent);color:var(--fg)}
+
+.lp-faq{display:grid;gap:8px;margin-top:14px;max-width:78ch}
+.lp-faq details{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px}
+.lp-faq summary{cursor:pointer;font-weight:600;font-size:14.5px}
+.lp-faq summary::marker{color:var(--fg-3)}
+.lp-faq p{margin:10px 0 0;color:var(--fg-2);font-size:13.5px;line-height:1.65}
+
+.lp-fim{border-top:1px solid var(--line);margin-top:8px;padding:34px 0 8px;text-align:center}
+.lp-fim h2{margin:0 0 6px;font-size:22px;letter-spacing:-.3px}
+.lp-fim p{margin:0 0 20px;color:var(--fg-2)}
+.lp-cta-fim{justify-content:center}
+
+@media (max-width:640px){
+  .lp-provas{gap:14px 24px}
+  .lp-provas dt{font-size:22px}
+}

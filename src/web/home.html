@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radar de Leilões — busca única de veículos e imóveis em leilão no Brasil</title>
+<meta name="description" content="Pesquise veículos e imóveis em leilão de 9 plataformas e 114 leiloeiros oficiais numa busca só. Lance atual, data de encerramento, desconto sobre a avaliação e link direto para o site do leiloeiro.">
+<link rel="canonical" href="__SITE__/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Radar de Leilões">
+<meta property="og:title" content="Todo leilão do Brasil numa busca só">
+<meta property="og:description" content="21.769 lotes de veículos e imóveis de 9 plataformas de leilão, com lance, prazo e link direto para o leiloeiro.">
+<meta property="og:url" content="__SITE__/">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f6feb'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3EL%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/cartao.css">
+<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebSite","@id":"__SITE__/#site","name":"Radar de Leilões","url":"__SITE__/","inLanguage":"pt-BR",
+  "potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"__SITE__/busca?q={search_term_string}"},"query-input":"required name=search_term_string"}},
+ {"@type":"Organization","@id":"__SITE__/#org","name":"Radar de Leilões","url":"__SITE__/",
+  "description":"Agregador de lotes de leilão de veículos e imóveis no Brasil."},
+ {"@type":"SoftwareApplication","name":"Radar de Leilões","applicationCategory":"BusinessApplication",
+  "operatingSystem":"Web","url":"__SITE__/","inLanguage":"pt-BR",
+  "description":"Busca unificada de veículos e imóveis em leilão, com alerta por busca salva e link direto para o leiloeiro oficial.",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"BRL","description":"Busca e filtros sem custo; alertas e API em plano pago."}},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"De onde vêm os lotes do Radar de Leilões?","acceptedAnswer":{"@type":"Answer","text":"Dos próprios sites e APIs públicas dos leiloeiros e das plataformas de leilão. Hoje são 9 fontes e 114 leiloeiros oficiais. Cada lote aponta para a página original, e o lance vale no site de origem."}},
+  {"@type":"Question","name":"O Radar cobra comissão sobre o arremate?","acceptedAnswer":{"@type":"Answer","text":"Não. O Radar não intermedeia lance nem arremate. Ele encontra o lote e leva você ao site do leiloeiro, onde o lance é dado."}},
+  {"@type":"Question","name":"Com que frequência os lances são atualizados?","acceptedAnswer":{"@type":"Answer","text":"Lotes com timer por lote são atualizados a cada poucos minutos quando estão perto do encerramento; os agendados, a cada poucas horas. O horário de encerramento mostrado é sempre o da fonte."}},
+  {"@type":"Question","name":"Dá para receber aviso quando aparecer o carro que eu procuro?","acceptedAnswer":{"@type":"Answer","text":"Sim. Você salva a busca com os filtros que quiser (modelo, estado, cidade, faixa de preço, tipo de leilão) e recebe alerta quando um lote novo casar com ela."}},
+  {"@type":"Question","name":"O desconto exibido é desconto real?","acceptedAnswer":{"@type":"Answer","text":"É a diferença entre o lance e a avaliação publicada pela própria fonte. Avaliação não é preço de venda e lance de abertura não é preço de arremate — por isso o número aparece sempre com essa ressalva."}}
+ ]}
+]}
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="/" aria-label="Início"><span class="dot"></span> Radar de Leilões</a>
+    <form class="searchbar" id="formHero" action="/busca" method="get">
+      <label for="q" class="sr-only">Buscar por modelo de veículo ou tipo de imóvel</label>
+      <input id="q" name="q" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none"
+             placeholder="Busque: t-cross, nivus, hilux, apartamento em Curitiba…">
+      <button type="submit">Buscar</button>
+    </form>
+    <nav class="tabs" aria-label="Seções">
+      <a href="/busca">Busca</a>
+      <a href="/alertas">Alertas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="lp">
+  <section class="lp-hero">
+    <p class="lp-eyebrow">Agregador de leilões · Brasil</p>
+    <h1>Todo leilão de veículo e imóvel do Brasil numa busca só</h1>
+    <p class="lp-sub">Hoje o comprador abre nove sites, cada um com busca própria, e ainda perde o lote porque não viu o prazo.
+      O Radar lê essas nove fontes, padroniza marca, modelo e localização, e devolve <b>um resultado só</b> — com lance atual,
+      prazo de encerramento e link direto para o site do leiloeiro.</p>
+    <div class="lp-cta">
+      <a class="cta cta-veiculo" href="/busca?tipo=veiculo">
+        <span class="cta-ico" aria-hidden="true">🚗</span>
+        <span><b>Buscar veículos</b><small id="ctaVeiculos">carros, motos, picapes, caminhões, máquinas</small></span>
+      </a>
+      <a class="cta cta-imovel" href="/busca?tipo=imovel">
+        <span class="cta-ico" aria-hidden="true">🏠</span>
+        <span><b>Buscar imóveis</b><small id="ctaImoveis">casas, apartamentos, terrenos, comerciais</small></span>
+      </a>
+    </div>
+    <dl class="lp-provas">
+      <div><dt id="heroLotes">—</dt><dd>lotes no índice</dd></div>
+      <div><dt id="heroFontes">—</dt><dd>plataformas lidas</dd></div>
+      <div><dt id="heroLeiloeiros">—</dt><dd>leiloeiros oficiais</dd></div>
+      <div><dt id="heroUfs">—</dt><dd>estados cobertos</dd></div>
+    </dl>
+  </section>
+
+  <section class="lp-sec">
+    <div class="lp-sec-head">
+      <h2>Últimos lotes mapeados</h2>
+      <a class="lp-vertodos" href="/busca?sort=recent">Ver todos →</a>
+    </div>
+    <div class="carrossel" data-carrossel>
+      <button class="carr-nav prev" type="button" aria-label="Anterior" hidden>‹</button>
+      <div class="carr-trilho" id="trilhoRecentes"></div>
+      <button class="carr-nav next" type="button" aria-label="Próximo" hidden>›</button>
+    </div>
+  </section>
+
+  <section class="lp-sec" id="recursos">
+    <h2 class="lp-h2">O que o Radar resolve</h2>
+    <div class="lp-cards">
+      <article class="lp-card">
+        <h3>Busca que entende o modelo</h3>
+        <p>“t-cross”, “T CROSS” e “tcross” são a mesma coisa aqui. Nas fontes, não são: a mesma consulta devolve
+          zero num site e cinco no outro. O Radar normaliza marca, modelo e ano antes de indexar.</p>
+      </article>
+      <article class="lp-card">
+        <h3>Alerta por busca salva</h3>
+        <p>Salve “Hilux 4x4 no PR até R$ 120 mil” e receba aviso quando um lote novo casar. É o que separa
+          achar o lote de achar o lote <em>a tempo</em>.</p>
+      </article>
+      <article class="lp-card">
+        <h3>Prazo que não mente</h3>
+        <p>Leilão tem três modelos de encerramento: timer por lote, pregão em horário marcado e encerramento
+          sequencial. Mostrar contagem regressiva nos três seria mentira — o Radar mostra o que cada fonte de fato garante.</p>
+      </article>
+      <article class="lp-card">
+        <h3>Desconto sobre a avaliação</h3>
+        <p>Quando a fonte publica a avaliação, o Radar calcula a diferença para o lance e sinaliza o lote —
+          sempre com a ressalva de que avaliação não é preço de venda.</p>
+      </article>
+      <article class="lp-card">
+        <h3>Filtro até a cidade</h3>
+        <p>Estado, cidade, tipo de bem, tipo de veículo, tipo de imóvel, leiloeiro, tipo de leilão, faixa de preço
+          e de ano. E a URL carrega os filtros: dá para mandar a busca pronta para alguém.</p>
+      </article>
+      <article class="lp-card">
+        <h3>Link direto para o leiloeiro</h3>
+        <p>O Radar não intermedeia lance. Cada lote leva à página original, no site de quem está leiloando,
+          com o crédito da foto para o leiloeiro que a publicou.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="lp-sec">
+    <h2 class="lp-h2">Como funciona</h2>
+    <ol class="lp-passos">
+      <li><b>Nós lemos as fontes.</b> Nove plataformas de leilão, por API pública ou pela página do próprio leiloeiro, em ciclo contínuo.</li>
+      <li><b>Padronizamos o dado.</b> Marca, modelo, ano, cor, combustível, cidade e tipo do bem entram no índice num formato só. Placa, chassi e RENAVAM são mascarados na entrada.</li>
+      <li><b>Você busca e é avisado.</b> Uma busca cobre tudo; a busca salva vira alerta; o lote leva ao leiloeiro.</li>
+    </ol>
+  </section>
+
+  <section class="lp-sec">
+    <div class="lp-sec-head">
+      <h2>Lotes por leiloeiro oficial</h2>
+      <label for="selLeiloeiro" class="sr-only">Escolher leiloeiro</label>
+      <select id="selLeiloeiro"></select>
+    </div>
+    <div class="carrossel" data-carrossel>
+      <button class="carr-nav prev" type="button" aria-label="Anterior" hidden>‹</button>
+      <div class="carr-trilho" id="trilhoLeiloeiro"></div>
+      <button class="carr-nav next" type="button" aria-label="Próximo" hidden>›</button>
+    </div>
+  </section>
+
+  <section class="lp-sec" id="cobertura">
+    <h2 class="lp-h2">Cobertura por estado</h2>
+    <p class="lp-lead">Leilão é um mercado local: o pátio, o cartório e a vistoria ficam perto de você.
+      Estes são os estados com mais lotes no índice agora.</p>
+    <nav class="lp-ufs" id="ufs" aria-label="Lotes por estado"></nav>
+  </section>
+
+  <section class="lp-sec" id="planos">
+    <h2 class="lp-h2">Planos</h2>
+    <div class="lp-planos">
+      <article class="lp-plano">
+        <h3>Busca</h3>
+        <p class="lp-preco">Grátis</p>
+        <ul>
+          <li>Busca e filtros completos</li>
+          <li>Todos os lotes do índice</li>
+          <li>Link direto para o leiloeiro</li>
+        </ul>
+        <a class="lp-botao lp-botao-2" href="/busca">Começar a buscar</a>
+      </article>
+      <article class="lp-plano lp-plano-destaque">
+        <p class="lp-tag">Para quem arremata</p>
+        <h3>Profissional</h3>
+        <p class="lp-preco">sob consulta</p>
+        <ul>
+          <li>Tudo do plano Busca</li>
+          <li>Alertas por busca salva, sem limite</li>
+          <li>Aviso de encerramento próximo</li>
+          <li>Histórico do lote e do preço</li>
+        </ul>
+        <a class="lp-botao" href="/alertas">Ver alertas</a>
+      </article>
+      <article class="lp-plano">
+        <h3>API</h3>
+        <p class="lp-preco">sob consulta</p>
+        <ul>
+          <li>Índice completo por REST</li>
+          <li>Campos padronizados e estáveis</li>
+          <li>Para revenda, seguradora e banco</li>
+        </ul>
+        <a class="lp-botao lp-botao-2" href="#contato">Falar com a gente</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="lp-sec" id="faq">
+    <h2 class="lp-h2">Perguntas frequentes</h2>
+    <div class="lp-faq">
+      <details><summary>De onde vêm os lotes?</summary>
+        <p>Dos próprios sites e APIs públicas dos leiloeiros e das plataformas. Hoje são 9 fontes e 114 leiloeiros
+          oficiais. Cada lote aponta para a página original, e o lance vale no site de origem.</p></details>
+      <details><summary>O Radar cobra comissão sobre o arremate?</summary>
+        <p>Não. O Radar não intermedeia lance nem arremate. Ele encontra o lote e leva você ao site do leiloeiro.</p></details>
+      <details><summary>Com que frequência os lances são atualizados?</summary>
+        <p>Lotes com timer por lote são atualizados a cada poucos minutos quando estão perto do encerramento;
+          os agendados, a cada poucas horas. O horário mostrado é sempre o da fonte.</p></details>
+      <details><summary>Dá para receber aviso quando aparecer o que eu procuro?</summary>
+        <p>Sim. Você salva a busca com os filtros que quiser e recebe alerta quando um lote novo casar com ela.</p></details>
+      <details><summary>O desconto exibido é desconto real?</summary>
+        <p>É a diferença entre o lance e a avaliação publicada pela fonte. Avaliação não é preço de venda e lance
+          de abertura não é preço de arremate — por isso o número aparece sempre com essa ressalva.</p></details>
+    </div>
+  </section>
+
+  <section class="lp-fim" id="contato">
+    <h2>Comece pela busca que você faria hoje</h2>
+    <p>Se o lote existir em qualquer uma das nove fontes, ele aparece.</p>
+    <div class="lp-cta lp-cta-fim">
+      <a class="lp-botao" href="/busca?tipo=veiculo">Ver veículos</a>
+      <a class="lp-botao lp-botao-2" href="/busca?tipo=imovel">Ver imóveis</a>
+    </div>
+  </section>
+</main>
+
+<footer class="lp-rodape">
+  <p>Os dados vêm dos próprios sites dos leiloeiros. O lance e o encerramento valem no site de origem — sempre confira lá antes de dar lance.
+     O Radar de Leilões não é leiloeiro e não intermedeia arremate.</p>
+</footer>
+
+<script src="/cartao.js"></script>
+<script src="/slug.js"></script>
+<script src="/home.js"></script>
+</body>
+</html>

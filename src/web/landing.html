@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radar de Leilões — todo leilão do Brasil numa busca só</title>
+<meta name="description" content="Busque veículos e imóveis em leilões oficiais do Brasil numa busca só. 9 plataformas, 114 leiloeiros e 27 estados, com lance, prazo de encerramento e link direto para o leiloeiro.">
+<link rel="canonical" href="__SITE__/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#05070f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Radar de Leilões">
+<meta property="og:title" content="Todo leilão do Brasil numa busca só">
+<meta property="og:description" content="Veículos e imóveis de 9 plataformas de leilão, com lance, prazo e link direto para o leiloeiro.">
+<meta property="og:url" content="__SITE__/">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6bff'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2322d3ee'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/cartao.css">
+<link rel="stylesheet" href="/landing.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebSite","@id":"__SITE__/#site","name":"Radar de Leilões","url":"__SITE__/","inLanguage":"pt-BR",
+  "potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"__SITE__/busca?q={search_term_string}"},"query-input":"required name=search_term_string"}},
+ {"@type":"Organization","@id":"__SITE__/#org","name":"Radar de Leilões","url":"__SITE__/",
+  "description":"Agregador de lotes de leilão de veículos e imóveis no Brasil. Não é leiloeiro e não intermedeia arremate."},
+ {"@type":"SoftwareApplication","name":"Radar de Leilões","applicationCategory":"BusinessApplication",
+  "operatingSystem":"Web","url":"__SITE__/","inLanguage":"pt-BR",
+  "description":"Busca unificada de veículos e imóveis em leilão, com alerta por busca salva e link direto para o leiloeiro oficial.",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"BRL","description":"Busca e filtros sem custo; alertas e API em plano pago."}},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"De onde vêm os lotes?","acceptedAnswer":{"@type":"Answer","text":"De nove plataformas de leilão e das páginas dos próprios leiloeiros, por API pública ou pela página do leiloeiro, em ciclo contínuo. Marca, modelo, ano e localização são padronizados antes de entrar no índice."}},
+  {"@type":"Question","name":"O Radar cobra comissão sobre o arremate?","acceptedAnswer":{"@type":"Answer","text":"Não. O Radar não intermedeia lance nem recebe pagamento: cada lote leva para a página original do leiloeiro, onde a arrematação acontece."}},
+  {"@type":"Question","name":"Com que frequência os lances são atualizados?","acceptedAnswer":{"@type":"Answer","text":"Lotes com timer por lote são reconsultados a cada poucos minutos quando estão perto do encerramento; os agendados, a cada poucas horas. O horário mostrado é sempre o da fonte."}},
+  {"@type":"Question","name":"Dá para receber aviso quando aparecer o que eu procuro?","acceptedAnswer":{"@type":"Answer","text":"Sim. Você salva a busca com os filtros que quiser e recebe alerta na plataforma e por notificação do navegador quando um lote novo casar com ela."}},
+  {"@type":"Question","name":"O desconto exibido é desconto real?","acceptedAnswer":{"@type":"Answer","text":"É a diferença entre o lance e a avaliação publicada pela própria fonte. Avaliação não é preço de venda e lance de abertura não é preço de arremate — o número é sinal de partida para a sua análise, não promessa."}},
+  {"@type":"Question","name":"Os meus dados e os do lote ficam expostos?","acceptedAnswer":{"@type":"Answer","text":"Placa, chassi, RENAVAM e número de motor são mascarados na entrada do índice, antes de qualquer indexação, mesmo quando a fonte publica em claro."}},
+  {"@type":"Question","name":"Preciso pagar para buscar?","acceptedAnswer":{"@type":"Answer","text":"Não. A busca e os filtros são gratuitos. Os alertas por busca salva e o acesso por API são os planos pagos."}}
+ ]}
+]}
+</script>
+</head>
+<body>
+
+<header class="topo">
+  <div class="faixa topo-inner">
+    <a class="logo" href="#topo">
+      <span class="marca-radar"><i class="malha"></i><span class="cone varre"></span><span class="ponto"></span></span>
+      Radar de Leilões
+    </a>
+    <nav aria-label="Seções">
+      <a href="#lotes">Lotes</a>
+      <a href="#categorias">Categorias</a>
+      <a href="#leiloeiros">Leiloeiros</a>
+      <a href="#confianca">Como funciona</a>
+      <a href="#planos">Planos</a>
+    </nav>
+    <div class="topo-acoes">
+      <a class="link-quieto" href="/login">Entrar</a>
+      <a class="btn" href="#espera">Entrar na lista <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <button class="abre-menu" type="button" id="btnMenu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menuMovel">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="menu-movel" id="menuMovel" data-aberto="0" aria-label="Seções">
+    <a href="#lotes">Lotes</a>
+    <a href="#categorias">Categorias</a>
+    <a href="#leiloeiros">Leiloeiros</a>
+    <a href="#confianca">Como funciona</a>
+    <a href="#planos">Planos</a>
+    <a href="/login">Entrar</a>
+  </nav>
+</header>
+
+<main>
+<section class="hero" id="topo">
+  <div class="malha"></div>
+  <div class="faixa hero-grade">
+    <div>
+      <p class="selo selo-verify sobe" style="--atraso:40ms">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+        <span><b id="seloLeiloeiros">114</b> leiloeiros oficiais identificados nos lotes</span>
+      </p>
+
+      <h1 class="sobe" style="--atraso:120ms">Todo leilão do Brasil <span>numa busca só.</span></h1>
+
+      <p class="hero-sub sobe" style="--atraso:200ms">
+        Veículos e imóveis de <b id="heroFontes">9</b> plataformas de leilão, com lance, data de
+        encerramento e link direto para o leiloeiro. Sem taxa para procurar e sem comissão sobre o arremate.
+      </p>
+
+      <div class="busca-caixa sobe" style="--atraso:280ms">
+        <form class="busca-linha" id="formBusca" action="/busca" method="get">
+          <label class="sr-only" for="q">Buscar lote</label>
+          <div class="busca-campo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="q" name="q" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none"
+                   placeholder="Busque: t-cross, hilux, apartamento, trator...">
+          </div>
+          <button class="btn btn-g" type="submit">Buscar lotes</button>
+        </form>
+        <div class="chips" id="chips" role="group" aria-label="Filtrar por categoria"></div>
+      </div>
+
+      <div class="hero-provas sobe" style="--atraso:340ms">
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--verify)" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/></svg> Placa e chassi mascarados na entrada</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--signal)" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 004 0"/></svg> Alerta quando um lote novo casa com a sua busca</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--brand-bright)" aria-hidden="true"><path d="M14 4l6 6M3 21l3-1 11-11-2-2L4 18z"/></svg> <b id="heroLotes">—</b> lotes indexados</span>
+      </div>
+    </div>
+
+    <aside class="painel sobe" style="--atraso:160ms" aria-labelledby="painelTitulo">
+      <span class="brilho halo"></span>
+      <div class="painel-topo">
+        <span class="olho" id="painelTitulo"><span class="bolha pulso"></span> Encerrando agora</span>
+        <span class="mono" style="font-size:11px;color:var(--ink-soft)" id="painelJanela">—</span>
+      </div>
+
+      <div class="painel-destaque">
+        <p class="rot">Lote mais próximo do encerramento</p>
+        <p class="val" id="painelValor">—</p>
+        <p class="nome" id="painelNome">carregando…</p>
+        <p class="onde" id="painelOnde"></p>
+      </div>
+
+      <div class="barras">
+        <div class="barras-rot">
+          <span>Encerramentos por hora</span>
+          <b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg> <span id="barrasNota">próximas 12h</span></b>
+        </div>
+        <div class="barras-trilho" id="barras" role="img" aria-label="Distribuição de encerramentos nas próximas 12 horas"></div>
+      </div>
+
+      <ul class="feed" id="feed"></ul>
+
+      <div class="painel-rodape">
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--signal)" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 004 0"/></svg> Alerta por busca salva</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--verify)" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/></svg> Dado pessoal mascarado</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--brand-bright)" aria-hidden="true"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg> Link direto à origem</span>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<section class="faixa">
+  <dl class="numeros" id="numeros"></dl>
+</section>
+
+<section class="faixa sec" id="categorias">
+  <div class="sec-cab">
+    <span class="olho"><span class="bolha"></span> Categorias</span>
+    <h2>Filtre por categoria e vá direto ao lote</h2>
+    <p>Cada categoria mostra quantos lotes estão abertos agora na base. O filtro vale para a busca
+      inteira, incluindo os alertas que você criar. Judiciais cruza com as outras: é a natureza do
+      leilão, não o tipo do bem.</p>
+  </div>
+  <div class="cats" id="cats"></div>
+</section>
+
+<section class="faixa sec" id="lotes">
+  <div class="sec-cab-linha">
+    <div class="sec-cab">
+      <span class="olho"><span class="bolha pulso"></span> Atualizado agora</span>
+      <h2>Últimos lotes mapeados</h2>
+      <p>Lotes reais do índice, com a foto publicada pelo leiloeiro e o crédito de quem publicou.</p>
+    </div>
+    <a class="btn btn-2" href="/busca?sort=recent">Ver todos os lotes</a>
+  </div>
+  <div class="cartoes" id="lotesGrade" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))"></div>
+</section>
+
+<section class="faixa sec" id="confianca">
+  <div class="sec-cab">
+    <span class="selo selo-verify">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/></svg>
+      O que o Radar faz, e o que não faz
+    </span>
+    <h2>Dar lance com informação, não com fé</h2>
+    <p>Arrematar em leilão é uma compra como qualquer outra — desde que você saiba o que está
+      comprando e de quem. Abaixo está só o que o sistema faz hoje. O que ainda não existe não
+      aparece aqui.</p>
+  </div>
+  <div class="cartoes" id="resolve"></div>
+</section>
+
+<section class="faixa sec">
+  <div class="sec-cab">
+    <span class="olho"><span class="bolha"></span> Como funciona</span>
+    <h2>Da fonte até o seu alerta</h2>
+  </div>
+  <ol class="passos">
+    <li><b>Nós lemos as fontes</b>Nove plataformas de leilão, por API pública ou pela página do próprio leiloeiro, em ciclo contínuo.</li>
+    <li><b>Padronizamos o dado</b>Marca, modelo, ano, cor, combustível, cidade e tipo do bem entram no índice num formato só. Placa, chassi, RENAVAM e número de motor são mascarados na entrada.</li>
+    <li><b>Você busca e é avisado</b>Uma busca cobre tudo; a busca salva vira alerta; o lote leva à página original do leiloeiro.</li>
+  </ol>
+</section>
+
+<section class="faixa sec" id="leiloeiros">
+  <div class="sec-cab-linha">
+    <div class="sec-cab">
+      <span class="olho"><span class="bolha"></span> Leiloeiros</span>
+      <h2>Leiloeiros oficiais mapeados no índice</h2>
+      <p>Estes são os nomes que as próprias fontes publicam nos lotes, com o volume que cada um tem
+        aberto agora. Quando a fonte publica a matrícula na junta, ela aparece na página do lote.</p>
+    </div>
+  </div>
+  <div class="leiloeiros" id="leiloeirosGrade"></div>
+</section>
+
+<section class="faixa sec" id="cobertura">
+  <div class="sec-cab">
+    <span class="olho"><span class="bolha"></span> Cobertura</span>
+    <h2>Leilão é mercado local</h2>
+    <p>O pátio, o cartório e a vistoria ficam perto de você. Estes são os estados com lote aberto no índice agora.</p>
+  </div>
+  <nav class="ufs" id="ufs" aria-label="Lotes por estado"></nav>
+</section>
+
+<section class="faixa sec" id="planos">
+  <div class="sec-cab">
+    <span class="olho"><span class="bolha"></span> Planos</span>
+    <h2>Buscar é grátis. Ser avisado é o produto.</h2>
+  </div>
+  <div class="planos">
+    <article class="plano">
+      <h3>Busca</h3>
+      <p class="preco">Grátis</p>
+      <p class="nota">para começar hoje</p>
+      <ul>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Busca e filtros completos</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Todos os lotes do índice</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Link direto para o leiloeiro</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Filtros compartilháveis por URL</li>
+      </ul>
+      <a class="btn btn-2" href="/busca">Começar a buscar</a>
+    </article>
+    <article class="plano plano-destaque">
+      <span class="selo selo-brand">Para quem arremata</span>
+      <h3 style="margin-top:14px">Profissional</h3>
+      <p class="preco">Sob consulta</p>
+      <p class="nota">cobrado por assento</p>
+      <ul>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Tudo do plano Busca</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Alertas por busca salva, sem limite</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Aviso de encerramento próximo</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Histórico do lote e do preço</li>
+      </ul>
+      <a class="btn" href="#espera">Entrar na lista</a>
+    </article>
+    <article class="plano">
+      <h3>API</h3>
+      <p class="preco">Sob consulta</p>
+      <p class="nota">índice por REST</p>
+      <ul>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Índice completo por REST</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Campos padronizados e estáveis</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Para revenda, seguradora e banco</li>
+      </ul>
+      <a class="btn btn-2" href="#espera">Falar com a gente</a>
+    </article>
+  </div>
+</section>
+
+<section class="faixa sec" id="espera">
+  <div class="cadastro">
+    <span class="brilho halo"></span>
+    <div>
+      <span class="selo selo-signal">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>
+        Ainda em acesso restrito
+      </span>
+      <h2>Entre na lista e seja avisado quando as contas abrirem</h2>
+      <p style="margin-top:12px;max-width:34rem;color:var(--ink-soft);line-height:1.65">
+        O índice já roda com <b id="esperaLotes">—</b> lotes, mas o cadastro aberto ainda não existe.
+        Deixe seu e-mail e a gente avisa quando abrir — primeiro para quem estiver na lista.
+      </p>
+      <ul class="plano" style="border:0;background:transparent;padding:0;margin-top:22px">
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Um e-mail quando abrir. Não mandamos newsletter.</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Sem cartão de crédito e sem compromisso.</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Você pode pedir a remoção a qualquer momento.</li>
+      </ul>
+    </div>
+
+    <div>
+      <form id="formEspera" novalidate>
+        <label class="campo" for="espNome"><span>Nome (opcional)</span>
+          <input id="espNome" name="nome" autocomplete="name" maxlength="120"></label>
+        <label class="campo" for="espEmail"><span>E-mail</span>
+          <input id="espEmail" name="email" type="email" inputmode="email" autocomplete="email" required maxlength="160" placeholder="voce@empresa.com.br"></label>
+        <label class="campo" for="espInteresse"><span>O que você procura</span>
+          <select id="espInteresse" name="interesse">
+            <option value="veiculos">Veículos</option>
+            <option value="imoveis">Imóveis</option>
+            <option value="ambos">Os dois</option>
+            <option value="api">Acesso por API</option>
+          </select></label>
+        <button class="btn btn-g" type="submit" style="width:100%" id="btnEspera">Entrar na lista de espera</button>
+        <p class="lgpd" id="textoConsentimento">
+          Ao enviar, você concorda que o Radar de Leilões guarde seu e-mail com a única finalidade de
+          avisar quando o cadastro abrir. Não compartilhamos com terceiros e não enviamos newsletter.
+          Para sair da lista, responda o aviso ou escreva para o contato do rodapé.
+        </p>
+        <div id="avisoEspera" hidden></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="faixa sec" id="faq">
+  <div class="sec-cab">
+    <span class="olho"><span class="bolha"></span> Dúvidas</span>
+    <h2>Perguntas frequentes</h2>
+  </div>
+  <div class="faq">
+    <details><summary>De onde vêm os lotes?</summary>
+      <p>De nove plataformas de leilão e das páginas dos próprios leiloeiros, por API pública ou pela
+        página do leiloeiro, em ciclo contínuo. Marca, modelo, ano e localização são padronizados
+        antes de entrar no índice.</p></details>
+    <details><summary>O Radar cobra comissão sobre o arremate?</summary>
+      <p>Não. O Radar não intermedeia lance nem recebe pagamento: cada lote leva para a página
+        original do leiloeiro, onde a arrematação acontece. Você paga a comissão do leiloeiro, não a nossa.</p></details>
+    <details><summary>Com que frequência os lances são atualizados?</summary>
+      <p>Lotes com timer por lote são reconsultados a cada poucos minutos quando estão perto do
+        encerramento; os agendados, a cada poucas horas. O horário mostrado é sempre o da fonte, e
+        leilão tem três modelos de encerramento — por lote, pregão em horário marcado e sequencial.
+        Só mostramos contagem regressiva onde a fonte de fato garante o prazo.</p></details>
+    <details><summary>Dá para receber aviso quando aparecer o que eu procuro?</summary>
+      <p>Sim. Você salva a busca com os filtros que quiser e recebe alerta na plataforma e por
+        notificação do navegador quando um lote novo casar com ela.</p></details>
+    <details><summary>O desconto exibido é desconto real?</summary>
+      <p>É a diferença entre o lance e a avaliação publicada pela própria fonte. Avaliação não é
+        preço de venda e lance de abertura não é preço de arremate — o número é sinal de partida
+        para a sua análise, não promessa.</p></details>
+    <details><summary>Os dados do lote ficam expostos?</summary>
+      <p>Placa, chassi, RENAVAM e número de motor são mascarados na entrada do índice, antes de
+        qualquer indexação — inclusive quando a fonte publica em claro, o que acontece.</p></details>
+    <details><summary>Preciso pagar para buscar?</summary>
+      <p>Não. A busca e os filtros são gratuitos. Os alertas por busca salva e o acesso por API são
+        os planos pagos.</p></details>
+  </div>
+</section>
+</main>
+
+<footer class="rodape">
+  <div class="faixa rodape-grade">
+    <div>
+      <a class="logo" href="#topo" style="display:flex;align-items:center;gap:10px;font-family:var(--fonte-display);font-weight:600">
+        <span class="marca-radar"><i class="malha"></i><span class="cone"></span><span class="ponto"></span></span>
+        Radar de Leilões
+      </a>
+      <p style="margin:14px 0 0;max-width:30ch;font-size:13px;line-height:1.65;color:var(--ink-soft)">
+        Agregador de lotes de leilão de veículos e imóveis no Brasil.
+      </p>
+    </div>
+    <div>
+      <h4>Buscar</h4>
+      <ul>
+        <li><a href="/busca?tipo=veiculo">Veículos</a></li>
+        <li><a href="/busca?tipo=imovel">Imóveis</a></li>
+        <li><a href="/busca?sort=recent">Últimos mapeados</a></li>
+        <li><a href="/home">Página inicial do app</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Produto</h4>
+      <ul>
+        <li><a href="#categorias">Categorias</a></li>
+        <li><a href="#leiloeiros">Leiloeiros</a></li>
+        <li><a href="#planos">Planos</a></li>
+        <li><a href="#faq">Perguntas frequentes</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Acesso</h4>
+      <ul>
+        <li><a href="/login">Entrar</a></li>
+        <li><a href="#espera">Lista de espera</a></li>
+        <li><a href="/sitemap.xml">Sitemap</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="faixa rodape-fim">
+    <p style="margin:0">
+      Os dados vêm dos próprios sites dos leiloeiros e das plataformas de leilão. O lance e o
+      encerramento valem no site de origem — confira lá antes de dar lance. O Radar de Leilões não é
+      leiloeiro, não intermedeia arremate e não recebe pagamento de arrematação.
+    </p>
+  </div>
+</footer>
+
+<script src="/cartao.js"></script>
+<script src="/slug.js"></script>
+<script src="/landing.js"></script>
+</body>
+</html>
