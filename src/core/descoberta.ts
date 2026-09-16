@@ -17,11 +17,41 @@ const GRATUITOS = new Set([
   'uol.com.br', 'terra.com.br', 'ig.com.br', 'live.com', 'icloud.com', 'globo.com', 'me.com',
 ]);
 
+/**
+ * Normaliza o domínio que a FENAJU publica.
+ *
+ * MEDIDO numa amostra de ~500 leiloeiros: o campo `dominio` vem sujo em 8 formas
+ * distintas, e só DUAS são domínio recuperável —
+ * `'https://.rocketleiloes.com.br">'` (ponto solto depois do esquema e lixo de HTML
+ * no fim) e `'https://www.vipleiloes.com.br\nE-mail: robertojpinhojr@gmail.com'`
+ * (o e-mail colado depois de uma quebra de linha). As outras seis são e-mail no
+ * campo errado ou lixo (`'comercial:'`, `'000000000000000000000000'`) e continuam
+ * sendo descartadas de propósito.
+ *
+ * A quebra de linha é tratada ANTES de qualquer outra coisa: juntar as linhas
+ * primeiro cola o e-mail no domínio e o `@` passa a reprovar um valor que era bom.
+ */
 function host(v?: string | null): string | null {
   if (!v) return null;
-  let s = String(v).trim().toLowerCase();
+  // Primeiro token: o resto costuma ser rótulo humano ("E-mail: ...", "Tel: ...").
+  let s = String(v).trim().toLowerCase().split(/[\s\n\r]+/)[0];
+  if (!s) return null;
+  s = s
+    .replace(/&nbsp;|&amp;/g, '')
+    // esquema repetido: 'http://http://'
+    .replace(/^(?:https?:\/\/)+/, '')
+    // ponto solto logo depois do esquema
+    .replace(/^\.+/, '');
+  // Dois domínios no mesmo campo: fica o primeiro, que a fonte trata como principal.
+  s = s.split(/[,;]/)[0];
   if (!s || s.includes('@')) return null;
-  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(':')[0];
+  s = s
+    .replace(/^www\./, '')
+    .split('/')[0]
+    .split(':')[0]
+    // lixo de HTML que sobra quando o valor foi copiado de dentro de um atributo
+    .replace(/["'>»<]+$/g, '')
+    .replace(/\.+$/, '');
   return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s) ? s : null;
 }
 
@@ -57,9 +87,13 @@ export async function descobrirFenaju(): Promise<ResultadoFenaju> {
 
   for (const l of todos) {
     const declarado = host(l.dominio);
-    const doEmail = declarado ? null : hostDoEmail(l.email);
-    const domain = declarado ?? doEmail;
     const domLeilao = host(l.dominio_url);
+    const doEmail = declarado ?? domLeilao ? null : hostDoEmail(l.email);
+    // `dominio_url` (o `.leilao.br` da federação) era lido e nunca usado: 12
+    // leiloeiros com domínio no próprio registro entravam como "sem domínio".
+    // Fica atrás do declarado porque a medição mostrou que TODOS os 12 `.leilao.br`
+    // publicados falham em DNS — serve como último recurso, não como preferência.
+    const domain = declarado ?? domLeilao ?? doEmail;
     if (domLeilao) comLeilaoBr++;
     const uf = String(l.juntaUF ?? '').toUpperCase().slice(0, 2) || null;
 
@@ -74,7 +108,7 @@ export async function descobrirFenaju(): Promise<ResultadoFenaju> {
          associado=EXCLUDED.associado, nivel=EXCLUDED.nivel, dominio_leilao=EXCLUDED.dominio_leilao,
          collected_at=now()`,
       [String(l.id), l.nome ?? '', l.matricula ?? null, l.juntaSigla ?? null, uf, l.situacao ?? null,
-        domain, declarado ? 'declarado' : doEmail ? 'email' : null,
+        domain, declarado ? 'declarado' : domLeilao ? 'dominio_url' : doEmail ? 'email' : null,
         l.anoPosse ?? null, l.credenciamento ?? null, l.isAssociado ?? null, l.nivel ?? null, domLeilao],
     );
 

@@ -10,8 +10,9 @@ import { vlance } from './vlance.js';
 import { leilaopro } from './leilaopro.js';
 import { suaplataforma } from './suaplataforma.js';
 import { suporteleiloes } from './suporteleiloes.js';
+import { bomvalor } from './bomvalor.js';
 
-export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes];
+export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor];
 
 export function getConnector(id: string): Connector | undefined {
   return connectors.find((c) => c.def.id === id);
