@@ -29,5 +29,38 @@ services:
       timeout: 3s
       retries: 20
 
+  # Keycloak: provedor de identidade OIDC.
+  #
+  # O realm entra por import de arquivo (infra/keycloak/realm-radar.json) e não
+  # pela tela de admin, para ser reproduzível: realm configurado a mão é
+  # configuração que ninguém sabe recriar depois.
+  #
+  # `start-dev` é deliberado nesta POC: sobe sem HTTPS e sem hostname fixo. Em
+  # produção troca para `start` com KC_HOSTNAME e certificado — e aí o banco
+  # embutido também sai, apontando para o Postgres.
+  leilao-auth:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: leilao-auth
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASS:-admin}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+      - leilao-kcdata:/opt/keycloak/data
+    healthcheck:
+      # A imagem 26 não tem curl nem wget; o health vai pelo endpoint interno
+      # de management na 9000, checado pelo próprio Java.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\nHost: localhost\\nConnection: close\\n\\n' >&3 && cat <&3 | grep -q '\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
 volumes:
   leilao-pgdata:
+  leilao-kcdata:

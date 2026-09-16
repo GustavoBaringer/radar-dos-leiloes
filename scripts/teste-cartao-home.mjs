@@ -4,6 +4,7 @@
  * Aqui o teste compara os dois lados no navegador de verdade.
  */
 import { chromium } from 'playwright-core';
+import { entrarComSenha } from './_teste-comum.mjs';
 
 const BASE = process.env.BASE ?? 'http://localhost:4500';
 const b = await chromium.launch({
@@ -12,10 +13,7 @@ const b = await chromium.launch({
 });
 const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 
-await p.goto(`${BASE}/login`);
-await p.fill('#usuario', process.env.APP_USUARIO);
-await p.fill('#senha', process.env.APP_SENHA);
-await Promise.all([p.waitForNavigation(), p.click('button[type=submit]')]);
+await entrarComSenha(p, BASE);
 
 const leCartoes = async (seletor) =>
   p.$$eval(seletor, (nos) =>

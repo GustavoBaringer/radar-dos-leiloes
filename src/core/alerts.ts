@@ -12,6 +12,7 @@ import { parseQuery, fold } from './normalize.js';
 
 export interface Alerta {
   id: number;
+  owner_id: number;
   label: string;
   q: string | null;
   filters: Record<string, any>;
@@ -21,6 +22,9 @@ export interface Alerta {
 
 export interface Disparo {
   alertId: number;
+  /** Dono do alerta. O push precisa dele: sem isso o alerta de um usuário
+   *  notificava o celular de todos os outros. */
+  ownerId: number;
   label: string;
   channels: string[];
   email: string | null;
@@ -106,7 +110,7 @@ function condicoes(a: Alerta): { sql: string[]; params: any[] } {
 export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
   if (!lotIds.length) return [];
   const alertas = await query<Alerta>(
-    `SELECT id, label, q, filters, channels, email FROM alerts WHERE enabled ORDER BY id`,
+    `SELECT id, owner_id, label, q, filters, channels, email FROM alerts WHERE enabled ORDER BY id`,
   );
   const disparos: Disparo[] = [];
 
@@ -132,6 +136,7 @@ export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
       if (!ins) continue;
       disparos.push({
         alertId: a.id,
+        ownerId: Number(a.owner_id),
         label: a.label,
         channels: a.channels,
         email: a.email,

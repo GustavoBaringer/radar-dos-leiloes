@@ -25,14 +25,31 @@ export async function enviarPush(disparos: Disparo[]) {
   const alvos = disparos.filter((d) => d.channels.includes('push'));
   if (!alvos.length) return 0;
 
-  const inscricoes = await query<any>('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE failures < 5');
+  /**
+   * Inscrições agrupadas POR DONO. Antes o SELECT trazia todas e cada disparo
+   * ia para todo aparelho inscrito: o alerta de um usuário chegava no celular
+   * dos outros, junto com o título do lote que ele estava procurando.
+   */
+  const porDono = new Map<number, any[]>();
+  for (const i of await query<any>(
+    'SELECT endpoint, p256dh, auth, owner_id FROM push_subscriptions WHERE failures < 5 AND owner_id IS NOT NULL',
+  )) {
+    const lista = porDono.get(Number(i.owner_id)) ?? [];
+    lista.push(i);
+    porDono.set(Number(i.owner_id), lista);
+  }
   let enviados = 0;
 
   for (const d of alvos) {
+    const inscricoes = porDono.get(d.ownerId) ?? [];
+    if (!inscricoes.length) continue;
     const payload = JSON.stringify({
       title: `Novo lote: ${d.label}`,
       body: `${d.title.slice(0, 80)} — ${moeda(d.bid)}`,
-      url: `/?lote=${d.lotId}`,
+      // `/` passou a ser a landing de venda, e `?lote=` nunca foi lido pelo app:
+      // o push levava para marketing ou para a busca vazia. O id no fim do slug
+      // é o que resolve o lote, então o texto antes dele é dispensável aqui.
+      url: `/lote/alerta-${d.lotId}`,
       tag: `alerta-${d.alertId}-${d.lotId}`,
     });
     for (const s of inscricoes) {

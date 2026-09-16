@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { searchLots, getLot, getStats, ensureSources } from './core/repo.js';
 import { avaliarAlertas } from './core/alerts.js';
 import { authLigada, papelDasCredenciais, criarToken, lerToken, COOKIE, type Papel } from './core/auth.js';
+import { oidcLigado, iniciarLogin, concluirLogin, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
+import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Identidade } from './core/identidade.js';
 import { query } from './core/db.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';
 import { connectors } from './connectors/index.js';
@@ -35,7 +37,7 @@ await app.register(formbody);
  * local continua sem atrito. O service worker do push precisa passar livre:
  * o navegador o busca sem cookie de sessão e um 302 ali quebraria o push.
  */
-const LIVRES = new Set(['/login', '/api/login', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/styles.css']);
+const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/styles.css']);
 
 /**
  * Catálogo público, conta continua fechada.
@@ -82,15 +84,22 @@ button:hover{background:#3d7bf5}
 .erro{background:#3a1b1b;border:1px solid #7a3030;color:#ffb4b4;border-radius:9px;
       padding:10px 12px;font-size:13px;margin-bottom:6px}
 .rodape{margin-top:18px;font-size:11.5px;color:#5f6b7a;text-align:center}
+.ou{display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:#5f6b7a;font-size:11px}
+.ou::before,.ou::after{content:"";flex:1;height:1px;background:#27313d}
+.oidc{display:block;text-align:center;text-decoration:none;background:transparent;border:1px solid #27313d;
+      border-radius:10px;padding:12px;color:#e7edf5;font-size:14px;font-weight:600}
+.oidc:hover{border-color:#2f6feb;background:#121a24}
 </style></head><body>
 <form method="POST" action="/api/login">
   <div class="marca"><span class="dot"></span><b>Radar de Leilões</b></div>
+  <input type="hidden" name="de" value="__DE__">
   __ERRO__
   <label for="usuario">Usuário</label>
   <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" autofocus required>
   <label for="senha">Senha</label>
   <input id="senha" name="senha" type="password" autocomplete="current-password" required>
   <button type="submit">Entrar</button>
+  __OIDC__
   <p class="rodape">Acesso restrito</p>
 </form></body></html>`;
 
@@ -103,6 +112,9 @@ if (authLigada()) {
     // espera é a única escrita liberada — é o CTA da landing e não lê nada.
     if (liberadoPorSeo(caminho) && (req.method === 'GET' || caminho === '/api/espera')) {
       (req as any).papel = 'comum';
+      // userId 0: nenhuma linha de users tem esse id, então consulta filtrada
+      // por dono devolve vazio em vez de devolver os alertas do administrador.
+      (req as any).eu = ANONIMO;
       return;
     }
     const cookie = String(req.headers.cookie ?? '')
@@ -110,40 +122,218 @@ if (authLigada()) {
       .map((c) => c.trim().split('='))
       .find(([k]) => k === COOKIE)?.[1];
     const sessao = lerToken(cookie);
-    if (sessao.valido) {
+    if (sessao.valido && sessao.papel) {
       (req as any).papel = sessao.papel;
+      // A identidade resolvida acompanha a requisição: é o `userId` dela que
+      // filtra alerts, saved_searches e push_subscriptions por dono.
+      const eu = sessao.sub ? await identidadePorSub(sessao.sub) : await usuarioDoPortao(sessao.papel);
+      // Sessão assinada apontando para usuário que não existe mais (conta
+      // apagada no provedor): melhor mandar para o login do que seguir sem dono.
+      if (!eu) return reply.code(302).header('location', '/login').send();
+      (req as any).eu = eu;
+      (req as any).papel = eu.papel;
       return;
     }
     // API responde 401 em JSON; navegação vai para a tela de senha.
     if (caminho.startsWith('/api/') || caminho === '/ws') {
       return reply.code(401).send({ erro: 'não autenticado' });
     }
-    return reply.code(302).header('location', '/login').send();
+    // Leva o destino pretendido: sem isso, quem abre um link de /alertas cai na
+    // busca depois de entrar e tem de navegar de novo.
+    return reply.code(302).header('location', `/login?de=${encodeURIComponent(req.url)}`).send();
   });
 
-  app.get('/login', async (_req, reply) =>
-    reply.type('text/html; charset=utf-8').send(PAGINA_LOGIN.replace('__ERRO__', '')),
+  /**
+   * Destino pós-login. Aceita só caminho interno conhecido: um `location` vindo
+   * de query string sem validação é redirect aberto — bastaria mandar
+   * `/login?de=https://site-falso` para a nossa tela de senha despachar a vítima
+   * para lá logo depois de ela digitar a senha.
+   */
+  const DESTINO_PADRAO = '/busca';
+  function destinoSeguro(bruto: unknown): string {
+    const v = String(bruto ?? '');
+    if (!v.startsWith('/') || v.startsWith('//')) return DESTINO_PADRAO;
+    const caminho = v.split('?')[0];
+    const permitido =
+      caminho === '/' || caminho === '/home' || APP_ROTAS.includes(caminho) || caminho.startsWith('/lote/');
+    return permitido ? v : DESTINO_PADRAO;
+  }
+  const escapaAtributo = (v: string) =>
+    v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const telaLogin = (de: unknown, erro = '') => {
+    const destino = destinoSeguro(de);
+    // O bloco do provedor só existe quando o OIDC está configurado: um botão
+    // que leva a 404 é pior do que botão nenhum.
+    const bloco = oidcLigado()
+      ? `<div class="ou">ou</div><a class="oidc" href="/auth/login?de=${encodeURIComponent(destino)}">Entrar com conta Radar</a>`
+      : '';
+    return PAGINA_LOGIN.replace('__DE__', escapaAtributo(destino))
+      .replace('__ERRO__', erro)
+      .replace('__OIDC__', bloco);
+  };
+
+  app.get('/login', async (req, reply) =>
+    reply.type('text/html; charset=utf-8').send(telaLogin((req.query as any)?.de)),
   );
+
+  /**
+   * Login por provedor OIDC (Keycloak).
+   *
+   * O `redirect_uri` é derivado do host da requisição, não de variável fixa: a
+   * POC é acessada por localhost E pelo túnel, e um valor fixo quebraria um dos
+   * dois. O provedor só aceita URIs que estão na allowlist do client, então
+   * derivar do host não abre redirecionamento arbitrário.
+   */
+  const uriDeCallback = (req: any) => {
+    const proto = String(req.headers['x-forwarded-proto'] ?? req.protocol ?? 'http').split(',')[0];
+    return `${proto}://${req.headers.host}/auth/callback`;
+  };
+  const cookieDeSessao = (req: any, valor: string, maxAge = 30 * 24 * 3600) => {
+    const seguro = req.protocol === 'https' || String(req.headers['x-forwarded-proto'] ?? '') === 'https';
+    return `${COOKIE}=${valor}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${seguro ? '; Secure' : ''}`;
+  };
+
+  app.get('/auth/login', async (req, reply) => {
+    if (!oidcLigado()) return reply.code(404).send({ erro: 'OIDC desligado' });
+    try {
+      const { url, cookie } = await iniciarLogin(uriDeCallback(req), destinoSeguro((req.query as any)?.de));
+      return reply
+        // O cookie do PKCE vive minutos e é SameSite=Lax porque o provedor
+        // devolve a pessoa por navegação de topo — com Strict ele não voltaria.
+        .header('set-cookie', `${COOKIE_PKCE}=${cookie}; Path=/auth; HttpOnly; SameSite=Lax; Max-Age=600`)
+        .code(302)
+        .header('location', url)
+        .send();
+    } catch (e: any) {
+      app.log?.error?.(e);
+      return reply.code(502).type('text/html; charset=utf-8').send(
+        telaLogin('', `<div class="erro">Provedor de identidade indisponível. Use usuário e senha.</div>`),
+      );
+    }
+  });
+
+  app.get('/auth/callback', async (req, reply) => {
+    if (!oidcLigado()) return reply.code(404).send({ erro: 'OIDC desligado' });
+    const q = (req.query as any) ?? {};
+    const pkce = String(req.headers.cookie ?? '')
+      .split(';').map((c) => c.trim().split('=')).find(([k]) => k === COOKIE_PKCE)?.[1];
+    // O provedor devolve erro na própria query quando o usuário cancela.
+    if (q.error) {
+      return reply.code(400).type('text/html; charset=utf-8').send(
+        telaLogin('', `<div class="erro">Login cancelado no provedor (${String(q.error).slice(0, 40)}).</div>`),
+      );
+    }
+    try {
+      const r = await concluirLogin({ code: String(q.code ?? ''), state: String(q.state ?? ''), cookiePkce: pkce, redirectUri: uriDeCallback(req) });
+      const eu = await garantirUsuario({ sub: r.sub, email: r.email, nome: r.nome, papel: r.papel });
+      return reply
+        .header('set-cookie', [
+          cookieDeSessao(req, criarToken(eu.papel, eu.sub)),
+          `${COOKIE_PKCE}=; Path=/auth; Max-Age=0`,
+          `${COOKIE_OIDC}=1; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 3600}`,
+        ])
+        .code(302)
+        .header('location', destinoSeguro(r.destino))
+        .send();
+    } catch (e: any) {
+      app.log?.error?.(e);
+      return reply.code(400).type('text/html; charset=utf-8').send(
+        telaLogin('', `<div class="erro">Não foi possível concluir o login: ${String(e.message).slice(0, 80)}</div>`),
+      );
+    }
+  });
+
+  /**
+   * Sair. Apaga a nossa sessão e, quando a entrada foi por OIDC, encerra também
+   * no provedor — sem isso o próximo "Entrar" reautentica em silêncio e o botão
+   * de sair parece não funcionar.
+   */
+  app.get('/auth/logout', async (req, reply) => {
+    const cookies = String(req.headers.cookie ?? '');
+    const veioDeOidc = /(?:^|;\s*)radar_oidc=1/.test(cookies);
+    const limpa = [cookieDeSessao(req, '', 0), `${COOKIE_OIDC}=; Path=/; Max-Age=0`];
+    const proto = String(req.headers['x-forwarded-proto'] ?? req.protocol ?? 'http').split(',')[0];
+    let destino = '/login';
+    if (veioDeOidc && oidcLigado()) {
+      try {
+        destino = (await urlDeLogout(`${proto}://${req.headers.host}/login`)) ?? '/login';
+      } catch {
+        /* provedor fora do ar: a sessão local cai de qualquer forma */
+      }
+    }
+    return reply.header('set-cookie', limpa).code(302).header('location', destino).send();
+  });
+
+  /**
+   * Freio de força bruta no login.
+   *
+   * Medido antes disto: dez senhas erradas seguidas devolviam dez 401 sem
+   * atraso nenhum. Com uma senha só protegendo o índice inteiro e a POC exposta
+   * por túnel público, isso é o furo mais explorável que existia.
+   *
+   * O contador vive no Redis, não em memória: o processo reinicia a cada edição
+   * de código, e um contador que zera no restart não é freio.
+   */
+  // Conexão própria: a outra do servidor está em modo subscribe, e no ioredis
+  // uma conexão inscrita em canal não aceita mais comandos comuns.
+  const redis = makeRedis();
+  const JANELA_S = 900;
+  const TETO = 8;
+  async function tentativasDe(ip: string): Promise<number> {
+    try {
+      return Number(await redis.get(`login:falha:${ip}`)) || 0;
+    } catch {
+      // Redis fora do ar não pode derrubar o login: sem contador, sem freio,
+      // mas com o portão ainda funcionando.
+      return 0;
+    }
+  }
+  async function registraFalha(ip: string) {
+    try {
+      const chave = `login:falha:${ip}`;
+      const n = await redis.incr(chave);
+      if (n === 1) await redis.expire(chave, JANELA_S);
+    } catch {
+      /* idem */
+    }
+  }
+  const ipDe = (req: any) =>
+    String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.ip ?? '')
+      .split(',')[0]
+      .trim() || 'desconhecido';
 
   app.post('/api/login', async (req, reply) => {
     const corpo = (req.body ?? {}) as any;
+    const ip = ipDe(req);
+    if ((await tentativasDe(ip)) >= TETO) {
+      return reply
+        .code(429)
+        .type('text/html; charset=utf-8')
+        .send(telaLogin(corpo.de, '<div class="erro">Muitas tentativas. Aguarde 15 minutos.</div>'));
+    }
     const papel = papelDasCredenciais(corpo.usuario ?? '', corpo.senha ?? '');
     if (!papel) {
+      await registraFalha(ip);
       // Mensagem única de propósito: dizer qual campo errou entrega ao atacante
       // a confirmação de que o usuário existe.
       return reply
         .code(401)
         .type('text/html; charset=utf-8')
-        .send(PAGINA_LOGIN.replace('__ERRO__', '<div class="erro">Usuário ou senha incorretos.</div>'));
+        .send(telaLogin(corpo.de, '<div class="erro">Usuário ou senha incorretos.</div>'));
     }
-    const seguro = req.protocol === 'https' || String(req.headers['x-forwarded-proto'] ?? '') === 'https';
+    // Acerto zera o contador: senão quem errou 7 vezes e acertou continuaria
+    // a um erro do bloqueio pelos 15 minutos seguintes.
+    try {
+      await redis.del(`login:falha:${ip}`);
+    } catch {
+      /* sem Redis, sem contador para zerar */
+    }
     return reply
-      .header(
-        'set-cookie',
-        `${COOKIE}=${criarToken(papel)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}${seguro ? '; Secure' : ''}`,
-      )
+      .header('set-cookie', cookieDeSessao(req, criarToken(papel, null)))
       .code(302)
-      .header('location', '/')
+      // `/` é a landing de venda e é idêntica antes e depois de entrar: mandar
+      // para lá dava a impressão de que o login não tinha funcionado.
+      .header('location', destinoSeguro(corpo.de))
       .send();
   });
 }
@@ -540,11 +730,27 @@ app.get('/api/lot/:id', async (req, reply) => {
   return lot;
 });
 
+/**
+ * O dono da requisição. Sem portão de senha o modo local segue aberto e tudo
+ * pertence à conta administradora — é o comportamento de sempre no localhost.
+ */
+const donoDe = async (req: any): Promise<Identidade> =>
+  (req.eu as Identidade) ?? (await usuarioDoPortao(authLigada() ? 'comum' : 'admin'));
+
 /** Sem portão de senha, não há papel: o modo local continua aberto como sempre. */
 const papelDe = (req: any): Papel => (authLigada() ? ((req.papel as Papel) ?? 'comum') : 'admin');
 
 /** O cliente não decide o próprio papel: ele pergunta, e a resposta vem do cookie assinado. */
-app.get('/api/me', async (req) => ({ papel: papelDe(req), authLigada: authLigada() }));
+app.get('/api/me', async (req) => {
+  const eu = await donoDe(req);
+  return {
+    papel: papelDe(req),
+    authLigada: authLigada(),
+    oidc: oidcLigado(),
+    // `sub` presente = entrou por provedor; ausente = portão de senha.
+    conta: { id: eu.userId, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null },
+  };
+});
 
 /**
  * Esconder a aba no cliente não protege nada: basta abrir o DevTools e chamar a
@@ -561,12 +767,15 @@ app.get('/api/stats', async (req, reply) => (exigeAdmin(req, reply) ? undefined 
 
 /* ---------------- alertas ---------------- */
 
-app.get('/api/alerts', async () => {
-  return query(`
-    SELECT a.*,
-           (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id) AS total,
-           (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id AND NOT h.seen) AS nao_vistos
-      FROM alerts a ORDER BY a.created_at DESC`);
+app.get('/api/alerts', async (req) => {
+  const eu = await donoDe(req);
+  return query(
+    `SELECT a.*,
+            (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id) AS total,
+            (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id AND NOT h.seen) AS nao_vistos
+       FROM alerts a WHERE a.owner_id = $1 ORDER BY a.created_at DESC`,
+    [eu.userId],
+  );
 });
 
 app.post('/api/alerts', async (req, reply) => {
@@ -581,8 +790,8 @@ app.post('/api/alerts', async (req, reply) => {
     return reply.code(400).send({ erro: 'canal e-mail exige um endereço' });
   }
   const [a] = await query<any>(
-    `INSERT INTO alerts (label, q, filters, channels, email) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [String(b.label ?? q ?? 'Alerta').slice(0, 80), q || null, JSON.stringify(filters), canais, b.email ?? null],
+    `INSERT INTO alerts (label, q, filters, channels, email, owner_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [String(b.label ?? q ?? 'Alerta').slice(0, 80), q || null, JSON.stringify(filters), canais, b.email ?? null, (await donoDe(req)).userId],
   );
   // Casa contra o índice atual: alerta criado hoje já mostra o que existe,
   // em vez de ficar vazio esperando a próxima coleta.
@@ -612,7 +821,14 @@ app.patch('/api/alerts/:id', async (req, reply) => {
 app.delete('/api/alerts/:id', async (req, reply) => {
   const { id } = req.params as { id: string };
   if (!/^\d+$/.test(id)) return reply.code(400).send({ erro: 'id inválido' });
-  await query('DELETE FROM alerts WHERE id = $1', [Number(id)]);
+  // O dono entra no WHERE, não numa checagem antes: com a verificação separada
+  // existe a janela entre ler e apagar, e um 404 honesto é melhor que um 403
+  // que confirma a existência do alerta de outra pessoa.
+  const apagados = await query<{ id: string }>(
+    'DELETE FROM alerts WHERE id = $1 AND owner_id = $2 RETURNING id',
+    [Number(id), (await donoDe(req)).userId],
+  );
+  if (!apagados.length) return reply.code(404).send({ erro: 'alerta não encontrado' });
   return { ok: true };
 });
 
@@ -640,13 +856,17 @@ app.get('/api/alerts/hits', async (req) => {
       FROM alert_hits h
       JOIN alerts a ON a.id = h.alert_id
       JOIN lots l ON l.id = h.lot_id
-     ${naoVistos === 'true' ? 'WHERE NOT h.seen' : ''}
+     WHERE a.owner_id = $1 ${naoVistos === 'true' ? 'AND NOT h.seen' : ''}
      GROUP BY l.id
-     ORDER BY max(h.created_at) DESC LIMIT 60`);
+     ORDER BY max(h.created_at) DESC LIMIT 60`, [(await donoDe(req)).userId]);
 });
 
-app.post('/api/alerts/hits/seen', async () => {
-  await query('UPDATE alert_hits SET seen = TRUE WHERE NOT seen');
+app.post('/api/alerts/hits/seen', async (req) => {
+  await query(
+    `UPDATE alert_hits SET seen = TRUE
+      WHERE NOT seen AND alert_id IN (SELECT id FROM alerts WHERE owner_id = $1)`,
+    [(await donoDe(req)).userId],
+  );
   return { ok: true };
 });
 
@@ -675,9 +895,10 @@ app.post('/api/push/subscribe', async (req, reply) => {
     return reply.code(400).send({ erro: 'inscrição inválida' });
   }
   await query(
-    `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent) VALUES ($1,$2,$3,$4)
-     ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, failures=0`,
-    [b.endpoint, b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] ?? '').slice(0, 200)],
+    `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent, owner_id) VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, failures=0,
+                                          owner_id=EXCLUDED.owner_id`,
+    [b.endpoint, b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] ?? '').slice(0, 200), (await donoDe(req)).userId],
   );
   return { ok: true };
 });

@@ -7,6 +7,7 @@
  * reafirma depois — sem isso o teste mede um instante, não o comportamento.
  */
 import { chromium } from 'playwright-core';
+import { entrarComSenha } from './_teste-comum.mjs';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -40,10 +41,7 @@ p.on('response', (r) => {
   if (r.url().includes('/api/lot/')) rede.push({ url: r.url(), status: r.status(), t: Date.now() });
 });
 
-await p.goto(`${BASE}/login`);
-await p.fill('#usuario', env.APP_USUARIO);
-await p.fill('#senha', env.APP_SENHA);
-await Promise.all([p.waitForNavigation(), p.click('button[type=submit]')]);
+await entrarComSenha(p, BASE);
 
 async function hrefDoBotao(caminho) {
   await p.goto(BASE + caminho, { waitUntil: 'networkidle' });

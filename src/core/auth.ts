@@ -55,19 +55,32 @@ export function papelDasCredenciais(usuario: string, senha: string): Papel | nul
  * O formato mudou de 2 para 3 partes, então cookie antigo é rejeitado sozinho
  * pelo parse — todo mundo desloga uma vez, e não fica código de compatibilidade.
  */
-export function criarToken(papel: Papel): string {
+export function criarToken(papel: Papel, sub?: string | null): string {
   const expira = Date.now() + VALIDADE_MS;
-  const assinatura = createHmac('sha256', SEGREDO).update(`${expira}:${papel}`).digest('hex');
-  return `${expira}.${papel}.${assinatura}`;
+  // `sub` é o identificador do provedor OIDC; vazio nas sessões do portão de
+  // senha, que não vêm de provedor nenhum. Vai DENTRO do HMAC junto com o
+  // papel: sem isso o cliente trocaria o sub e assumiria a conta de outro.
+  const s = sub ?? '';
+  const assinatura = createHmac('sha256', SEGREDO).update(`${expira}:${papel}:${s}`).digest('hex');
+  return `${expira}.${papel}.${Buffer.from(s).toString('base64url')}.${assinatura}`;
 }
 
-export function lerToken(token?: string | null): { valido: boolean; papel: Papel | null } {
-  const invalido = { valido: false, papel: null };
+export function lerToken(token?: string | null): { valido: boolean; papel: Papel | null; sub: string | null } {
+  const invalido = { valido: false, papel: null, sub: null };
   if (!token) return invalido;
-  const [expira, papel, assinatura] = String(token).split('.');
-  if (!expira || !papel || !assinatura) return invalido;
+  // Quatro partes. O formato anterior tinha três, então cookie velho é
+  // rejeitado sozinho pelo parse: todos deslogam uma vez e não fica código de
+  // compatibilidade para manter.
+  const [expira, papel, subB64, assinatura] = String(token).split('.');
+  if (!expira || !papel || subB64 === undefined || !assinatura) return invalido;
   if (papel !== 'admin' && papel !== 'comum') return invalido;
   if (Number(expira) < Date.now()) return invalido;
-  const esperada = createHmac('sha256', SEGREDO).update(`${expira}:${papel}`).digest('hex');
-  return iguais(assinatura, esperada) ? { valido: true, papel } : invalido;
+  let sub = '';
+  try {
+    sub = Buffer.from(subB64, 'base64url').toString('utf8');
+  } catch {
+    return invalido;
+  }
+  const esperada = createHmac('sha256', SEGREDO).update(`${expira}:${papel}:${sub}`).digest('hex');
+  return iguais(assinatura, esperada) ? { valido: true, papel, sub: sub || null } : invalido;
 }

@@ -140,7 +140,56 @@ Carvalho, Mega, Parque, Suporte Leilões) e o Tier 3 (bloqueados por antibot) se
 node scripts/teste-landing.mjs            # landing: leitor, robô e formulário
 node --env-file=.env scripts/teste-cartao-home.mjs    # o mesmo cartão na home e na busca
 node --env-file=.env scripts/teste-link-leiloeiro.mjs # deep link sobrevive à coleta
+node --env-file=.env scripts/teste-auth.mjs           # portão, OIDC, isolamento entre contas, freio
 ```
+
+## Autenticação
+
+Dois modos, e o código não sabe qual está em uso: `src/core/identidade.ts` expõe
+uma `Identidade` com `userId`, e é esse id que alerts, saved_searches e
+push_subscriptions usam como dono. É a indireção que torna a escolha de provedor
+reversível — trocar Keycloak por Cognito é trocar `OIDC_ISSUER` e `OIDC_CLIENT_ID`,
+porque os dois são OIDC, e nada fora de `identidade.ts` e `oidc.ts` encosta nisso.
+
+| Modo | Liga com | Para quê |
+|---|---|---|
+| Portão de senha | `APP_SENHA` | uso local e a POC atrás do túnel; conta compartilhada |
+| OIDC (Keycloak) | `OIDC_ISSUER` | contas de verdade, com reset de senha, verificação e MFA do provedor |
+
+```bash
+docker compose up -d leilao-auth     # Keycloak em http://localhost:8081
+# realm 'radar' importado de infra/keycloak/realm-radar.json no boot
+OIDC_ISSUER=http://localhost:8081/realms/radar npm start
+```
+
+O papel sai das **roles do token**, nunca de nada que o cliente mande: quem tem
+`radar-admin` no realm vira admin aqui, o resto entra como comum.
+
+O realm é arquivo versionado de propósito. Realm configurado pela tela de admin é
+configuração que ninguém sabe recriar depois — e o Keycloak recusa o import inteiro
+por um campo desconhecido, então o arquivo também é o que garante que ele sobe.
+
+### Dono
+
+Antes da migração `db/011_usuarios.sql` **nada tinha dono**, porque "usuário" era
+uma senha compartilhada: quem entrava via e apagava os alertas de todo mundo, e o
+push de um alerta ia para o celular de todos os inscritos. O provedor de identidade
+não resolve posse — por isso a coluna `owner_id` veio antes do Keycloak, e não depois.
+
+O dono entra no `WHERE`, não numa checagem separada: entre ler e apagar existe uma
+janela, e um 404 honesto é melhor que um 403 que confirma a existência do alerta
+de outra pessoa.
+
+### Freio de força bruta
+
+Medido antes de existir: dez senhas erradas seguidas davam dez `401`, sem atraso.
+Com uma senha só protegendo o índice e a POC exposta por túnel, era o furo mais
+explorável do sistema. O contador vive no Redis, não em memória — contador que
+zera no restart não é freio.
+
+Efeito colateral que vale saber: todo teste que entra no sistema precisa zerar o
+contador antes (`scripts/_teste-comum.mjs`), senão o teste seguinte toma `429` e
+falha com sintoma enganoso ("a home não renderizou cartão", quando nem entrou).
 
 ## Acesso protegido por senha
 
