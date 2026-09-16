@@ -27,6 +27,7 @@ function card(lot) {
   const el = document.createElement('article');
   el.className = 'card';
   el.dataset.id = lot.id;
+  if (lot.auction_end_utc) el.dataset.fim = lot.auction_end_utc;
   const bid = lot.current_bid ?? lot.min_bid;
   el.tabIndex = 0;
   el.setAttribute('role', 'button');
@@ -548,6 +549,21 @@ function connectWs() {
     // segundo cinto, para o caso de a mensagem chegar por outro caminho.
     if (msg.type === 'collect' && state.papel === 'admin') {
       toast(`Coleta ${msg.sourceId}: ${msg.upserted} lotes atualizados`);
+    }
+    if (msg.type === 'encerrados' && state.papel === 'admin') {
+      const n = Number(msg.total) || 0;
+      toast(`${n.toLocaleString('pt-BR')} lote${n === 1 ? '' : 's'} encerrado${n === 1 ? '' : 's'}`);
+      // O lote que fechou continua desenhado na tela até a próxima busca: marcar
+      // o cartão é mais honesto do que deixar "Encerra em 3 min" congelado.
+      for (const el of document.querySelectorAll('.card .when')) {
+        if (/encerra em/i.test(el.textContent)) {
+          const fim = el.closest('.card')?.dataset.fim;
+          if (fim && new Date(fim).getTime() < Date.now()) {
+            el.textContent = 'Encerrado';
+            el.className = 'when nodate';
+          }
+        }
+      }
     }
     if (msg.type === 'alertas') {
       const b = $('sinoBadge');

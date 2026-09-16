@@ -1128,10 +1128,11 @@ const clients = new Map<any, Papel>();
 const subscriber = makeRedis();
 await subscriber.subscribe(CHANNEL_UPDATES);
 subscriber.on('message', (_channel, message) => {
-  // Telemetria de coleta é de administrador; lance e alerta vão para todos.
+  // Telemetria de coleta e de encerramento é de administrador; lance e alerta
+  // vão para todos. "37 lotes encerrados" não é acionável para quem só busca.
   let soAdmin = false;
   try {
-    soAdmin = JSON.parse(message)?.type === 'collect';
+    soAdmin = ['collect', 'encerrados'].includes(JSON.parse(message)?.type);
   } catch {
     /* mensagem malformada segue o caminho comum */
   }

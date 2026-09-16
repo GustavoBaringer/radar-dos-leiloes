@@ -98,8 +98,16 @@ async function cicloDeEncerramento() {
   travado = true;
   try {
     const r = await encerrarLotes();
-    if (r.porPrazo || r.porAusencia) {
+    const total = r.porPrazo + r.porAusencia;
+    if (total) {
       console.log(`[encerrar] prazo: ${r.porPrazo} · ausente na fonte: ${r.porAusencia}`);
+      // Mesmo canal do lance e da coleta: a tela avisa sem recarregar. O ciclo
+      // roda a cada minuto e quase sempre fecha zero — publicar o zero encheria
+      // a tela de aviso vazio.
+      await publisher.publish(
+        CHANNEL_UPDATES,
+        JSON.stringify({ type: 'encerrados', total, porPrazo: r.porPrazo, porAusencia: r.porAusencia }),
+      );
     }
   } catch (e: any) {
     console.error('[encerrar] falhou:', e.message);
@@ -128,6 +136,12 @@ async function cicloDeVerificacao() {
         `[verificar] ${r.verificados} conferidos na origem: ${r.encerrados} encerrados, ` +
           `${r.vivos} vivos, ${r.indeterminados} sem resposta`,
       );
+      if (r.encerrados) {
+        await publisher.publish(
+          CHANNEL_UPDATES,
+          JSON.stringify({ type: 'encerrados', total: r.encerrados, origem: 'verificacao' }),
+        );
+      }
     }
   } catch (e: any) {
     console.error('[verificar] falhou:', e.message);

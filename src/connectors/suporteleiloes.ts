@@ -54,6 +54,61 @@ function ehSuporteLeiloes(html: string): boolean {
   return /static\.suporteleiloes\.com\.br|suporteleiloes/i.test(html);
 }
 
+/**
+ * Dados do LEILÃO (evento), lidos de um lote qualquer dele.
+ *
+ * A data não existe no card nem no lote: `dataFechamento` e `cronometro` do
+ * lote vêm null em toda a amostra. Quem carrega o prazo é o evento, em
+ * `leilao.data{1,2,3}` com `leilao.praca` dizendo qual vale agora.
+ *
+ * Sem isso, todo lote desta fonte entrava sem data nenhuma — 1.540 lotes que
+ * nenhuma regra de encerramento alcançava, nem o relógio nem a verificação.
+ */
+interface DadosDoLeilao {
+  fim: Date | null;
+  leiloeiro: string | null;
+  codigo: string | null;
+}
+
+/** O slug do leilão na URL do lote é a chave do evento: /eventos/leilao/{slug}/lote/{id}/... */
+const slugDoLeilao = (url: string): string | null => /\/eventos\/leilao\/([^/]+)\/lote\//.exec(url)?.[1] ?? null;
+
+function dataDoBloco(v: any): Date | null {
+  // O formato é {date, timezone_type, timezone} do PHP, em America/Fortaleza —
+  // mesmo UTC-3 de Brasília e sem horário de verão.
+  const bruto = typeof v === 'string' ? v : v?.date;
+  if (!bruto) return null;
+  const t = Date.parse(`${String(bruto).replace(' ', 'T').slice(0, 19)}-03:00`);
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+
+async function lerLeilao(urlDeUmLote: string): Promise<DadosDoLeilao | null> {
+  let r;
+  try {
+    r = await fetchText(urlDeUmLote, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 30000 });
+  } catch {
+    return null;
+  }
+  if (r.status !== 200) return null;
+  // `var lote = {...};` — JSON válido, produzido por json_encode do PHP.
+  const m = /var\s+lote\s*=\s*(\{[\s\S]*?\});\s*\n/.exec(r.body);
+  if (!m) return null;
+  let lote: any;
+  try {
+    lote = JSON.parse(m[1]);
+  } catch {
+    return null;
+  }
+  const le = lote?.leilao;
+  if (!le) return null;
+  const praca = Number(le.praca ?? 1);
+  return {
+    fim: dataDoBloco(le[`data${praca >= 3 ? 3 : praca === 2 ? 2 : 1}`]) ?? dataDoBloco(le.data1),
+    leiloeiro: le.leiloeiro?.nome ? String(le.leiloeiro.nome) : null,
+    codigo: le.codigo ? String(le.codigo) : null,
+  };
+}
+
 const STATUS: Record<string, LotStatus> = { '1': 'aberto' };
 const statusDoCard = (classe: string): LotStatus => {
   const m = /status-(\d+)/.exec(classe);
@@ -141,7 +196,7 @@ function ultimaPagina(html: string): number {
   return max;
 }
 
-function mapCard(c: Card, asset: AssetType, host: string): CanonicalLot {
+function mapCard(c: Card, asset: AssetType, host: string, ev: DadosDoLeilao | null): CanonicalLot {
   return {
     sourceId: 'suporteleiloes',
     // O id é GLOBAL nesta plataforma (medido: o mesmo id resolve para o mesmo
@@ -156,15 +211,19 @@ function mapCard(c: Card, asset: AssetType, host: string): CanonicalLot {
     // A data mora no LEILÃO, não no lote: `dataFechamento` e `cronometro` do
     // lote vieram null em toda a amostra, nas duas arquiteturas.
     closingModel: 'pregao_em_horario',
+    // O prazo vem do EVENTO, não do lote — ver lerLeilao().
+    auctionEndUtc: ev?.fim ?? null,
+    auctionStartUtc: ev?.fim ?? null,
     sourceTz: 'America/Sao_Paulo',
     status: c.status,
+    auctioneerName: ev?.leiloeiro ?? null,
     currentBid: c.currentBid,
     minBid: c.minBid,
     city: c.city,
     state: c.state,
     photos: c.foto ? [c.foto] : [],
     photoCount: c.foto ? 1 : 0,
-    raw: { tenant: host, statusCard: c.statusBruto },
+    raw: { tenant: host, statusCard: c.statusBruto, leilao: ev?.codigo ?? null },
   } as CanonicalLot;
 }
 
@@ -187,6 +246,9 @@ export const suporteleiloes: Connector = {
     let status = 0;
 
     const cats = CATEGORIAS.filter(([, a]) => !assetTypes || assetTypes.includes(a));
+    // Cache de evento por slug, vivo durante o ciclo inteiro: o mesmo leilão
+    // aparece nas duas categorias e em várias páginas.
+    const eventos = new Map<string, DadosDoLeilao | null>();
 
     for (const host of await tenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60))) {
       if (lots.length >= limit) break;
@@ -223,7 +285,12 @@ export const suporteleiloes: Connector = {
 
           for (const c of cards) {
             if (lots.length >= limit) break;
-            lots.push(mapCard(c, asset, host));
+            // UMA requisição por LEILÃO, não por lote: o prazo e o leiloeiro são
+            // do evento, e o slug da URL identifica o evento. Numa página de 12
+            // cards do mesmo leilão isso é 1 requisição extra, não 12.
+            const slug = slugDoLeilao(c.url);
+            if (slug && !eventos.has(slug)) eventos.set(slug, await lerLeilao(c.url));
+            lots.push(mapCard(c, asset, host, slug ? (eventos.get(slug) ?? null) : null));
           }
           if (cards.length < POR_PAGINA) break;
         }
