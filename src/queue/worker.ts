@@ -5,7 +5,7 @@ import { upsertLots, startRun, finishRun, ensureSources } from '../core/repo.js'
 import { processarAposColeta } from '../core/pos-coleta.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
-import { encerrarLotes } from '../core/encerramento.js';
+import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -108,6 +108,35 @@ async function cicloDeEncerramento() {
   }
 }
 setInterval(cicloDeEncerramento, 60_000).unref();
+
+/**
+ * Verificação na origem, em ciclo próprio e mais lento.
+ *
+ * Separada do encerramento por prazo porque a natureza é outra: aquele é uma
+ * consulta local de milissegundos, este faz dezenas de requisições a sites de
+ * terceiros e leva minutos. Rodar os dois no mesmo intervalo faria a varredura
+ * de rede atrasar o fechamento por relógio, que não depende de rede nenhuma.
+ */
+let verificando = false;
+async function cicloDeVerificacao() {
+  if (verificando) return;
+  verificando = true;
+  try {
+    const r = await verificarCandidatos();
+    if (r.verificados) {
+      console.log(
+        `[verificar] ${r.verificados} conferidos na origem: ${r.encerrados} encerrados, ` +
+          `${r.vivos} vivos, ${r.indeterminados} sem resposta`,
+      );
+    }
+  } catch (e: any) {
+    console.error('[verificar] falhou:', e.message);
+  } finally {
+    verificando = false;
+  }
+}
+setInterval(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000)).unref();
+void cicloDeVerificacao();
 // Roda na subida também: reiniciar o worker não deve deixar lote vencido
 // esperando o primeiro minuto.
 void cicloDeEncerramento();

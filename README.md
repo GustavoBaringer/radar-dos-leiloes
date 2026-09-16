@@ -149,15 +149,47 @@ e aplica duas regras:
 | Regra | Alcance | Como decide |
 |---|---|---|
 | **Prazo** | 94% dos lotes | timer vence pelo fim publicado; pregão e sequencial vencem pelo **início**, sem janela de tolerância |
-| **Ausência na fonte** | os 6% sem data nenhuma | não apareceu nas últimas N varreduras **completas** daquela fonte |
+| **Verificação na origem** | os 6% sem data nenhuma | a ausência na varredura PROPÕE o candidato; a fonte DECIDE |
 
 Por que duas: 78,4% dos lotes têm data de fim, os de pregão têm só o início (a fonte
 não publica fim), e **1.041 não têm data nenhuma** — soleon grava as duas como NULL
 incondicionalmente. Nenhum relógio alcança esses.
 
-O corte da segunda regra é por ciclo de varredura, não por horas fixas: fonte que
-ficou fora do ar não pode encerrar o catálogo inteiro dela só porque o tempo passou.
-Sem varredura bem-sucedida não há evidência de ausência, e o lote fica como está.
+### Ausência na varredura NÃO é encerramento
+
+A segunda regra nasceu errada e foi reprovada por medição antes de causar dano.
+`scripts/poc-encerramento.mjs` conferiu, no site da origem, 25 lotes do soleon que
+a versão antiga fecharia: **19 estavam vivos** — 16 com o leilão ainda por abrir
+(`Aguarde Abertura`) e 3 abertos para lance. Erraria 3 em cada 4.
+
+Ausência mede a **cobertura da nossa varredura**, não o estado na fonte. As três
+causas medidas são diferentes entre si:
+
+| Fonte | Por que o lote vivo some da varredura |
+|---|---|
+| soleon | a rota global `/lotes/veiculo` lista leilão **em andamento**; lote de leilão por abrir não aparece |
+| vlance | 15 hosts com lote no índice estão **fora da lista de tenants varridos** — 1.829 lotes nunca revisitados |
+| leilo | em apuração |
+
+Por isso o encerramento passa por `src/core/verificacao.ts`, um verificador por fonte:
+
+- **soleon** — a página do lote traz o estado em `#status_lote .label_lote`, com rótulos
+  medidos em campo (`aberto_lance`, `aguarde_abertura`, `vendido`). Classe desconhecida
+  cai em indeterminado de propósito: inventar significado para rótulo novo é como se
+  fecha lote vivo.
+- **vlance** — a API do host devolve o catálogo ativo inteiro numa requisição, então
+  **uma** chamada resolve todos os lotes daquele host. O veredito se lê ao contrário:
+  presente = vivo, ausente = encerrado. Consulta os quatro `tipo`, não só os dois que o
+  conector ingere — há lote vivo em `tipo` 2 e 4, e conferir só 1 e 3 daria "ausente"
+  para lote vivo.
+- **leilo** — **sem verificador**. A página é SPA (200 com o conteúdo desenhado no
+  cliente, inclusive o "não encontrado"): 47 de 47 lotes deram indeterminado. Enquanto
+  não houver caminho, lote do leilo não é encerrado por este mecanismo — preferir lote
+  a mais na busca a lote vivo apagado em silêncio.
+
+Silêncio nunca vira encerramento: host que não responde devolve indeterminado e o lote
+fica como está, com recuo crescente (`verify_fails`) para não ser reconsultado para
+sempre.
 
 Isso obrigou `collection_runs` a registrar o `limite` da coleta: o refresh quente
 (120 lotes) e a varredura de catálogo (15 mil) gravavam os dois `job='collect'`, e

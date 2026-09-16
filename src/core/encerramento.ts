@@ -11,6 +11,7 @@
  * discordando de novo.
  */
 import { query } from './db.js';
+import { VERIFICADORES, temVerificador, type LoteParaVerificar, type Veredito } from './verificacao.js';
 
 /**
  * Lote vencido pelo relógio.
@@ -59,17 +60,26 @@ async function encerrarPorPrazo(): Promise<number> {
 }
 
 /**
- * Fecha o que a fonte parou de devolver.
+ * DESLIGADA. Ausência na listagem NÃO é evidência de encerramento.
  *
- * É o único caminho para os lotes sem data nenhuma — soleon publica 958 assim,
- * e o conector grava as duas datas como NULL incondicionalmente. Nenhum relógio
- * alcança esses: só a ausência na origem.
+ * Medido em 2026-09-16 com `scripts/poc-encerramento.mjs`, amostra de 25 lotes
+ * do soleon que esta regra fecharia: **19 estavam vivos** (16 com o leilão ainda
+ * por abrir, "Aguarde Abertura", e 3 abertos para lance). Só 5 estavam
+ * encerrados. A regra erraria 3 em cada 4.
  *
- * O corte é por CICLO DE VARREDURA, não por horas fixas. Fonte que ficou fora do
- * ar não pode encerrar o catálogo inteiro dela só porque o tempo passou — sem
- * varredura bem-sucedida não há evidência de ausência, e o lote fica como está.
+ * A causa: a rota global que o conector varre (`/lotes/veiculo`) lista leilão em
+ * ANDAMENTO. Lote de leilão que ainda não abriu não aparece nela e, para esta
+ * regra, era indistinguível de lote que sumiu por ter encerrado.
+ *
+ * Fica aqui, desligada e com o motivo, porque o erro é atraente: a regra parece
+ * óbvia e o dano seria invisível — lote vivo sumindo da busca sem nenhum sintoma.
+ * O caminho certo é verificar a página do lote antes de fechar; a página
+ * discrimina com precisão (`aguarde_abertura` / `aberto_lance` / `vendido`).
  */
+const AUSENCIA_LIGADA = process.env.ENCERRAR_POR_AUSENCIA === '1';
+
 async function encerrarPorAusencia(): Promise<number> {
+  if (!AUSENCIA_LIGADA) return 0;
   const linhas = await query<{ id: string }>(
     `WITH varreduras AS (
        -- As N varreduras COMPLETAS mais recentes de cada fonte. O refresh quente
@@ -99,6 +109,101 @@ async function encerrarPorAusencia(): Promise<number> {
   return linhas.length;
 }
 
+/**
+ * Verifica na origem os candidatos a encerramento e fecha só os confirmados.
+ *
+ * O candidato vem da ausência na varredura; quem decide é a fonte. Lote que a
+ * origem diz vivo ganha `verified_at` e sai da fila por um tempo — não é
+ * reconsultado a cada ciclo, senão a fila nunca esvazia e o tráfego vira
+ * constante contra os mesmos hosts.
+ *
+ * Hosts em paralelo, cadência dentro do host a cargo do verificador (gapMs).
+ * Medido: latência p50 819ms, então o ritmo real é ~1,9s por requisição por
+ * host — estimativa feita com 1 req/s subestima o tempo pela metade.
+ */
+export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_POR_CICLO ?? 300)) {
+  const fontes = Object.keys(VERIFICADORES);
+  if (!fontes.length) return { verificados: 0, encerrados: 0, vivos: 0, indeterminados: 0 };
+
+  const candidatos = await query<{ id: string; source_id: string; external_id: string | null; lot_url: string | null }>(
+    `WITH ult AS (
+       SELECT source_id, max(started_at) u FROM collection_runs
+        WHERE job IN ('collect','collect:cli') AND ok AND limite >= $2 GROUP BY 1)
+     SELECT l.id, l.source_id, l.external_id, l.lot_url
+       FROM lots l JOIN ult ON ult.source_id = l.source_id
+      WHERE l.source_id = ANY($1)
+        AND l.status IN ('aberto','agendado')
+        AND l.collected_at < ult.u
+        -- Recuo: quem a origem já disse vivo espera; quem não deu para decidir
+        -- espera mais a cada tentativa frustrada, até parar de ser reconsultado.
+        AND (l.verified_at IS NULL
+             OR l.verified_at < now() - (interval '6 hours' * GREATEST(1, l.verify_fails)))
+      ORDER BY l.verified_at NULLS FIRST, random()
+      LIMIT $3`,
+    [fontes, LIMITE_DE_VARREDURA, teto],
+  );
+  if (!candidatos.length) return { verificados: 0, encerrados: 0, vivos: 0, indeterminados: 0 };
+
+  const porHost = new Map<string, { fonte: string; lotes: LoteParaVerificar[] }>();
+  for (const c of candidatos) {
+    let host = '';
+    try {
+      host = new URL(c.lot_url ?? '').host;
+    } catch {
+      host = `(sem-url)-${c.source_id}`;
+    }
+    const grupo = porHost.get(host) ?? { fonte: c.source_id, lotes: [] };
+    grupo.lotes.push({ id: Number(c.id), externalId: c.external_id, lotUrl: c.lot_url });
+    porHost.set(host, grupo);
+  }
+
+  const vereditos: Array<{ id: number; veredito: Veredito; sinal: string }> = [];
+  await Promise.all(
+    [...porHost.entries()].map(async ([host, { fonte, lotes }]) => {
+      if (!temVerificador(fonte)) return;
+      try {
+        const r = await VERIFICADORES[fonte].verificar(host, lotes);
+        for (const [id, res] of r) vereditos.push({ id, ...res });
+      } catch (e: any) {
+        for (const l of lotes) vereditos.push({ id: l.id, veredito: 'indeterminado', sinal: String(e.message).slice(0, 50) });
+      }
+    }),
+  );
+
+  const mortos = vereditos.filter((v) => v.veredito === 'encerrado' || v.veredito === 'sumiu');
+  const vivos = vereditos.filter((v) => v.veredito === 'aberto' || v.veredito === 'agendado');
+  const cegos = vereditos.filter((v) => v.veredito === 'indeterminado');
+
+  if (mortos.length) {
+    await query(
+      `UPDATE lots SET status='encerrado', closed_reason='verificado_na_fonte', closed_at=now(),
+              verified_at=now(), verify_result=d.sinal, verify_fails=0
+         FROM (SELECT unnest($1::bigint[]) id, unnest($2::text[]) sinal) d
+        WHERE lots.id = d.id`,
+      [mortos.map((m) => m.id), mortos.map((m) => m.sinal.slice(0, 120))],
+    );
+  }
+  if (vivos.length) {
+    await query(
+      `UPDATE lots SET verified_at=now(), verify_result=d.sinal, verify_fails=0
+         FROM (SELECT unnest($1::bigint[]) id, unnest($2::text[]) sinal) d
+        WHERE lots.id = d.id`,
+      [vivos.map((m) => m.id), vivos.map((m) => m.sinal.slice(0, 120))],
+    );
+  }
+  if (cegos.length) {
+    await query(
+      `UPDATE lots SET verified_at=now(), verify_result=d.sinal, verify_fails=verify_fails+1
+         FROM (SELECT unnest($1::bigint[]) id, unnest($2::text[]) sinal) d
+        WHERE lots.id = d.id`,
+      [cegos.map((m) => m.id), cegos.map((m) => m.sinal.slice(0, 120))],
+    );
+  }
+  return { verificados: vereditos.length, encerrados: mortos.length, vivos: vivos.length, indeterminados: cegos.length };
+}
+
 export async function encerrarLotes(): Promise<ResultadoEncerramento> {
   return { porPrazo: await encerrarPorPrazo(), porAusencia: await encerrarPorAusencia() };
 }
+
+export const ausenciaLigada = () => AUSENCIA_LIGADA;
