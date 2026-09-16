@@ -141,6 +141,23 @@ void cicloDeVerificacao();
 // esperando o primeiro minuto.
 void cicloDeEncerramento();
 
+/**
+ * Job repetido que não tem mais conector fica órfão no Redis e falha a cada
+ * ciclo com "fonte desconhecida". Aconteceu com `collect:serrano`, que virou
+ * `vlance` quando descobrimos que era um tenant da mesma plataforma: o agendado
+ * sobreviveu à renomeação porque vive no Redis, não no código.
+ */
+async function limparAgendamentosOrfaos() {
+  for (const r of await collectQueue.getRepeatableJobs()) {
+    const id = r.name.replace(/^collect:/, '');
+    if (!getConnector(id)) {
+      await collectQueue.removeRepeatableByKey(r.key);
+      console.log(`[agenda] removido job órfão ${r.name} (sem conector)`);
+    }
+  }
+}
+await limparAgendamentosOrfaos();
+
 await ensureSources();
 
 new Worker<CollectJob>(

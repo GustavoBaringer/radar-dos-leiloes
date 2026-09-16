@@ -33,3 +33,9 @@ for (const c of targets) {
 }
 await pub.quit();
 await pool.end();
+// Saída explícita: fechar as conexões não bastava. Algum handle (socket do
+// undici, timer do ioredis) segurava o loop de eventos, e a coleta ficava
+// pendurada para sempre com Postgres e Redis abertos — dez processos assim
+// acumularam num dia, e um deles segurava código de 22h antes, pronto para
+// regravar lote com o classificador velho quando destravasse.
+process.exit(0);
