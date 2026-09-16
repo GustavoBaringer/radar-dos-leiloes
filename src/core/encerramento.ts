@@ -125,11 +125,11 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
   const fontes = Object.keys(VERIFICADORES);
   if (!fontes.length) return { verificados: 0, encerrados: 0, vivos: 0, indeterminados: 0 };
 
-  const candidatos = await query<{ id: string; source_id: string; external_id: string | null; lot_url: string | null }>(
+  const candidatos = await query<{ id: string; source_id: string; external_id: string | null; lot_url: string | null; source_category: string | null }>(
     `WITH ult AS (
        SELECT source_id, max(started_at) u FROM collection_runs
         WHERE job IN ('collect','collect:cli') AND ok AND limite >= $2 GROUP BY 1)
-     SELECT l.id, l.source_id, l.external_id, l.lot_url
+     SELECT l.id, l.source_id, l.external_id, l.lot_url, l.source_category
        FROM lots l JOIN ult ON ult.source_id = l.source_id
       WHERE l.source_id = ANY($1)
         AND l.status IN ('aberto','agendado')
@@ -153,7 +153,7 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
       host = `(sem-url)-${c.source_id}`;
     }
     const grupo = porHost.get(host) ?? { fonte: c.source_id, lotes: [] };
-    grupo.lotes.push({ id: Number(c.id), externalId: c.external_id, lotUrl: c.lot_url });
+    grupo.lotes.push({ id: Number(c.id), externalId: c.external_id, lotUrl: c.lot_url, categoria: c.source_category });
     porHost.set(host, grupo);
   }
 

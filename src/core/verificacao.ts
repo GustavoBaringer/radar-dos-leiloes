@@ -20,6 +20,9 @@ export interface LoteParaVerificar {
   id: number;
   externalId: string | null;
   lotUrl: string | null;
+  /** Categoria da fonte. O verificador do leilo varre POR categoria e precisa
+   *  saber em qual procurar cada lote — e qual delas ficou sem resposta. */
+  categoria: string | null;
 }
 export interface Resultado {
   veredito: Veredito;
@@ -32,6 +35,24 @@ export interface Verificador {
 }
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
+
+/**
+ * A página anuncia alguma praça com data no FUTURO?
+ *
+ * É o que separa "lote sem lance e acabou" de "lote sem lance na 1ª praça que
+ * reabre na 2ª". Leilão judicial no Brasil tem duas praças por lei (CPC 891),
+ * e a segunda usa a mesma URL e o mesmo id.
+ */
+function praçaFutura(html: string): boolean {
+  const agora = Date.now();
+  for (const m of html.matchAll(/Data\s+\d?[ºo]?\s*Leil[ãa]o:?\s*<\/strong>?\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/gi)) {
+    const [, d, mes, a, h = '23', min = '59'] = m;
+    // Horário de Brasília (UTC-3) — a página publica local, sem fuso.
+    const t = Date.parse(`${a}-${mes}-${d}T${h}:${min}:00-03:00`);
+    if (Number.isFinite(t) && t > agora) return true;
+  }
+  return false;
+}
 
 /**
  * SOLEON — a página do lote traz o estado num marcador estável:
@@ -79,13 +100,28 @@ const soleon: Verificador = {
         else if (/aguard/.test(classe)) saida.set(l.id, { veredito: 'agendado', sinal: texto });
         else if (/encerrad|sustad|arrematad|vendid|cancelad|suspens|deserto|retirad/.test(classe)) {
           saida.set(l.id, { veredito: 'encerrado', sinal: texto });
+        } else if (/condicional/.test(classe)) {
+          // Venda condicional: o lance já foi dado e falta só a aprovação do
+          // comitente. O edital do leilão (lido na investigação) diz que a
+          // comissão decide "de forma soberana e irrecorrível" e NÃO prevê
+          // reoferta ao público — não há terceiro que possa dar lance enquanto
+          // isso. Encerrado.
+          saida.set(l.id, { veredito: 'encerrado', sinal: texto });
+        } else if (/sem_licitante|nao_vendido/.test(classe)) {
+          // "Sem Licitante" NÃO encerra sozinho. Contraexemplo medido: leilão
+          // judicial de duas praças (CPC art. 891) — a 1ª praça não teve lance,
+          // e o MESMO lote, na MESMA URL, reabre na 2ª com lance mínimo de 50%.
+          // Fechá-lo perderia justamente a praça mais barata.
+          //
+          // O que discrimina não é a classe, é haver praça futura na página.
+          saida.set(l.id, praçaFutura(r.body)
+            ? { veredito: 'agendado', sinal: `${texto} (2ª praça marcada)` }
+            : /<div[^>]*btn-block[^>]*>\s*<strong>\s*ENCERRADO\s*<\/strong>/i.test(r.body)
+              ? { veredito: 'encerrado', sinal: `${texto} (sem praça futura)` }
+              : { veredito: 'indeterminado', sinal: `${texto}: sem praça futura nem marca de encerrado` });
         } else {
-          // Rótulos vistos em campo e ainda NÃO decididos: `condicional` (venda
-          // sujeita a aprovação do comitente) e `sem_licitante` (pregão sem
-          // lance). Os dois provavelmente significam pregão encerrado, mas não
-          // medi. Tentei usar "a página tem controle de lance?" como sinal e o
-          // controle derrubou: um lote aberto deu false e um "Aguarde Abertura"
-          // deu true. Sem evidência, ficam indeterminados e aparecem no log.
+          // Classe nova: indeterminado de propósito. Inventar significado para
+          // rótulo desconhecido é como se fecha lote vivo.
           saida.set(l.id, { veredito: 'indeterminado', sinal: `${classe}: ${texto}` });
         }
       } catch (e: any) {
@@ -148,15 +184,88 @@ const vlance: Verificador = {
 };
 
 /**
- * LEILO — sem verificador.
+ * LEILO — varredura completa por categoria.
  *
- * A página do lote é SPA: responde 200 e desenha o conteúdo no cliente,
- * inclusive o "não encontrado". Medido em 47 lotes, 47 indeterminados. A API de
- * busca existe, mas o filtro por id não funciona (`campo:"id"` devolve lista
- * vazia até para lote comprovadamente ativo). Enquanto não houver caminho, o
- * lote do leilo NÃO é encerrado por este mecanismo — preferir lote a mais na
- * busca a lote vivo apagado em silêncio.
+ * A página é SPA e não serve: 47 de 47 lotes deram indeterminado no HTML cru.
+ * E o filtro por id da API é instável — medido, `campo:"lelId"` devolveu
+ * `count:0` para 2 de 5 lotes comprovadamente ATIVOS. Filtro pontual não pode
+ * ser veredito.
+ *
+ * O que funciona é a mesma lógica do vlance: a `busca-elastic` devolve SÓ lote
+ * ativo. Medido nas seis categorias (535 itens): `dataFim` no passado = ZERO em
+ * todas elas, e `situacao` só aparece como `LiberadoLeilao` ou `AoVivo`. Logo,
+ * presente na varredura = vivo; ausente = encerrado.
+ *
+ * Todos os lotes do leilo saem do mesmo host, então `porHost: true` junta o
+ * conjunto inteiro e seis varreduras respondem por todos de uma vez.
  */
-export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance };
+const CATEGORIAS_LEILO = ['Carros', 'Motos', 'Utilitarios', 'Sucatas', 'Pesados', 'Equipamentos'];
+const PAGINA_LEILO = 200;
+
+const leilo: Verificador = {
+  porHost: true,
+  async verificar(_host, lotes) {
+    const saida = new Map<number, Resultado>();
+    const vivos = new Set<string>();
+    /** Categorias varridas até o fim. Só nelas a ausência significa alguma coisa. */
+    const completas = new Set<string>();
+
+    for (const cat of CATEGORIAS_LEILO) {
+      let ok = true;
+      let itensNaCategoria = 0;
+      for (let from = 0; from < 5000; from += PAGINA_LEILO) {
+        let r;
+        try {
+          r = await fetchJson<any>('https://api.leilo.com.br/v1/lote/busca-elastic', {
+            method: 'POST',
+            gapMs: 1100,
+            timeoutMs: 40000,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              from,
+              size: PAGINA_LEILO,
+              requisicoesBusca: [{ campo: 'tipo', tipo: 'exata', valor: cat }],
+            }),
+          });
+        } catch {
+          ok = false;
+          break;
+        }
+        const itens: any[] = r.status === 200 ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? [])) : [];
+        if (r.status !== 200 || !Array.isArray(itens)) {
+          ok = false;
+          break;
+        }
+        itensNaCategoria += itens.length;
+        for (const it of itens) vivos.add(String(it.lelId ?? it.id));
+        // Página incompleta = fim da categoria. É o sinal de que a varredura
+        // chegou ao fim, e não de que a API cortou a resposta no meio.
+        if (itens.length < PAGINA_LEILO) break;
+      }
+      // Categoria que devolveu ZERO é indistinguível de categoria que falhou.
+      // Aceitar o vazio encerraria todos os lotes dela de uma vez — é o mesmo
+      // erro de tratar silêncio como resposta.
+      if (ok && itensNaCategoria > 0) completas.add(cat);
+    }
+
+    for (const l of lotes) {
+      const cat = l.categoria ?? '';
+      if (!completas.has(cat)) {
+        saida.set(l.id, { veredito: 'indeterminado', sinal: `categoria "${cat}" não varrida por completo` });
+        continue;
+      }
+      const ext = String(l.externalId ?? '');
+      saida.set(
+        l.id,
+        vivos.has(ext)
+          ? { veredito: 'aberto', sinal: 'presente na varredura da categoria' }
+          : { veredito: 'encerrado', sinal: 'ausente da varredura completa da categoria' },
+      );
+    }
+    return saida;
+  },
+};
+
+export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance, leilo };
 
 export const temVerificador = (fonte: string) => fonte in VERIFICADORES;

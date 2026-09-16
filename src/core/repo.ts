@@ -130,6 +130,8 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
            color=EXCLUDED.color, fuel=EXCLUDED.fuel, plate_masked=EXCLUDED.plate_masked, doc_type=EXCLUDED.doc_type,
            closing_model=EXCLUDED.closing_model, auction_start_utc=EXCLUDED.auction_start_utc,
            auction_end_utc=EXCLUDED.auction_end_utc, source_tz=EXCLUDED.source_tz, status=EXCLUDED.status,
+          closed_reason=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_reason END,
+          closed_at=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_at END,
            current_bid=EXCLUDED.current_bid, min_bid=EXCLUDED.min_bid, bid_increment=EXCLUDED.bid_increment,
            appraisal=EXCLUDED.appraisal, fees_pct=EXCLUDED.fees_pct, fees_amount=EXCLUDED.fees_amount,
            auctioneer_name=EXCLUDED.auctioneer_name, auctioneer_reg=EXCLUDED.auctioneer_reg,
