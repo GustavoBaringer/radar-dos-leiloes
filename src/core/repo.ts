@@ -1,5 +1,6 @@
 import { query, pool } from './db.js';
 import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade } from './normalize.js';
+import { VENCIDO } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
 import { connectors } from '../connectors/index.js';
@@ -247,23 +248,11 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     P('search_text LIKE ?', `%${parsed.compactTerm}%`);
   }
 
-  // Um lote está vencido quando o timer dele passou (fontes com fim por lote)
-  // OU quando a hora do pregão já chegou.
-  //
-  // NENHUMA fonte de pregão publica hora de término, e a API da Copart também
-  // não ajuda: `upcoming` marca lote sem classificação, não lote futuro. Já
-  // testei janela de tolerância (6h, depois 3h) e o resultado é lote de manhã
-  // ainda na lista à tarde. Como o lote em pregão não é algo que o usuário possa
-  // planejar — ou está sendo vendido agora, ou já foi — ele sai do resultado
-  // padrão assim que a hora chega. Continua acessível em Situação = Encerrado.
-  // O COALESCE não é adorno: lote com timer e SEM fim publicado deixava a
-  // expressão em NULL, e `NOT NULL` também é NULL, que o WHERE trata como falso.
-  // 409 lotes abertos/agendados sumiam da busca padrão por causa disso.
-  // Sem saber se venceu, o certo é não tratar como vencido: o status da fonte decide.
-  const VENCIDO = `COALESCE(
-    (closing_model = 'timer_por_lote' AND auction_end_utc < now())
-    OR (closing_model <> 'timer_por_lote' AND auction_start_utc <= now())
-  , FALSE)`;
+  // A regra de vencimento mora em encerramento.ts, que é quem a GRAVA uma vez
+  // por minuto. Manter uma cópia aqui faria a listagem (que filtra) divergir do
+  // status gravado (que a página do lote lê) — foi exatamente esse o defeito.
+  // O filtro continua aqui como rede: entre dois minutos do job há lote que
+  // acabou de vencer e ainda não foi gravado.
 
   /** 'a,b' e ['a','b'] viram a mesma lista; string única vira lista de um. */
   const lista = (v: Multi): string[] =>
@@ -468,10 +457,10 @@ export async function getStats() {
   return { totals, bySource, runs };
 }
 
-export async function startRun(sourceId: string, job: string): Promise<number> {
+export async function startRun(sourceId: string, job: string, limite?: number): Promise<number> {
   const [row] = await query<{ id: string }>(
-    'INSERT INTO collection_runs (source_id, job) VALUES ($1,$2) RETURNING id',
-    [sourceId, job],
+    'INSERT INTO collection_runs (source_id, job, limite) VALUES ($1,$2,$3) RETURNING id',
+    [sourceId, job, limite ?? null],
   );
   return Number(row.id);
 }

@@ -94,7 +94,7 @@ export async function usuarioDoPortao(papel: Papel): Promise<Identidade> {
 }
 
 /**
- * Identidade do visitante anônimo do catálogo público (SEO_PUBLICO=1).
+ * Identidade do visitante anônimo da landing pública.
  * `userId` é 0 — nenhuma linha de `users` tem esse id, então toda consulta
  * filtrada por dono devolve vazio em vez de devolver o do administrador.
  */

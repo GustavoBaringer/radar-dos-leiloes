@@ -17,7 +17,16 @@ const SENHA_COMUM = process.env.APP_SENHA_COMUM ?? '';
 
 export type Papel = 'admin' | 'comum';
 const SEGREDO = process.env.APP_SESSAO_SEGREDO ?? randomBytes(32).toString('hex');
-const VALIDADE_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * Duas janelas, não uma.
+ *
+ * `OCIOSA` é quanto tempo a sessão sobrevive sem uso e é renovada a cada
+ * requisição; `ABSOLUTA` é o teto que nenhuma renovação ultrapassa. Só a
+ * absoluta é o que havia antes: uma sessão de 30 dias que nunca expirava por
+ * inatividade, então um cookie copiado valia um mês inteiro.
+ */
+const OCIOSA_MS = Number(process.env.APP_SESSAO_OCIOSA_HORAS ?? 12) * 3600 * 1000;
+const ABSOLUTA_MS = Number(process.env.APP_SESSAO_HORAS ?? 720) * 3600 * 1000;
 
 export const authLigada = () => SENHA.length > 0;
 export const COOKIE = 'radar_sessao';
@@ -55,32 +64,66 @@ export function papelDasCredenciais(usuario: string, senha: string): Papel | nul
  * O formato mudou de 2 para 3 partes, então cookie antigo é rejeitado sozinho
  * pelo parse — todo mundo desloga uma vez, e não fica código de compatibilidade.
  */
-export function criarToken(papel: Papel, sub?: string | null): string {
-  const expira = Date.now() + VALIDADE_MS;
+export function criarToken(papel: Papel, sub?: string | null, nasceu = Date.now()): string {
+  const expira = Date.now() + OCIOSA_MS;
   // `sub` é o identificador do provedor OIDC; vazio nas sessões do portão de
-  // senha, que não vêm de provedor nenhum. Vai DENTRO do HMAC junto com o
-  // papel: sem isso o cliente trocaria o sub e assumiria a conta de outro.
+  // senha, que não vêm de provedor nenhum. Ele e o `nasceu` vão DENTRO do HMAC:
+  // sem isso o cliente trocaria o sub para assumir outra conta, ou o nasceu
+  // para fugir do teto absoluto renovando para sempre.
   const s = sub ?? '';
-  const assinatura = createHmac('sha256', SEGREDO).update(`${expira}:${papel}:${s}`).digest('hex');
-  return `${expira}.${papel}.${Buffer.from(s).toString('base64url')}.${assinatura}`;
+  const assinatura = createHmac('sha256', SEGREDO).update(`${nasceu}:${expira}:${papel}:${s}`).digest('hex');
+  return `${nasceu}.${expira}.${papel}.${Buffer.from(s).toString('base64url')}.${assinatura}`;
 }
 
-export function lerToken(token?: string | null): { valido: boolean; papel: Papel | null; sub: string | null } {
-  const invalido = { valido: false, papel: null, sub: null };
-  if (!token) return invalido;
-  // Quatro partes. O formato anterior tinha três, então cookie velho é
-  // rejeitado sozinho pelo parse: todos deslogam uma vez e não fica código de
-  // compatibilidade para manter.
-  const [expira, papel, subB64, assinatura] = String(token).split('.');
-  if (!expira || !papel || subB64 === undefined || !assinatura) return invalido;
-  if (papel !== 'admin' && papel !== 'comum') return invalido;
-  if (Number(expira) < Date.now()) return invalido;
+export interface Sessao {
+  valido: boolean;
+  papel: Papel | null;
+  sub: string | null;
+  /** Momento do login. É o que o teto absoluto mede, e por isso não se renova. */
+  nasceu: number;
+  /** Fim da janela de ociosidade deste cookie. */
+  expiraEm: number;
+  /** Por que caiu, quando caiu. A tela de login mostra o motivo em vez de um formulário mudo. */
+  motivo: 'ok' | 'ausente' | 'malformado' | 'ocioso' | 'expirado' | 'assinatura';
+}
+
+export function lerToken(token?: string | null): Sessao {
+  const ruim = (motivo: Sessao['motivo']): Sessao => ({ valido: false, papel: null, sub: null, nasceu: 0, expiraEm: 0, motivo });
+  if (!token) return ruim('ausente');
+  // Cinco partes. Cada mudança de formato invalida os cookies do formato
+  // anterior sozinha, pelo parse: todos deslogam uma vez e não sobra código de
+  // compatibilidade para manter depois.
+  const [nasceuS, expira, papel, subB64, assinatura] = String(token).split('.');
+  if (!nasceuS || !expira || !papel || subB64 === undefined || !assinatura) return ruim('malformado');
+  if (papel !== 'admin' && papel !== 'comum') return ruim('malformado');
+  const nasceu = Number(nasceuS);
+  if (!Number.isFinite(nasceu)) return ruim('malformado');
   let sub = '';
   try {
     sub = Buffer.from(subB64, 'base64url').toString('utf8');
   } catch {
-    return invalido;
+    return ruim('malformado');
   }
-  const esperada = createHmac('sha256', SEGREDO).update(`${expira}:${papel}:${sub}`).digest('hex');
-  return iguais(assinatura, esperada) ? { valido: true, papel, sub: sub || null } : invalido;
+  // A assinatura é conferida ANTES das datas: sem isso um token forjado com
+  // data válida receberia a resposta "expirado", que confirma o formato ao
+  // atacante em vez de recusar sem informação.
+  const esperada = createHmac('sha256', SEGREDO).update(`${nasceu}:${expira}:${papel}:${sub}`).digest('hex');
+  if (!iguais(assinatura, esperada)) return ruim('assinatura');
+  if (Number(expira) < Date.now()) return ruim('ocioso');
+  if (Date.now() - nasceu > ABSOLUTA_MS) return ruim('expirado');
+  return { valido: true, papel, sub: sub || null, nasceu, expiraEm: Number(expira), motivo: 'ok' };
 }
+
+/**
+ * A sessão deve ser renovada agora?
+ *
+ * Reescrever o cookie a cada requisição significaria um Set-Cookie em toda
+ * chamada de API, inclusive nas dezenas que uma tela faz ao abrir. Renovar só
+ * quando já passou um terço da janela mantém o efeito deslizante com uma
+ * fração da escrita.
+ */
+export function precisaRenovar(s: Sessao): boolean {
+  return s.valido && s.expiraEm - Date.now() < OCIOSA_MS * (2 / 3);
+}
+
+export const JANELAS = { ociosaMs: OCIOSA_MS, absolutaMs: ABSOLUTA_MS };

@@ -353,7 +353,7 @@ async function iniciar() {
   observar();
   let d;
   try {
-    d = await (await fetch('/api/landing')).json();
+    d = await (await fetch('/api/vitrine')).json();
   } catch {
     $('painelNome').textContent = 'Não foi possível carregar o índice agora.';
     return;

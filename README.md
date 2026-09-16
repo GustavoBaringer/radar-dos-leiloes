@@ -104,9 +104,16 @@ A página do lote é a que traz busca orgânica de cauda longa, e ela é casca d
 o robô lê o HTML, não o resultado do `fetch`. Por isso o `<head>` dela é montado no
 servidor a partir do lote, enquanto o conteúdo visível continua sendo montado no cliente.
 
-`SEO_PUBLICO=1` tira o catálogo de leitura de trás do portão de senha (landing, busca,
-página de lote, cobertura). Sem isso o robô recebe `302` para `/login` e nada é indexado.
-As telas de conta e a coleta continuam exigindo sessão. **Vem desligado.**
+**Só a landing é pública**, e o que ela precisa para se desenhar: `/api/vitrine`
+(no máximo 8 lotes, sem busca, sem filtro, sem paginação), o proxy de imagem,
+`landing.css`/`landing.js` e a lista de espera. O resto do catálogo — `/busca`,
+`/lote/:slug`, `/home`, `/cobertura` e as APIs de busca — exige conta.
+
+Consequência assumida: o sitemap tem 5 URLs, não 22 mil. Anunciar página de lote
+que responde `302` gastaria rastreio e marcaria o site como cheio de redirect. O
+preço é a cauda longa ("honda civic 2018 leilão"), que era o que a meta por lote
+renderizada no servidor ia capturar — ela continua no código, pronta, para o dia
+em que a página do lote voltar a ser pública.
 
 ## Lista de espera
 
@@ -127,6 +134,34 @@ picape (*Montana Ranger*) e ônibus em caminhão (*ÔNIBUS SCANIA MODELO COMIL*)
 Armadilha relacionada: o dicionário roda sobre texto já normalizado por `fold()`, que
 troca `/` e `-` por espaço. Regra com esses caracteres (`semi-?reboque`, `R/`) é **letra
 morta** — não dá erro, não dá zero visível, simplesmente nunca casa.
+
+## Encerramento de lote
+
+Até `db/012_encerramento.sql` **nada fechava lote**: o único lugar que escrevia
+`lots.status` era o upsert da coleta. Quando a fonte parava de devolver um lote, a
+linha nunca mais era tocada e ficava aberta para sempre. Medido no dia: 3.432 lotes
+vencidos ainda como abertos, e o número subia sozinho a cada hora.
+
+O job roda **a cada minuto** no worker (intervalo, não fila: um job repetido do BullMQ
+criaria 1.440 entradas por dia para um trabalho que quase sempre atualiza zero linha)
+e aplica duas regras:
+
+| Regra | Alcance | Como decide |
+|---|---|---|
+| **Prazo** | 94% dos lotes | timer vence pelo fim publicado; pregão e sequencial vencem pelo **início**, sem janela de tolerância |
+| **Ausência na fonte** | os 6% sem data nenhuma | não apareceu nas últimas N varreduras **completas** daquela fonte |
+
+Por que duas: 78,4% dos lotes têm data de fim, os de pregão têm só o início (a fonte
+não publica fim), e **1.041 não têm data nenhuma** — soleon grava as duas como NULL
+incondicionalmente. Nenhum relógio alcança esses.
+
+O corte da segunda regra é por ciclo de varredura, não por horas fixas: fonte que
+ficou fora do ar não pode encerrar o catálogo inteiro dela só porque o tempo passou.
+Sem varredura bem-sucedida não há evidência de ausência, e o lote fica como está.
+
+Isso obrigou `collection_runs` a registrar o `limite` da coleta: o refresh quente
+(120 lotes) e a varredura de catálogo (15 mil) gravavam os dois `job='collect'`, e
+contar o refresh como ciclo encerraria lote que ele nunca teve por que visitar.
 
 ## Status das fontes
 
@@ -179,6 +214,22 @@ não resolve posse — por isso a coluna `owner_id` veio antes do Keycloak, e n�
 O dono entra no `WHERE`, não numa checagem separada: entre ler e apagar existe uma
 janela, e um 404 honesto é melhor que um 403 que confirma a existência do alerta
 de outra pessoa.
+
+### Tempo de sessão
+
+Duas janelas, não uma. `APP_SESSAO_OCIOSA_HORAS` (12h por padrão) é quanto a sessão
+sobrevive sem uso e **desliza**: cada requisição renova, mas só grava o cookie quando
+já passou um terço da janela — renovar em toda chamada colocaria um `Set-Cookie` nas
+dezenas de requisições que uma tela faz ao abrir.
+
+`APP_SESSAO_HORAS` (720h) é o teto que nenhuma renovação ultrapassa. O momento do
+login viaja dentro do HMAC, então não há como renovar para sempre. Antes existia só
+o teto: uma sessão de 30 dias que nunca expirava por inatividade, e um cookie copiado
+valia um mês.
+
+A assinatura é conferida **antes** das datas de propósito: um token forjado com data
+válida receberia "expirado", que confirma o formato ao atacante em vez de recusar
+sem informação.
 
 ### Freio de força bruta
 

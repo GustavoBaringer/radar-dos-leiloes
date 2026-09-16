@@ -10,7 +10,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { searchLots, getLot, getStats, ensureSources } from './core/repo.js';
 import { avaliarAlertas } from './core/alerts.js';
-import { authLigada, papelDasCredenciais, criarToken, lerToken, COOKIE, type Papel } from './core/auth.js';
+import { authLigada, papelDasCredenciais, criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
 import { oidcLigado, iniciarLogin, concluirLogin, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
 import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Identidade } from './core/identidade.js';
 import { query } from './core/db.js';
@@ -40,26 +40,34 @@ await app.register(formbody);
 const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/styles.css']);
 
 /**
- * Catálogo público, conta continua fechada.
+ * Superfície pública.
  *
- * Uma landing de SEO atrás de senha não indexa nada: o robô recebe 302 para
- * /login e vai embora. Só que abrir tudo entregaria também alertas e coleta,
- * então o portão continua valendo — o que sai dele é o que um buscador precisa
- * ver e um visitante pode ler sem conta: landing, busca, página de lote,
- * cobertura e as leituras que essas telas fazem.
+ * A landing existe para vender o sistema para quem ainda não tem conta: atrás
+ * de senha ela não indexa (o robô leva 302 para /login) e não converte. Então
+ * ela e o que ela precisa para se desenhar ficam abertos — e SÓ isso.
  *
- * Desligado por padrão. Ligar é decisão de publicação: SEO_PUBLICO=1.
+ * O catálogo NÃO entra aqui: a vitrine da landing é um endpoint próprio, com
+ * resultado limitado e sem busca. Ver o resto dos anúncios exige conta.
  */
-const SEO_PUBLICO = process.env.SEO_PUBLICO === '1';
-const LIVRES_SEO = new Set([
-  '/', '/home', '/busca', '/cobertura', '/robots.txt', '/sitemap.xml',
-  '/api/home', '/api/home/leiloeiro', '/api/landing', '/api/espera', '/api/search', '/api/img',
-  '/api/sources', '/api/brands', '/api/stats', '/api/explain',
-  '/cartao.js', '/slug.js', '/landing.js', '/landing.css', '/cartao.css', '/home.js', '/app.js',
+const PUBLICAS = new Set([
+  '/',
+  '/robots.txt',
+  '/sitemap.xml',
+  // A vitrine é o único endereço de dado aberto, e devolve no máximo 8 lotes.
+  '/api/vitrine',
+  '/api/espera',
+  // O proxy de imagem é o que desenha as fotos da vitrine. Sem ele a landing
+  // pública abre com oito placeholders.
+  '/api/img',
+  '/landing.css',
+  '/landing.js',
+  '/cartao.js',
+  '/cartao.css',
+  '/slug.js',
+  '/nopic.svg',
+  '/nopic-imovel.svg',
 ]);
-const PREFIXOS_SEO = ['/lote/', '/api/lot/'];
-const liberadoPorSeo = (caminho: string) =>
-  SEO_PUBLICO && (LIVRES_SEO.has(caminho) || PREFIXOS_SEO.some((p) => caminho.startsWith(p)));
+const ehPublica = (caminho: string) => PUBLICAS.has(caminho);
 
 const PAGINA_LOGIN = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Radar de Leilões</title>
@@ -110,7 +118,7 @@ if (authLigada()) {
     // Visitante anônimo no catálogo público entra como 'comum': as telas que
     // dependem de papel (coleta, alerta) continuam exigindo sessão. A lista de
     // espera é a única escrita liberada — é o CTA da landing e não lê nada.
-    if (liberadoPorSeo(caminho) && (req.method === 'GET' || caminho === '/api/espera')) {
+    if (ehPublica(caminho) && (req.method === 'GET' || caminho === '/api/espera')) {
       (req as any).papel = 'comum';
       // userId 0: nenhuma linha de users tem esse id, então consulta filtrada
       // por dono devolve vazio em vez de devolver os alertas do administrador.
@@ -126,6 +134,12 @@ if (authLigada()) {
       (req as any).papel = sessao.papel;
       // A identidade resolvida acompanha a requisição: é o `userId` dela que
       // filtra alerts, saved_searches e push_subscriptions por dono.
+      // Sessão deslizante: renovar prorroga a janela de OCIOSIDADE, nunca o teto
+      // absoluto — `nasceu` viaja igual e assinado, então não há como renovar
+      // para sempre.
+      if (precisaRenovar(sessao)) {
+        reply.header('set-cookie', cookieDeSessao(req, criarToken(sessao.papel, sessao.sub, sessao.nasceu)));
+      }
       const eu = sessao.sub ? await identidadePorSub(sessao.sub) : await usuarioDoPortao(sessao.papel);
       // Sessão assinada apontando para usuário que não existe mais (conta
       // apagada no provedor): melhor mandar para o login do que seguir sem dono.
@@ -463,7 +477,12 @@ app.get('/robots.txt', async (_req, reply) =>
       'Allow: /api/img',
       'Disallow: /api/',
       'Disallow: /login',
+      // Exigem conta: rastrear leva a 302 e não produz página indexável.
+      'Disallow: /busca',
       'Disallow: /alertas',
+      'Disallow: /cobertura',
+      'Disallow: /lote/',
+      'Disallow: /home',
       'Allow: /',
       '',
       `Sitemap: ${SITE}/sitemap.xml`,
@@ -473,29 +492,16 @@ app.get('/robots.txt', async (_req, reply) =>
 );
 
 app.get('/sitemap.xml', async (_req, reply) => {
-  const lotes = await query<{ id: number; slug: string; collected_at: string }>(
-    `SELECT id,
-            regexp_replace(
-              lower(translate(coalesce(title_display, title_raw, 'lote'),
-                'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
-                'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC')),
-              '[^a-z0-9]+', '-', 'g') AS slug,
-            collected_at
-       FROM lots
-      WHERE status IN ('aberto','agendado','sem_data')
-      ORDER BY collected_at DESC
-      LIMIT 40000`,
-  );
-  const url = (loc: string, mod?: string, prio?: string) =>
-    `<url><loc>${loc}</loc>${mod ? `<lastmod>${mod}</lastmod>` : ''}${prio ? `<priority>${prio}</priority>` : ''}</url>`;
-  const fixas = ['/', '/home', '/busca', '/busca?tipo=veiculo', '/busca?tipo=imovel'];
-  const corpo = [
-    ...fixas.map((r) => url(`${SITE}${r.replace(/&/g, '&amp;')}`, undefined, r === '/' ? '1.0' : '0.8')),
-    ...lotes.map((l) =>
-      url(`${SITE}/lote/${l.slug.replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/, '')}-${l.id}`,
-          new Date(l.collected_at).toISOString().slice(0, 10), '0.6'),
-    ),
-  ].join('');
+  // Só a landing entra. As 22 mil páginas de lote exigem conta agora, e
+  // anunciar no sitemap URL que responde 302 para /login é pior do que não
+  // anunciar: o buscador gasta rastreio e marca o site como cheio de redirect.
+  //
+  // O custo dessa decisão é a cauda longa ("honda civic 2018 leilão"), que era
+  // justamente o que a meta por lote renderizada no servidor ia capturar.
+  const corpo = [...PUBLICAS]
+    .filter((r) => !r.startsWith('/api/') && !/\.(css|js|svg|txt|xml)$/.test(r))
+    .map((r) => `<url><loc>${SITE}${r === '/' ? '/' : r}</loc><priority>${r === '/' ? '1.0' : '0.7'}</priority></url>`)
+    .join('');
   return reply
     .type('application/xml; charset=utf-8')
     .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${corpo}</urlset>`);
@@ -559,7 +565,17 @@ app.get('/api/home', async () => {
  * "21.943 lotes" e "116 leiloeiros" escritos no HTML — número chumbado em
  * landing de agregador vira mentira no mesmo dia.
  */
-app.get('/api/landing', async () => {
+/**
+ * Vitrine pública da landing.
+ *
+ * É o ÚNICO endereço de dado aberto, e por isso tem teto rígido: 8 lotes, 12
+ * leiloeiros, contagens agregadas. Não aceita termo de busca, filtro nem
+ * paginação — quem quiser percorrer o catálogo entra na conta. Era essa a
+ * diferença entre "landing pública" e "índice público".
+ */
+const TETO_VITRINE = 8;
+
+app.get('/api/vitrine', async () => {
   const ABERTOS = `status IN ('aberto','agendado','sem_data')`;
   // As categorias são as do índice de verdade, com a mesma query que o filtro da
   // busca usa — assim o número do cartão e o resultado do clique não divergem.
@@ -608,7 +624,7 @@ app.get('/api/landing', async () => {
          SELECT *, row_number() OVER (PARTITION BY source_id ORDER BY first_seen_at DESC, id DESC) AS n
            FROM lots
           WHERE ${ABERTOS} AND photos IS NOT NULL AND jsonb_array_length(photos) > 0
-       ) t WHERE n <= 2 ORDER BY first_seen_at DESC, id DESC LIMIT 8`,
+       ) t WHERE n <= 2 ORDER BY first_seen_at DESC, id DESC LIMIT ${TETO_VITRINE}`,
     ),
     // Só timer por lote entra no painel: pregão em horário marcado não tem fim
     // por lote, e enfileirar os dois ali seria prometer prazo que a fonte não dá.

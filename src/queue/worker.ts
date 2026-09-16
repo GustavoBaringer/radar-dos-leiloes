@@ -5,6 +5,7 @@ import { upsertLots, startRun, finishRun, ensureSources } from '../core/repo.js'
 import { processarAposColeta } from '../core/pos-coleta.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
+import { encerrarLotes } from '../core/encerramento.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -15,7 +16,7 @@ const publisher = makeRedis();
 async function runCollect(sourceId: string, limit: number) {
   // startRun ANTES de validar a fonte: com o throw primeiro, um sourceId
   // errado não gerava linha nenhuma em collection_runs e sumia da tela.
-  const runId = await startRun(sourceId, 'collect');
+  const runId = await startRun(sourceId, 'collect', limit);
   const connector = getConnector(sourceId);
   if (!connector) {
     await finishRun(runId, { ok: false, error: `fonte desconhecida: ${sourceId}` });
@@ -79,6 +80,37 @@ async function runRefresh() {
   }
   return { hot: hot.reduce((a, b) => a + b.n, 0) };
 }
+
+/**
+ * Encerramento a cada minuto.
+ *
+ * Fica num intervalo do próprio worker, não numa fila: é uma consulta curta com
+ * índice, sem rede e sem risco de acumular fila. Um job repetido do BullMQ para
+ * isto criaria entrada de fila por minuto — 1.440 por dia — para um trabalho
+ * que na maior parte das vezes atualiza zero linha.
+ *
+ * O `travado` impede sobreposição: se uma varredura demorar mais que o minuto,
+ * a seguinte espera em vez de rodar o mesmo UPDATE em paralelo.
+ */
+let travado = false;
+async function cicloDeEncerramento() {
+  if (travado) return;
+  travado = true;
+  try {
+    const r = await encerrarLotes();
+    if (r.porPrazo || r.porAusencia) {
+      console.log(`[encerrar] prazo: ${r.porPrazo} · ausente na fonte: ${r.porAusencia}`);
+    }
+  } catch (e: any) {
+    console.error('[encerrar] falhou:', e.message);
+  } finally {
+    travado = false;
+  }
+}
+setInterval(cicloDeEncerramento, 60_000).unref();
+// Roda na subida também: reiniciar o worker não deve deixar lote vencido
+// esperando o primeiro minuto.
+void cicloDeEncerramento();
 
 await ensureSources();
 

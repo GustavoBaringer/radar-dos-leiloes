@@ -8,14 +8,15 @@
 import { chromium } from 'playwright-core';
 import { readFileSync } from 'node:fs';
 
-const BASE = process.env.BASE ?? 'http://localhost:4600';
+const BASE = process.env.BASE ?? 'http://localhost:4500';
 const DIR = '/tmp/claude-1000/-home-gustavopereira-projetos/63e603a2-8717-4a2b-a04d-f0200fa824d5/scratchpad';
 const b = await chromium.launch({ headless: true, executablePath: '/home/gustavopereira/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome' });
 const falhas = [];
+const ok2 = (c, m) => (c ? console.log(`  PASSA  ${m}`) : falhas.push(m));
 
 // Nenhum dos números do índice pode estar escrito no arquivo servido.
 const html = readFileSync('src/web/landing.html', 'utf8');
-const api = await (await fetch(`${BASE}/api/landing`)).json();
+const api = await (await fetch(`${BASE}/api/vitrine`)).json();
 for (const [campo, valor] of Object.entries({ total: api.total, leiloeiros: api.totalLeiloeiros })) {
   if (valor > 999 && html.includes(String(valor))) falhas.push(`número de "${campo}" (${valor}) chumbado no HTML`);
 }
@@ -136,6 +137,29 @@ console.log({ primeira: um, repetida: dois, emailInvalido: ruim.status });
 if (!um.ok || um.jaEstava) falhas.push('lista de espera: primeiro envio não gravou');
 if (!dois.jaEstava) falhas.push('lista de espera: duplicata não foi detectada');
 if (ruim.status !== 400) falhas.push(`lista de espera: e-mail inválido devolveu ${ruim.status}, esperado 400`);
+
+
+// A landing tem de abrir para VISITANTE, sem cookie nenhum — era esse o pedido.
+// E o resto do catálogo tem de continuar fechado: uma landing pública que abre
+// o índice junto é o defeito oposto, e igualmente silencioso.
+{
+  const ctx = await b.newContext();
+  const p = await ctx.newPage();
+  const r = await p.goto(`${BASE}/`);
+  ok2(r.status() === 200 && !p.url().includes('/login'), `landing abre sem conta (HTTP ${r.status()}, ${p.url()})`);
+  await p.waitForSelector('#lotesGrade .card', { timeout: 20000 });
+  ok2((await p.locator('#lotesGrade .card').count()) > 0, 'a vitrine desenha lotes para o visitante');
+  ok2((await p.locator('#lotesGrade .card img[src^="/api/img"]').count()) > 0, 'as fotos da vitrine carregam pelo proxy');
+  for (const rota of ['/busca', '/lote/x-319', '/home', '/alertas']) {
+    const resp = await p.goto(`${BASE}${rota}`);
+    ok2(p.url().includes('/login'), `${rota} exige conta (terminou em ${p.url()})`);
+  }
+  const api = await p.evaluate(() => fetch('/api/search?q=hilux').then((r) => r.status));
+  ok2(api === 401, `/api/search sem conta devolve 401 (devolveu ${api})`);
+  const vitrine = await p.evaluate(() => fetch('/api/vitrine').then((r) => r.json()));
+  ok2(vitrine.recentes.length <= 8, `a vitrine devolve no máximo 8 lotes (devolveu ${vitrine.recentes.length})`);
+  await ctx.close();
+}
 
 await b.close();
 console.log(falhas.length ? `\nFALHOU:\n- ${falhas.join('\n- ')}` : '\nOK: landing válida para leitor, para robô e para o formulário.');

@@ -12,7 +12,7 @@ const pub = makeRedis();
 await ensureSources();
 for (const c of targets) {
   const t0 = Date.now();
-  const runId = await startRun(c.def.id, 'collect:cli');
+  const runId = await startRun(c.def.id, 'collect:cli', limit);
   try {
     const res = await c.collect({ limit });
     const { upserted, bidChanges, novos } = await upsertLots(res.lots);
