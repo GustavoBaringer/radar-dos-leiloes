@@ -356,10 +356,10 @@
        que importa é o primeiro cartão. Linha 1: marca, estado, menu.
        Linha 2: a busca inteira. */
     .topo-inner { row-gap: 8px }
-    .logo { order: 1 }
-    .ws-dot { order: 2; margin-left: auto }
-    .abre-menu { order: 3 }
-    .busca-topo { order: 4; flex: 1 0 100% }
+    .topo-inner:not(.topo-publico) .logo { order: 1 }
+    .topo-inner:not(.topo-publico) .ws-dot { order: 2; margin-left: auto }
+    .topo-inner:not(.topo-publico) .abre-menu { order: 3 }
+    .topo-inner:not(.topo-publico) .busca-topo { order: 4; flex: 1 0 100% }
   }
   .menu-movel { display: grid; gap: 2px; padding: 8px 16px 14px; border-top: 1px solid var(--border) }
   .menu-movel button, .menu-movel a {
@@ -678,7 +678,12 @@
     padding: 0 0 14px; border-bottom: 1px solid var(--border);
   }
   .lote-pagina .painel-corpo { padding: 18px 0 0; max-width: none }
-  .topo-entrar { margin-left: auto; display: inline-flex; align-items: center; text-decoration: none }
+  .topo-publico { justify-content: space-between; flex-wrap: nowrap }
+  .topo-entrar { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; text-decoration: none }
+  /* Em tela estreita a marca some no cabeçalho logado para dar lugar à busca;
+     aqui não há busca, então ela fica — é o único sinal de onde o visitante
+     está. */
+  .topo-publico .logo-txt { display: inline }
 
   .convite {
     display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;

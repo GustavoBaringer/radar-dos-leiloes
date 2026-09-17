@@ -60,6 +60,30 @@ const b = await chromium.launch({ executablePath: ach() });
   await ctx.close();
 }
 
+/* o cabeçalho público em tela estreita */
+{
+  // O defeito era só no celular: a reordenação do cabeçalho LOGADO (marca,
+  // estado e menu numa linha; busca na de baixo) vazava para o público, que tem
+  // outros filhos, e jogava "Entrar" na frente da marca. Por isso a asserção
+  // roda em 390px — em 1280 nunca teria aparecido.
+  for (const w of [390, 768, 1280]) {
+    const ctx = await b.newContext({ viewport: { width: w, height: 820 } });
+    const p = await ctx.newPage();
+    await p.goto(`${API}/lote/${SLUG}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(1200);
+    const m = await p.evaluate(() => {
+      const r = (s) => { const e = document.querySelector(s); if (!e) return null;
+        const b = e.getBoundingClientRect(); return { x: Math.round(b.left), dir: Math.round(b.right) }; };
+      return { logo: r('.logo'), entrar: r('.topo-entrar'), marca: !!document.querySelector('.topo-publico .logo-txt'),
+               overflow: document.documentElement.scrollWidth > window.innerWidth };
+    });
+    const bom = m.logo && m.entrar && m.logo.x < m.entrar.x && m.logo.x <= 34 && !m.overflow && m.marca;
+    bom ? ok(`cabeçalho público em ${w}px`, `marca x=${m.logo.x}, Entrar x=${m.entrar.x}`)
+        : falha(`cabeçalho público em ${w}px`, `logo=${JSON.stringify(m.logo)} entrar=${JSON.stringify(m.entrar)} overflowX=${m.overflow} marca=${m.marca}`);
+    await ctx.close();
+  }
+}
+
 /* a volta: quem entra pelo link compartilhado tem de VOLTAR para o anúncio */
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });

@@ -49,7 +49,11 @@ export function AppHeader({
   if (publico) {
     return (
       <header className="topo">
-        <div className="faixa topo-inner">
+        {/* `topo-publico` não é enfeite: a reordenação móvel do cabeçalho
+            logado (marca/estado/menu numa linha, busca na de baixo) vazava
+            para cá, onde os filhos são outros, e jogava o botão "Entrar" na
+            frente da marca. */}
+        <div className="faixa topo-inner topo-publico">
           <a className="logo" href="/" aria-label="Radar de Leilões — ir para a página inicial">
             <MarcaRadar tamanho={32} />
             <span className="logo-txt">Radar de Leilões</span>
