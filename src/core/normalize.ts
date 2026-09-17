@@ -372,6 +372,12 @@ export function parseTitle(titleRaw: string, hintBrand?: string | null, hintMode
         // Alias só de dígitos exige marca já confirmada: sem isso
         // "2008 RANDON SEMI-REBOQUE" virava um Peugeot 2008.
         if (/^\d+$/.test(aliasCompact) && b.canonical !== brand) continue;
+        // Mesma trava, para alias de DUAS letras. "CG" e "CB" no título de
+        // semirreboque são código de carroceria do RENAVAM (Carga Geral, Carga
+        // Basculante) e viravam Honda CG/CB: 17 reboques exibidos como moto.
+        // Sigla de duas letras confirma um modelo quando a marca já é conhecida,
+        // mas não tem especificidade para DEFINIR a marca sozinha.
+        if (aliasCompact.length <= 2 && b.canonical !== brand) continue;
         const hit =
           new RegExp(`(^|[^a-z0-9])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(searchIn) ||
           (aliasCompact.length >= 4 && compactTokens.has(aliasCompact));
@@ -613,6 +619,11 @@ const CATEGORIA_FONTE: Array<[RegExp, VehicleType]> = [
   [/\b(reboques?|semi ?reboques?|carretas?|trailer|implemento|prancha|dolly|granel|cacamba|ca[cç]amba|cana picada|bau\b|tanque)/, 'reboque'],
   [/\b(trator|retro|escavadeira|empilhadeira|paleteira|colheitadeira|maquina|motoniveladora|carregadeira|plantadeira|pulverizador|agricola|pesada)/, 'maquina'],
   [/\b(barco|lancha|jet ?ski|embarcac|nautic|iate|navio|aeronave)/, 'nautico'],
+  // "Pesados" sem nada no título é caminhão — nunca carro. O leilo usa essa
+  // categoria para caminhão, reboque e implemento agrícola no MESMO saco, e o
+  // padrão anterior jogava os 76 que o título não reconhecia no filtro de
+  // veículo leve. Vem depois de máquina, para "Máquinas Pesadas" seguir máquina.
+  [/\bpesad[oa]s?\b/, 'caminhao'],
   [/\b(hatch|sedan|station wagon|perua|automove|carro|cupe|conversive|colec)/, 'carro'],
 ];
 
@@ -631,10 +642,16 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
   [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
+  // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
+  // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
+  // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
+  // "semeadeira": a fonte escreve das duas formas e só a segunda estava aqui.
+  // Sigla solta ficou de fora: "magnum" e "hitech" são trator E outras coisas.
+  [/\b(plataforma (de )?(corte|milho|graos|cereais)|plataforma (draper|flexivel)|draper|terraflex|acabadora de asfalto|plaina|semeadora|escarificador|grade (aradoura|niveladora|nivelador)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira)\b/, 'maquina'],
   [/\b(lancha|jet ?ski|embarcacao|iate|veleiro)\b/, 'nautico'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
-  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal)\b/, 'onibus'],
+  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|o 4\d{2} (rs|rse))\b/, 'onibus'],
   // Família que no Brasil só existe em caminhão. "AX0R" com zero no lugar do O
   // aparece cru no vlance. "Titan" ficou de fora: é VW 19.320 Titan e Honda CG
   // 125 Titan ao mesmo tempo — o CG já é pego pela regra de moto.
@@ -644,8 +661,12 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "Randon" e "prancha" ficaram de fora: a Randon também fabrica
   // retroescavadeira e prancha é carroceria de caminhão, não reboque.
   [/^(r|sr|reb) [a-z]/, 'reboque'],
-  [/\b(semi ?reboque|semirreboque)\b/, 'reboque'],
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|vw ?\d{2}\.\d{3}|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
+  // "facchini" ficou de fora pelo mesmo motivo que "Randon" já estava: a marca
+  // fabrica semirreboque E carroceria de caminhão, e o dry-run flagrou
+  // "Caminhão Mercedes Benz 1718 com baú da marca Facchini" virando reboque.
+  // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
+  [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
   [/\b(carreta|graneleiro)\b/, 'reboque'],
   [/\b(motocicleta|motoneta|scooter|ciclomotor|quadriciclo)\b/, 'moto'],
   [/\b(cg ?1[1-6]\d|cb ?\d{3}|cbr ?\d{3}|biz|pop ?1[01]0|fan ?125|bros|xre ?\d{3}|nxr|pcx|nmax|burgman|hornet|twister|fazer|ybr ?\d{2,3}|factor ?\d{3}|xj6|xtz ?\d{3}|crosser|lander|tenere|ninja ?\d{3}|shineray|haojue|dafra|kasinski)\b/, 'moto'],
@@ -659,6 +680,24 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
  * reclassificar a base inteira por classifyAsset seria arriscado, porque
  * `sourceGroup` não é persistido e linhas que dependiam dele cairiam no padrão.
  */
+/**
+ * Categorias que NÃO discriminam o tipo — nelas o título decide.
+ *
+ * "Carros" é o balaio de veículo leve do Superbid e do Leilo: "Sucata de
+ * Carros" guarda 125 lotes com moto, picape e D20 juntos, e o filtro de carro
+ * devolvia Honda CG. "Pesados" é o mesmo problema do outro lado: 229 lotes com
+ * caminhão, reboque e colheitadeira no mesmo saco.
+ */
+const GENERICAS = /\b(carros?|pesad[oa]s?|diversos|outros|veiculos?|geral)\b/;
+
+/**
+ * "Peças de Máquinas Pesadas" contém "pesadas" e NÃO é genérica: é uma
+ * categoria específica — peça. O dry-run pegou isto: sem a exclusão, o título
+ * "RODANTE DE FERRO DE ESCAVADEIRA" sobrescrevia peça com máquina e 36 peças
+ * do Superbid entravam no índice como máquina inteira.
+ */
+const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.test(cat);
+
 export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | null): VehicleType | null {
   const cat = fold(sourceCategory ?? '');
   let tipoCat: VehicleType | null = null;
@@ -668,13 +707,21 @@ export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | nu
       break;
     }
   }
-  // O título só corrige a categoria quando ela NÃO discrimina o tipo. "carro" é
-  // o balaio de veículo leve do Superbid e do Leilo — "Sucata de Carros" guarda
-  // 125 lotes com moto, picape e D20 juntos, e o filtro de carro devolvia Honda
-  // CG. Categoria específica ("Cavalos Mecânicos", "Motoniveladoras") é mais
-  // confiável que qualquer palavra do título e não é sobrescrita: o diff mostrou
-  // que sobrescrever transformava pulverizador em picape e ônibus em caminhão.
-  if (tipoCat !== null && tipoCat !== 'carro') return null;
+  // O título só corrige a categoria quando ela NÃO discrimina o tipo. Categoria
+  // específica ("Cavalos Mecânicos", "Motoniveladoras") é mais confiável que
+  // qualquer palavra do título e não é sobrescrita: o diff mostrou que
+  // sobrescrever transformava pulverizador em picape e ônibus em caminhão.
+  //
+  // O teste é pela CATEGORIA CRUA, não pelo tipo a que ela foi mapeada: desde
+  // que "Pesados" passou a cair em `caminhao` (em vez do padrão `carro`),
+  // testar o tipo mapeado teria bloqueado o título e transformado as 124
+  // colheitadeiras e plantadeiras dessa categoria em caminhão.
+  // Duas portas, não uma: o tipo MAPEADO ser `carro` (que cobre "Hatches",
+  // "Sedans", "Sucata de Carros" — categorias cujo nome não diz "carro") OU a
+  // categoria CRUA ser genérica (que cobre "Pesados", cujo tipo mapeado agora é
+  // `caminhao`). Trocar a primeira pela segunda fez um CR-V em "Hatches" perder
+  // o `forte` e cair na regra do ano — o dry-run pegou.
+  if (tipoCat !== null && tipoCat !== 'carro' && !categoriaGenerica(cat)) return null;
   const titulo = fold(titleRaw);
   if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
   for (const [re, tipo] of TITULO_FORTE) if (re.test(titulo)) return tipo;
@@ -686,7 +733,7 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
-  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2}\.\d{3}|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico)\b/, 'caminhao'],
+  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico)\b/, 'caminhao'],
   [/\b(onibus|microonibus|marcopolo|comil|neobus)\b/, 'onibus'],
   [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier)\b/, 'picape'],
   [/\b(sprinter|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia)\b/, 'utilitario'],
