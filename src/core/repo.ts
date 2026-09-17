@@ -210,6 +210,7 @@ export interface SearchParams {
   sourceId?: Multi;
   /** Nome do leiloeiro como a fonte publica; só ~57% dos lotes trazem. */
   auctioneer?: Multi;
+  seller?: Multi;
   /** Único de propósito: veículo e imóvel têm filtros e rótulos diferentes. */
   assetType?: string;
   vehicleType?: Multi;
@@ -235,7 +236,7 @@ export interface SearchResponse {
   pageSize: number;
   interpreted: { brand: string | null; model: string | null; freeTerms: string[] };
   items: any[];
-  facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; statuses: any[] };
+  facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[] };
 }
 
 /**
@@ -312,6 +313,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   PLista('seller_type', p.sellerType, 'sellerTypes');
   PLista('source_id', p.sourceId, 'sources');
   PLista('auctioneer_name', p.auctioneer, 'auctioneers');
+  PLista('seller_name', p.seller, 'sellers');
   if (p.assetType) P('asset_type = ?', p.assetType, 'assetTypes');
   const tiposVeiculo = PLista('vehicle_type', p.vehicleType, 'vehicleTypes');
   PLista('property_type', p.propertyType, 'propertyTypes');
@@ -416,7 +418,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     );
   }
 
-  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, statusesFacet] = await Promise.all([
+  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet] = await Promise.all([
     facet('state', 'states', 30),
     facetCidade(),
     facet('source_id', 'sources'),
@@ -425,6 +427,10 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     facet('vehicle_type', 'vehicleTypes'),
     facet('property_type', 'propertyTypes'),
     facet('auctioneer_name', 'auctioneers', 80),
+    // Comitente: quem PÔS o bem em leilão (Caixa, Porto Seguro, um tribunal).
+    // É a pergunta que o comprador faz junto com "qual leiloeiro", e 87% dos
+    // lotes publicam. 80 cabe a cauda útil dos 525 distintos.
+    facet('seller_name', 'sellers', 80),
     // Situação conta pelo status EFETIVO: lote de pregão cuja hora passou
     // aparece como aberto na coluna e como encerrado na tela.
     facet(`CASE WHEN ${VENCIDO} THEN 'encerrado' ELSE status END`, 'statuses', 10),
@@ -436,7 +442,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     pageSize,
     interpreted: { brand: parsed.brand, model: parsed.model, freeTerms: parsed.freeTerms },
     items,
-    facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, statuses: statusesFacet },
+    facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet },
   };
 }
 

@@ -62,23 +62,71 @@ async function runCollect(sourceId: string, limit: number) {
   }
 }
 
+/** Quanto tempo antes e depois da abertura um leilão de pregão fica "quente". */
+const ANTES_DA_ABERTURA_H = 2;
+const DEPOIS_DA_ABERTURA_H = 3;
+/** Piso entre duas recoletas da MESMA fonte de pregão. */
+const DESCANSO_PREGAO_MIN = 5;
+
 /**
- * Refresh quente: só os lotes que encerram em menos de uma hora.
- * Fonte com timer por lote é a única em que isso muda alguma coisa,
- * então o refresh recoleta essas fontes com limite pequeno.
+ * Refresh quente: recoleta as fontes cujos lotes estão em disputa agora.
+ *
+ * A versão anterior só olhava `timer_por_lote` com `auction_end_utc` na próxima
+ * hora, e o comentário afirmava que "fonte com timer por lote é a única em que
+ * isso muda alguma coisa". MEDIDO em 17/09 e FALSO: 430 lotes da Copart, 90 do
+ * soleon, 77 do kuss, 35 do suporte-leilões e 21 do leilão PRO já tiveram o
+ * lance alterado. Todos são `pregao_em_horario` ou `sequencial`, e nenhum tem
+ * `auction_end_utc` — eram estruturalmente invisíveis ao refresh e só mudavam
+ * na coleta de 6 em 6 horas. A média de observações por lote denuncia: 1,61 no
+ * pregão contra 2,84 no timer.
+ *
+ * Para o pregão o que discrimina é a ABERTURA, não o fim, porque a fonte não
+ * publica fim por lote.
  */
 async function runRefresh() {
-  const hot = await query<{ source_id: string; n: number }>(`
-    SELECT source_id, COUNT(*)::int AS n FROM lots
-    WHERE closing_model = 'timer_por_lote'
-      AND auction_end_utc IS NOT NULL
-      AND auction_end_utc BETWEEN now() AND now() + interval '1 hour'
-    GROUP BY 1`);
-  if (!hot.length) return { hot: 0 };
-  for (const row of hot) {
-    await runCollect(row.source_id, 120);
+  const quentes = new Map<string, number>();
+
+  // Timer por lote: limite pequeno basta, porque o conector dessas fontes
+  // entrega primeiro o que encerra antes.
+  for (const row of await query<{ source_id: string }>(`
+    SELECT DISTINCT source_id FROM lots
+     WHERE closing_model = 'timer_por_lote'
+       AND auction_end_utc IS NOT NULL
+       AND auction_end_utc BETWEEN now() AND now() + interval '1 hour'`)) {
+    quentes.set(row.source_id, 120);
   }
-  return { hot: hot.reduce((a, b) => a + b.n, 0) };
+
+  /**
+   * Pregão: precisa do limite CHEIO, não de 120.
+   *
+   * O conector da Copart pagina `query:'*'` sem ordenação nenhuma, então os
+   * 120 primeiros não têm relação com qual leilão abre agora — recoletar com
+   * limite pequeno gastaria requisição sem alcançar o lote em disputa.
+   *
+   * O descanso evita que uma coleta cheia (73s medidos na Copart) rode de volta
+   * em volta, já que este ciclo dispara a cada 2 minutos.
+   */
+  for (const row of await query<{ source_id: string }>(`
+    SELECT DISTINCT l.source_id FROM lots l
+     WHERE l.closing_model <> 'timer_por_lote'
+       AND l.status IN ('aberto','agendado')
+       AND l.auction_start_utc BETWEEN now() - interval '${DEPOIS_DA_ABERTURA_H} hours'
+                                   AND now() + interval '${ANTES_DA_ABERTURA_H} hours'
+       AND NOT EXISTS (
+         SELECT 1 FROM collection_runs r
+          WHERE r.source_id = l.source_id
+            AND r.started_at > now() - interval '${DESCANSO_PREGAO_MIN} minutes')`)) {
+    const c = connectors.find((x) => x.def.id === row.source_id);
+    if (c) quentes.set(row.source_id, c.def.method === 'api' ? 15000 : 1200);
+  }
+
+  const hot = [...quentes];
+  if (!hot.length) return { hot: 0 };
+  for (const [sourceId, limite] of hot) {
+    await runCollect(sourceId, limite);
+  }
+  console.log(`[refresh] ${hot.map(([f, l]) => `${f}(${l})`).join(' ')}`);
+  return { hot: hot.length };
 }
 
 /**
