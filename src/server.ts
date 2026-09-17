@@ -68,7 +68,19 @@ const PUBLICAS = new Set([
   '/nopic.svg',
   '/nopic-imovel.svg',
 ]);
-const ehPublica = (caminho: string) => PUBLICAS.has(caminho);
+/**
+ * A PÁGINA do lote é pública; a API continua fechada.
+ *
+ * Isso é possível porque o SSR lê do Postgres direto (`getLot`), sem passar por
+ * `/api/lot/:id` — abrir a página não abre endpoint nenhum. Sem isso, o robô do
+ * WhatsApp levava 302 para /login e o preview do link mostrava "Entrar · Radar
+ * de Leilões" em vez do lote.
+ *
+ * O que o visitante anônimo vê é decidido no render: o lote e o link para o
+ * leiloeiro, não a busca nem as facetas.
+ */
+const ehPublica = (caminho: string) =>
+  PUBLICAS.has(caminho) || caminho.startsWith('/lote/') || caminho.startsWith('/assets/');
 
 const PAGINA_LOGIN = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Radar de Leilões</title>
@@ -119,7 +131,12 @@ if (authLigada()) {
     // Visitante anônimo no catálogo público entra como 'comum': as telas que
     // dependem de papel (coleta, alerta) continuam exigindo sessão. A lista de
     // espera é a única escrita liberada — é o CTA da landing e não lê nada.
-    if (ehPublica(caminho) && (req.method === 'GET' || caminho === '/api/espera')) {
+    // Público NÃO significa "sessão ignorada": significa "sessão opcional".
+    // O atalho rodava antes de ler o cookie, e por isso quem estava LOGADO
+    // também era tratado como anônimo na página do lote — ganhava a versão de
+    // visitante em vez da gaveta sobre a busca.
+    const semSessao = !/(?:^|;)\s*radar_sessao=/.test(String(req.headers.cookie ?? ''));
+    if (ehPublica(caminho) && semSessao && (req.method === 'GET' || caminho === '/api/espera')) {
       (req as any).papel = 'comum';
       // userId 0: nenhuma linha de users tem esse id, então consulta filtrada
       // por dono devolve vazio em vez de devolver os alertas do administrador.
@@ -147,6 +164,14 @@ if (authLigada()) {
       if (!eu) return reply.code(302).header('location', '/login').send();
       (req as any).eu = eu;
       (req as any).papel = eu.papel;
+      return;
+    }
+    // Cookie presente mas inválido (expirado, adulterado) numa rota pública:
+    // segue como anônimo em vez de mandar para o login. Quem compartilhou o
+    // link não tem culpa da sessão velha de quem o abriu.
+    if (ehPublica(caminho) && req.method === 'GET') {
+      (req as any).papel = 'comum';
+      (req as any).eu = ANONIMO;
       return;
     }
     // API responde 401 em JSON; navegação vai para a tela de senha.
@@ -389,8 +414,8 @@ const cascaDoApp = () => readFileSync(join(APP_CLIENTE, 'index.html'), 'utf8');
  * refaria o parse de 82 KB por lote aberto, e importar no topo quebraria o boot
  * em ambiente onde o app ainda não foi construído.
  */
-let renderLote: ((lot: any) => string) | null = null;
-async function carregarRender(): Promise<((lot: any) => string) | null> {
+let renderLote: ((lot: any, publico?: boolean) => string) | null = null;
+async function carregarRender(): Promise<((lot: any, publico?: boolean) => string) | null> {
   if (renderLote) return renderLote;
   try {
     const mod = await import(pathToFileURL(join(APP_DIST, 'server', 'entry-server.js')).href);
@@ -418,6 +443,26 @@ const APP_ROTAS = ['/busca', '/alertas', '/cobertura'];
 const ESTATICOS = ['slug.js', 'cartao.js', 'landing.js', 'landing.css', 'cartao.css'];
 /** Origem pública do site, usada em canonical, Open Graph, JSON-LD e sitemap. */
 const SITE = (process.env.SITE_URL ?? 'http://localhost:4500').replace(/\/$/, '');
+
+/**
+ * Origem absoluta desta requisição.
+ *
+ * `SITE_URL` não está definido em desenvolvimento, e o padrão `localhost:4500`
+ * ia parar dentro do og:image — que o robô do WhatsApp não alcança, então o
+ * preview vinha sem foto mesmo com a meta presente. O host da requisição é o
+ * endereço por onde o visitante REALMENTE chegou (o domínio do túnel, o
+ * domínio de produção), e é ele que serve para montar URL absoluta.
+ *
+ * `SITE_URL` continua vencendo quando configurado: em produção a origem
+ * canônica é decisão nossa, não do cabeçalho que o cliente mandou.
+ */
+function origemDe(req: any): string {
+  if (process.env.SITE_URL) return SITE;
+  const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '').split(',')[0].trim();
+  if (!host || !/^[a-z0-9.\-:]+$/i.test(host)) return SITE;
+  const proto = String(req.headers['x-forwarded-proto'] ?? req.protocol ?? 'http').split(',')[0].trim();
+  return `${proto === 'https' ? 'https' : 'http'}://${host}`;
+}
 
 function paginaVersionada(arquivo: string): string {
   let html = readFileSync(join(here, 'web', arquivo), 'utf8').replaceAll('__SITE__', SITE);
@@ -483,7 +528,8 @@ app.get('/lote/:slug', async (req, reply) => {
     lance ? `Lance ${lot.current_bid != null ? 'atual' : 'mínimo'}: ${lance}.` : 'Sem lance publicado.',
     'Prazo e link direto para o site do leiloeiro no Radar de Leilões.',
   ].filter(Boolean).join(' ');
-  const foto = lot.photos?.[0] ? `${SITE}/api/img?u=${encodeURIComponent(lot.photos[0])}&w=1200` : '';
+  const origem = origemDe(req);
+  const foto = lot.photos?.[0] ? `${origem}/api/img?u=${encodeURIComponent(lot.photos[0])}&w=1200` : '';
 
   const jsonld = {
     '@context': 'https://schema.org',
@@ -498,7 +544,7 @@ app.get('/lote/:slug', async (req, reply) => {
       // O lance corrente é o preço que existe hoje; a avaliação não é preço de venda.
       ...(lot.current_bid ?? lot.min_bid ? { price: String(lot.current_bid ?? lot.min_bid) } : {}),
       availability: 'https://schema.org/InStock',
-      url: `${SITE}/lote/${(req.params as any).slug}`,
+      url: `${origem}/lote/${(req.params as any).slug}`,
       ...(lot.auction_end_utc ? { priceValidUntil: new Date(lot.auction_end_utc).toISOString().slice(0, 10) } : {}),
       ...(lot.auctioneer_name ? { seller: { '@type': 'Organization', name: lot.auctioneer_name } } : {}),
     },
@@ -507,7 +553,7 @@ app.get('/lote/:slug', async (req, reply) => {
   const cabeca = [
     `<title>${esc(titulo)}${local ? ` em ${esc(local)}` : ''} — leilão | Radar de Leilões</title>`,
     `<meta name="description" content="${esc(descricao)}">`,
-    `<link rel="canonical" href="${SITE}/lote/${esc((req.params as any).slug)}">`,
+    `<link rel="canonical" href="${origem}/lote/${esc((req.params as any).slug)}">`,
     `<meta property="og:type" content="product">`,
     `<meta property="og:title" content="${esc(titulo)}">`,
     `<meta property="og:description" content="${esc(descricao)}">`,
@@ -516,16 +562,31 @@ app.get('/lote/:slug', async (req, reply) => {
     `<script type="application/ld+json">${JSON.stringify(jsonld).replaceAll('<', '\\u003c')}</script>`,
   ].filter(Boolean).join('\n');
 
-  let corpo = html.replace(/<title>[\s\S]*?<\/title>/, cabeca);
+  /**
+   * As metas do lote SUBSTITUEM as do template, não convivem com elas.
+   *
+   * O index.html do app traz og:title/og:description genéricos ("Radar de
+   * Leilões"), e injetar as do lote sem tirar aquelas deixava DUAS de cada no
+   * head — o robô escolhe uma, e não há garantia de qual. O preview do WhatsApp
+   * era a prova de fogo disso.
+   */
+  let corpo = html
+    .replace(/<meta\s+name="description"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:(title|description|type|image|url)"[^>]*>/gi, '')
+    .replace(/<title>[\s\S]*?<\/title>/, cabeca);
 
   // SSR de verdade: o robô recebe o lote já renderizado no HTML, e o cliente
   // hidrata sobre a mesma árvore com o mesmo objeto em `window.__LOTE__`.
   // Falha no render NÃO derruba a página: cai na casca e o cliente busca o
   // lote sozinho, que é exatamente o comportamento anterior.
+  // Anônimo (o robô do WhatsApp, quem recebeu o link) vê a página do lote e o
+  // convite para entrar — não a busca, que exige conta e devolveria 401 em todo
+  // fetch do cliente.
+  const publico = (req as any).eu === ANONIMO || (req as any).papel == null;
   const render = temAppNovo ? await carregarRender() : null;
   if (render) {
     try {
-      const marcado = render(lot);
+      const marcado = render(lot, publico);
       /**
        * O React 19 emite `<link rel="preload">` para as fotos do lote. São
        * elementos HOISTABLE: pertencem ao `<head>`, e o `renderToString`
@@ -547,7 +608,10 @@ app.get('/lote/:slug', async (req, reply) => {
       const estado = JSON.stringify(lot).replaceAll('<', '\\u003c');
       corpo = corpo
         .replace('<div id="root"></div>', `<div id="root">${html}</div>`)
-        .replace('</head>', `${preloads.join('')}<script>window.__LOTE__=${estado}</script></head>`);
+        .replace(
+          '</head>',
+          `${preloads.join('')}<script>window.__LOTE__=${estado};window.__PUBLICO__=${publico}</script></head>`,
+        );
     } catch (e: any) {
       app.log.error({ err: e.message, lote: id }, 'SSR do lote falhou; servindo a casca');
     }

@@ -17,12 +17,15 @@ const RECONECTA_MS = 4_000;
  * `aoReceber` fica em ref para a conexão não ser derrubada e refeita a cada
  * render do componente que a usa.
  */
-export function useWebSocket(aoReceber: (msg: WsMessage) => void) {
+export function useWebSocket(aoReceber: ((msg: WsMessage) => void) | null) {
   const [aoVivo, setAoVivo] = useState(false);
   const handler = useRef(aoReceber);
   handler.current = aoReceber;
 
   useEffect(() => {
+    // `null` = não conectar. O /ws exige sessão, e um visitante anônimo ficaria
+    // num laço de 401 + reconexão a cada 4 segundos.
+    if (!handler.current) return;
     let ws: WebSocket | null = null;
     let hb: ReturnType<typeof setInterval> | undefined;
     let religar: ReturnType<typeof setTimeout> | undefined;
@@ -53,7 +56,7 @@ export function useWebSocket(aoReceber: (msg: WsMessage) => void) {
       ws.onmessage = (ev) => {
         ultimaMsg = Date.now();
         try {
-          handler.current(JSON.parse(ev.data) as WsMessage);
+          handler.current?.(JSON.parse(ev.data) as WsMessage);
         } catch {
           /* mensagem malformada não pode derrubar a tela */
         }

@@ -11,10 +11,10 @@ import type { Lot } from './lib/types';
  * resultado do fetch. As outras rotas exigem sessão e não são indexáveis, então
  * renderizá-las no servidor custaria complexidade sem ganho nenhum.
  */
-export function renderLote(lot: Lot): string {
+export function renderLote(lot: Lot, publico = false): string {
   return renderToString(
     <StrictMode>
-      <App loteInicial={lot} />
+      <App loteInicial={lot} publico={publico} />
     </StrictMode>,
   );
 }

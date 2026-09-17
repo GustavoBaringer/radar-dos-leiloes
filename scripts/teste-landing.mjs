@@ -150,9 +150,33 @@ if (ruim.status !== 400) falhas.push(`lista de espera: e-mail inválido devolveu
   await p.waitForSelector('#lotesGrade .card', { timeout: 20000 });
   ok2((await p.locator('#lotesGrade .card').count()) > 0, 'a vitrine desenha lotes para o visitante');
   ok2((await p.locator('#lotesGrade .card img[src^="/api/img"]').count()) > 0, 'as fotos da vitrine carregam pelo proxy');
-  for (const rota of ['/busca', '/lote/x-319', '/alertas']) {
-    const resp = await p.goto(`${BASE}${rota}`);
+  // A página do LOTE saiu desta lista de propósito em 17/09: ela é pública para
+  // o link compartilhado gerar preview (o robô do WhatsApp lia a tela de login).
+  // A busca e os alertas continuam exigindo conta — é o par que interessa:
+  // a página abriu, o índice não.
+  for (const rota of ['/busca', '/alertas', '/cobertura']) {
+    await p.goto(`${BASE}${rota}`);
     ok2(p.url().includes('/login'), `${rota} exige conta (terminou em ${p.url()})`);
+  }
+  {
+    const resp = await p.goto(`${BASE}/lote/mercedes-benz-gla-2019-sinistrado-copart-5291`);
+    ok2(
+      resp.status() === 200 && !p.url().includes('/login'),
+      `a página do lote abre sem conta, para o link compartilhado (HTTP ${resp.status()})`,
+    );
+    // A asserção certa NÃO é "não contém localhost": acessando por localhost, a
+    // origem da requisição é localhost, e refletir isso é o comportamento
+    // correto. O que se afirma é que a origem do og:image ACOMPANHA por onde o
+    // visitante entrou — era isso que estava quebrado, com a meta apontando
+    // para localhost enquanto o link circulava pelo domínio do túnel.
+    const og = await p.locator('meta[property="og:image"]').getAttribute('content');
+    ok2(Boolean(og) && og.startsWith(`${BASE}/api/img`), `og:image acompanha a origem da requisição (${String(og).slice(0, 46)}…)`);
+    // E só um de cada: as metas do template não podem conviver com as do lote.
+    ok2(
+      (await p.locator('meta[property="og:title"]').count()) === 1,
+      'uma única og:title no head (as do template são removidas)',
+    );
+    ok2((await p.locator('.grade, .filtros').count()) === 0, 'o visitante anônimo não recebe a busca junto');
   }
   const api = await p.evaluate(() => fetch('/api/search?q=hilux').then((r) => r.status));
   ok2(api === 401, `/api/search sem conta devolve 401 (devolveu ${api})`);

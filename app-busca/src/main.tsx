@@ -7,11 +7,13 @@ import './styles.css';
 declare global {
   interface Window {
     __LOTE__?: Lot;
+    __PUBLICO__?: boolean;
   }
 }
 
 const raiz = document.getElementById('root')!;
 const loteInicial = window.__LOTE__ ?? null;
+const publico = window.__PUBLICO__ === true;
 
 /**
  * Hidrata quando o servidor já mandou HTML (a página do lote vem renderizada
@@ -21,7 +23,7 @@ const loteInicial = window.__LOTE__ ?? null;
  */
 const arvore = (
   <StrictMode>
-    <App loteInicial={loteInicial} />
+    <App loteInicial={loteInicial} publico={publico} />
   </StrictMode>
 );
 

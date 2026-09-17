@@ -669,6 +669,26 @@
   .proc summary { cursor: pointer; font-size: 12px; color: var(--brand-ink-soft) }
   .proc[open] summary { margin-bottom: 10px }
 
+  /* ---------- página pública do lote ---------- */
+  /* O mesmo conteúdo da gaveta, sem o aparato de modal: sem posição fixa, sem
+     scrim e com a largura de leitura da própria faixa. */
+  .lote-pagina { padding-block: 20px 8px; max-width: 860px }
+  .lote-pagina .painel-topo {
+    position: static; background: none; backdrop-filter: none;
+    padding: 0 0 14px; border-bottom: 1px solid var(--border);
+  }
+  .lote-pagina .painel-corpo { padding: 18px 0 0; max-width: none }
+  .topo-entrar { margin-left: auto; display: inline-flex; align-items: center; text-decoration: none }
+
+  .convite {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+    margin-top: 28px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-xl);
+    background: linear-gradient(155deg, #0d1730, #070b16);
+  }
+  .convite h2 { font-family: var(--font-display); font-size: 19px; margin: 0 0 6px }
+  .convite p { margin: 0; color: var(--brand-ink-soft); font-size: 14px; line-height: 1.6; max-width: 62ch }
+  .convite .btn-pri { flex: 0 0 auto; padding: 12px 20px }
+
   /* ---------- páginas simples ---------- */
   .sec { padding-block: 24px 8px }
   .page-head { font-family: var(--font-display); font-size: 24px; letter-spacing: -.02em; margin: 0 0 6px }

@@ -30,7 +30,7 @@ function abaDoCaminho(p: string): Aba {
  * mismatch — renderizar coisas diferentes no servidor e no cliente faz o React
  * descartar o HTML que o crawler acabou de ler.
  */
-export default function App({ loteInicial = null }: { loteInicial?: Lot | null }) {
+export default function App({ loteInicial = null, publico = false }: { loteInicial?: Lot | null; publico?: boolean }) {
   const [estado, setEstado] = useState<EstadoBusca>(() =>
     typeof window === 'undefined' ? ESTADO_VAZIO : estadoDaUrl(window.location.search),
   );
@@ -51,9 +51,10 @@ export default function App({ loteInicial = null }: { loteInicial?: Lot | null }
 
   /* ---------------- papel ---------------- */
   useEffect(() => {
+    if (publico) return; // sem sessão, /api/me devolve 401
     // Esconder a aba é cortesia visual; quem barra de fato é o 403 das rotas.
     api.eu().then((r) => setPapel(r.papel ?? 'comum')).catch(() => setPapel('comum'));
-  }, []);
+  }, [publico]);
 
   /* ---------------- rotas ---------------- */
 
@@ -155,7 +156,8 @@ export default function App({ loteInicial = null }: { loteInicial?: Lot | null }
     }
   }, [papel, aba, toast]);
 
-  const aoVivo = useWebSocket(aoReceber);
+  // O /ws também exige sessão: conectar sem ela é 401 em laço de reconexão.
+  const aoVivo = useWebSocket(publico ? null : aoReceber);
 
   /* ---------------- filtros ---------------- */
 
@@ -193,6 +195,36 @@ export default function App({ loteInicial = null }: { loteInicial?: Lot | null }
       resumo: a.q ? `busca "${a.q}"` : 'somente filtros',
     });
   }, []);
+
+  /**
+   * Página pública do lote: é o que o link compartilhado abre e o que o robô do
+   * WhatsApp lê. Mostra o bem, o prazo e o caminho para o leiloeiro — que é o
+   * que a fonte já publica — e convida a entrar para o resto. A busca, as
+   * facetas e os alertas ficam atrás da conta.
+   */
+  if (publico) {
+    return (
+      <>
+        <AppHeader
+          publico
+          aba="busca" aoTrocarAba={() => {}} termo="" aoDigitar={() => {}} aoBuscar={() => {}}
+          aoVivo={false} naoVistos={0} mostraCobertura={false}
+        />
+        <LotDrawer lot={lote} aoFechar={() => {}} comoPagina />
+        <section className="faixa convite">
+          <div>
+            <h2>Este é um de 21 mil lotes no índice</h2>
+            <p>
+              Veículos e imóveis de 12 plataformas de leilão, com busca por modelo, filtro por
+              estado, cidade, comitente e leiloeiro, e alerta quando entrar um lote como este.
+            </p>
+          </div>
+          <a className="btn-pri" href="/login">Entrar e buscar</a>
+        </section>
+        <Rodape />
+      </>
+    );
+  }
 
   return (
     <>

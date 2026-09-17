@@ -41,7 +41,13 @@ function BlocoKv({ titulo: t, pares }: { titulo: string; pares: Par[] }) {
   );
 }
 
-export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => void }) {
+/**
+ * `comoPagina` serve a página pública do lote (link compartilhado): mesmo
+ * conteúdo, sem scrim, sem foco preso e sem travar a rolagem do corpo — não é
+ * um modal sobre a busca, é a tela inteira. Reaproveitar em vez de duplicar
+ * evita a divergência que já aconteceu com o cartão.
+ */
+export function LotDrawer({ lot, aoFechar, comoPagina = false }: { lot: Lot | null; aoFechar: () => void; comoPagina?: boolean }) {
   const [fotoGrande, setFotoGrande] = useState(0);
   const painel = useRef<HTMLDivElement>(null);
   const botaoFechar = useRef<HTMLButtonElement>(null);
@@ -49,7 +55,7 @@ export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => 
   useEffect(() => setFotoGrande(0), [lot?.id]);
 
   useEffect(() => {
-    if (!lot) return;
+    if (!lot || comoPagina) return;
     botaoFechar.current?.focus();
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') aoFechar();
@@ -79,7 +85,7 @@ export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => 
       document.removeEventListener('keydown', tecla);
       document.body.style.overflow = antes;
     };
-  }, [lot, aoFechar]);
+  }, [lot, aoFechar, comoPagina]);
 
   if (!lot) return null;
 
@@ -96,15 +102,22 @@ export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => 
   if (lot.bid_increment != null) chips.push(['Incremento', money(lot.bid_increment)!]);
   if (lot.fees_pct) chips.push(['Comissão', `${lot.fees_pct}%`]);
 
-  const local = [...new Set([lot.yard, [lot.city, lot.state].filter(Boolean).join(' - ')].filter(Boolean))].join(' · ');
+  // O Set sozinho não deduplica "CURITIBA - PR" contra "Curitiba - PR": a
+  // fonte grava o pátio em caixa alta e a cidade normalizada vem em caixa
+  // mista. A chave de comparação ignora caixa, acento e pontuação; o que
+  // aparece na tela é a primeira grafia, que é a mais legível.
+  const chave = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const local = (() => {
+    const partes = [lot.yard, [lot.city, lot.state].filter(Boolean).join(' - ')].filter((v): v is string => Boolean(v));
+    const vistos = new Set<string>();
+    return partes.filter((v) => !vistos.has(chave(v)) && vistos.add(chave(v))).join(' · ');
+  })();
   // Só http(s): `javascript:` num campo vindo da fonte vira execução ao clique.
   const urlSegura = /^https?:\/\//.test(lot.lot_url ?? '') ? lot.lot_url! : null;
   const fotos = lot.photos ?? [];
 
-  return (
-    <div className="drawer open" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
-      <div className="scrim" onClick={aoFechar} />
-      <div className="painel" ref={painel}>
+  const corpo = (
+    <>
         <header className="painel-topo">
           <div>
             <h2 id="drawerTitle" title={lot.title_raw}>
@@ -117,9 +130,11 @@ export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => 
               {lot.doc_type && <span className="pill quieto">{LABEL_DOC[lot.doc_type] ?? lot.doc_type}</span>}
             </div>
           </div>
-          <button ref={botaoFechar} className="ico-fechar" onClick={aoFechar} aria-label="Fechar detalhe do lote">
-            <X size={20} aria-hidden />
-          </button>
+          {!comoPagina && (
+            <button ref={botaoFechar} className="ico-fechar" onClick={aoFechar} aria-label="Fechar detalhe do lote">
+              <X size={20} aria-hidden />
+            </button>
+          )}
         </header>
 
         <div className="painel-corpo">
@@ -259,6 +274,17 @@ export function LotDrawer({ lot, aoFechar }: { lot: Lot | null; aoFechar: () => 
             </details>
           </div>
         </div>
+    </>
+  );
+
+  // Página pública: o mesmo conteúdo sem o aparato de modal.
+  if (comoPagina) return <main className="faixa lote-pagina">{corpo}</main>;
+
+  return (
+    <div className="drawer open" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <div className="scrim" onClick={aoFechar} />
+      <div className="painel" ref={painel}>
+        {corpo}
       </div>
     </div>
   );

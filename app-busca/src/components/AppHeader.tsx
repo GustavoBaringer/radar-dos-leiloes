@@ -14,10 +14,12 @@ interface Props {
   naoVistos: number;
   /** Papel comum não vê Cobertura: cair nela deixaria a tela vazia. */
   mostraCobertura: boolean;
+  /** Visitante sem sessão: nada que exija conta aparece. */
+  publico?: boolean;
 }
 
 export function AppHeader({
-  aba, aoTrocarAba, termo, aoDigitar, aoBuscar, aoVivo, naoVistos, mostraCobertura,
+  aba, aoTrocarAba, termo, aoDigitar, aoBuscar, aoVivo, naoVistos, mostraCobertura, publico = false,
 }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -38,6 +40,22 @@ export function AppHeader({
     // Enter e para o toque em Buscar, porque os dois caem aqui.
     campo.current?.blur();
     aoBuscar();
+  }
+
+  // Sem sessão: nenhum controle que dependa de conta. A busca, as abas e o
+  // indicador "ao vivo" todos chamariam endpoint protegido e voltariam 401.
+  if (publico) {
+    return (
+      <header className="topo">
+        <div className="faixa topo-inner">
+          <a className="logo" href="/" aria-label="Radar de Leilões — ir para a página inicial">
+            <MarcaRadar tamanho={32} />
+            <span className="logo-txt">Radar de Leilões</span>
+          </a>
+          <a className="btn-buscar topo-entrar" href="/login">Entrar</a>
+        </div>
+      </header>
+    );
   }
 
   return (
