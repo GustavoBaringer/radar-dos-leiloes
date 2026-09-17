@@ -161,7 +161,11 @@ function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
     km: num(veic.nu_km),
     color: veic.nm_cor ?? null,
     fuel: veic.nm_statuscombustivel ?? null,
-    closingModel: 'pregao_em_horario',
+    // `timer_por_lote` e não `pregao_em_horario`: a fonte publica instante real de
+    // fechamento e os lotes do mesmo leilão fecham escalonados de 20 em 20 segundos.
+    // Com o rótulo de pregão, a regra de encerramento vence pelo INÍCIO — que aqui é
+    // a abertura do leilão, meses antes — e fechou 39 lotes com fim em dezembro.
+    closingModel: 'timer_por_lote',
     auctionStartUtc: inicio,
     auctionEndUtc: fim,
     sourceTz: 'America/Sao_Paulo',
