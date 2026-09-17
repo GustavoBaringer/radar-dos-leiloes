@@ -154,6 +154,26 @@ if (abriu === 1 && urlLote.includes('/lote/') && fechou === 0 && page.url() === 
   falha('6. gaveta empilha no histórico', `abriu=${abriu} url=${urlLote} fechou=${fechou}`);
 }
 
+/* 6b — compartilhar a partir da GAVETA copia a URL do lote, não a da busca */
+await page.goto(`${API}/busca?assetType=veiculo&uf=PR`, { waitUntil: 'networkidle' });
+await esperaBusca();
+const urlBusca = page.url();
+await page.click('.card');
+await page.waitForTimeout(1500);
+await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: API });
+await page.click('.btn-compartilhar');
+await page.waitForTimeout(600);
+const compartilhado = await page.evaluate(() => navigator.clipboard.readText());
+if (compartilhado.includes('/lote/') && compartilhado !== urlBusca) {
+  ok('6b. compartilhar na gaveta copia o lote', compartilhado.replace(API, ''));
+} else {
+  // O risco real: a gaveta é um modal SOBRE a busca, e sem o pushState do lote
+  // o botão copiaria o endereço da listagem — um link que não abre o anúncio.
+  falha('6b. compartilhar na gaveta copia o lote', `copiou "${compartilhado}"`);
+}
+await page.goBack();
+await page.waitForTimeout(800);
+
 /* 7/8 — WebSocket e toast de encerramento */
 const wsLigado = await page.locator('.ws-dot.on').count();
 if (wsLigado === 1) ok('7. WebSocket conectado', 'indicador "ao vivo" aceso');

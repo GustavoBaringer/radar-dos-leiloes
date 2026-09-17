@@ -616,6 +616,25 @@
     gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--brand-canvas) 92%, transparent); backdrop-filter: blur(12px);
   }
+  .painel-acoes { display: flex; align-items: center; gap: 8px; flex: 0 0 auto }
+  .btn-compartilhar {
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    background: var(--brand-panel-2); border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 13px; color: var(--foreground); cursor: pointer; font: inherit; font-size: 13px;
+    transition: border-color .15s, color .15s;
+  }
+  .btn-compartilhar:hover { border-color: var(--brand-core) }
+  /* Rótulo some no celular: ali o ícone é reconhecido e o espaço é do título. */
+  @media (max-width: 560px) { .btn-compartilhar span { display: none } .btn-compartilhar { padding: 8px 10px } }
+  .compartilhar-manual { display: flex; gap: 6px; align-items: center; flex: 1 1 220px; min-width: 0 }
+  .compartilhar-manual input {
+    flex: 1; min-width: 0; background: var(--brand-panel-2); border: 1px solid var(--border);
+    border-radius: 9px; padding: 8px 10px; color: var(--foreground); font-size: 12px; font-family: var(--font-mono);
+  }
+  .compartilhar-manual button {
+    flex: 0 0 auto; background: var(--brand-core); color: #fff; border: 0; border-radius: 9px;
+    padding: 8px 12px; cursor: pointer; font: inherit; font-size: 13px;
+  }
   .painel-topo h2 { font-family: var(--font-display); font-size: 17px; line-height: 1.25; margin: 0 0 7px }
   .painel-sub { display: flex; flex-wrap: wrap; gap: 6px }
   /* Foto em cima, dados abaixo — uma coluna em toda largura.

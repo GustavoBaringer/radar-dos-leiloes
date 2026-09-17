@@ -6,6 +6,7 @@ import {
   LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE, SRC_LABEL,
 } from '@/lib/labels';
 import { dataBr, img, money, nopicDe, titulo, whenLabel } from '@/lib/format';
+import { BotaoCompartilhar } from './BotaoCompartilhar';
 
 type Par = [string, string | null | undefined];
 
@@ -130,11 +131,19 @@ export function LotDrawer({ lot, aoFechar, comoPagina = false }: { lot: Lot | nu
               {lot.doc_type && <span className="pill quieto">{LABEL_DOC[lot.doc_type] ?? lot.doc_type}</span>}
             </div>
           </div>
-          {!comoPagina && (
-            <button ref={botaoFechar} className="ico-fechar" onClick={aoFechar} aria-label="Fechar detalhe do lote">
-              <X size={20} aria-hidden />
-            </button>
-          )}
+          <div className="painel-acoes">
+            {/* A descrição acompanha o compartilhamento nativo: sem ela, o
+                WhatsApp mostra só a URL crua até buscar o preview. */}
+            <BotaoCompartilhar
+              titulo={titulo(lot)}
+              descricao={`${titulo(lot)} em leilão${lot.city ? ` — ${lot.city}/${lot.state}` : ''}`}
+            />
+            {!comoPagina && (
+              <button ref={botaoFechar} className="ico-fechar" onClick={aoFechar} aria-label="Fechar detalhe do lote">
+                <X size={20} aria-hidden />
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="painel-corpo">

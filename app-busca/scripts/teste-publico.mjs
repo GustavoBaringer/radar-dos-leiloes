@@ -60,6 +60,67 @@ const b = await chromium.launch({ executablePath: ach() });
   await ctx.close();
 }
 
+/* compartilhar */
+{
+  const ctx = await b.newContext({
+    viewport: { width: 1280, height: 900 },
+    permissions: ['clipboard-read', 'clipboard-write'],
+  });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+
+  // 1) Caminho nativo. O Chromium headless não tem `navigator.share`, então o
+  //    stub entra ANTES da página para provar que o caminho preferido é usado
+  //    e com qual carga.
+  await p.addInitScript(() => {
+    window.__COMPARTILHOU__ = null;
+    navigator.share = async (d) => { window.__COMPARTILHOU__ = d; };
+  });
+  await p.goto(`${API}/lote/${SLUG}`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+  await p.click('.btn-compartilhar');
+  await p.waitForTimeout(400);
+  const nativo = await p.evaluate(() => window.__COMPARTILHOU__);
+  nativo?.url === `${API}/lote/${SLUG}` && nativo.title
+    ? ok('usa o compartilhamento nativo', `url e título ("${String(nativo.title).slice(0, 28)}…")`)
+    : falha('usa o compartilhamento nativo', JSON.stringify(nativo));
+
+  // 2) Sem o nativo, cai para a área de transferência.
+  const ctx2 = await b.newContext({
+    viewport: { width: 1280, height: 900 },
+    permissions: ['clipboard-read', 'clipboard-write'],
+  });
+  const p2 = await ctx2.newPage();
+  p2.on('pageerror', (e) => erros.push(e.message));
+  await p2.goto(`${API}/lote/${SLUG}`, { waitUntil: 'networkidle' });
+  await p2.waitForTimeout(1200);
+  await p2.click('.btn-compartilhar');
+  await p2.waitForTimeout(600);
+  const copiado = await p2.evaluate(() => navigator.clipboard.readText());
+  const aviso = await p2.textContent('.btn-compartilhar');
+  copiado === `${API}/lote/${SLUG}`
+    ? ok('copia o endereço desta página', copiado.replace(API, ''))
+    : falha('copia o endereço desta página', `copiou "${copiado}"`);
+  /\bcopiado\b/i.test(aviso ?? '') ? ok('confirma a cópia na tela', aviso.trim()) : falha('confirma a cópia', String(aviso));
+
+  // 3) A URL copiada tem de ser a da REQUISIÇÃO, não uma constante. Prova pelo
+  //    host alternativo: 127.0.0.1 é o mesmo servidor por outro endereço.
+  const p3 = await ctx2.newPage();
+  await p3.goto(`http://127.0.0.1:4500/lote/${SLUG}`, { waitUntil: 'networkidle' });
+  await p3.waitForTimeout(1200);
+  await p3.click('.btn-compartilhar');
+  await p3.waitForTimeout(600);
+  const outro = await p3.evaluate(() => navigator.clipboard.readText());
+  outro.startsWith('http://127.0.0.1:4500/')
+    ? ok('a URL acompanha o host de entrada', outro.slice(0, 32) + '…')
+    : falha('a URL acompanha o host de entrada', outro);
+
+  erros.length === 0 ? ok('sem erro de página ao compartilhar') : falha('erro de página', erros[0].slice(0, 80));
+  await ctx.close();
+  await ctx2.close();
+}
+
 /* o cabeçalho público em tela estreita */
 {
   // O defeito era só no celular: a reordenação do cabeçalho LOGADO (marca,
