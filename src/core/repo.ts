@@ -129,7 +129,22 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
            version=EXCLUDED.version, year_make=EXCLUDED.year_make, year_model=EXCLUDED.year_model, km=EXCLUDED.km,
            color=EXCLUDED.color, fuel=EXCLUDED.fuel, plate_masked=EXCLUDED.plate_masked, doc_type=EXCLUDED.doc_type,
            closing_model=EXCLUDED.closing_model, auction_start_utc=EXCLUDED.auction_start_utc,
-           auction_end_utc=EXCLUDED.auction_end_utc, source_tz=EXCLUDED.source_tz, status=EXCLUDED.status,
+          -- Fim NULO da fonte é "não sei agora", nunca "não tem prazo". O leilo
+          -- publica dataFim para todo lote e o ANULA enquanto o leilão está ao
+          -- vivo: 607 dos 639 lotes sem fim foram colhidos depois da abertura,
+          -- contra 505 dos 515 com fim colhidos antes. Gravar esse NULL por cima
+          -- apagava o prazo que já tínhamos, e o lote sumia da fonte logo em
+          -- seguida — 172 ficaram 'aberto' para sempre, invisíveis às duas regras
+          -- de encerramento (a do relógio não julga sem fim; a de ausência está
+          -- desligada).
+          -- O guard do início é o que separa isto de relistagem: mesmo leilão,
+          -- preserva o fim; leilão diferente (2ª praça reabre com o mesmo id),
+          -- descarta, senão o prazo velho encerraria a praça nova na hora.
+          auction_end_utc=COALESCE(
+            EXCLUDED.auction_end_utc,
+            CASE WHEN EXCLUDED.auction_start_utc IS NOT DISTINCT FROM lots.auction_start_utc
+                 THEN lots.auction_end_utc END),
+           source_tz=EXCLUDED.source_tz, status=EXCLUDED.status,
           closed_reason=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_reason END,
           closed_at=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_at END,
            current_bid=EXCLUDED.current_bid, min_bid=EXCLUDED.min_bid, bid_increment=EXCLUDED.bid_increment,

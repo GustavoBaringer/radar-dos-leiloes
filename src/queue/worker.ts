@@ -1,5 +1,5 @@
 
-import { Worker } from 'bullmq';
+import { Worker, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources } from '../core/repo.js';
 import { processarAposColeta } from '../core/pos-coleta.js';
@@ -195,36 +195,74 @@ new Worker<DiscoverJob>(
   { connection: makeRedis(), concurrency: 1 },
 ).on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message));
 
+/**
+ * Registra a agenda de uma fila, substituindo o que já existe no Redis.
+ *
+ * `queue.add()` com `repeat` NÃO atualiza um agendador já gravado: o payload
+ * fica congelado no Redis e o código novo vira decoração. Foi o que aconteceu
+ * com o teto de coleta — a medição de 15/09 subiu o limite para 15000 no
+ * código, e superbid, copart, leilo, caixa, freitas, kuss, leilaopro e soleon
+ * seguiram rodando com os 600 antigos, porque o agendador deles já existia.
+ * Só as fontes criadas DEPOIS pegaram o valor novo.
+ *
+ * O dano não parou na coleta curta: `verificarCandidatos` só aceita varredura
+ * com `limite >= 1000`, então nenhuma coleta agendada contava como varredura e
+ * a verificação na origem nunca teve candidato — a rede de segurança do
+ * encerramento estava desligada sem sintoma.
+ *
+ * `upsertJobScheduler` atualiza, mas a chave dele é o id que passamos, e a do
+ * `add({repeat, jobId})` é um HASH das opções. Só trocar de API criaria um
+ * segundo agendador ao lado do velho e a coleta rodaria duas vezes. Por isso a
+ * remoção dos ids que não são nossos vem antes — e é idempotente: no primeiro
+ * boot apaga os legados, nos seguintes não acha nada para apagar.
+ */
+async function agendar(
+  fila: Queue,
+  itens: Array<{ id: string; nome: string; pattern: string; data: unknown; manter: number }>,
+) {
+  const meus = new Set(itens.map((i) => i.id));
+  for (const s of await fila.getJobSchedulers(0, 200, true)) {
+    const chave = (s as any).key ?? (s as any).id;
+    if (chave && !meus.has(chave)) {
+      await fila.removeJobScheduler(chave);
+      console.log(`[agenda] agendador legado removido de ${fila.name}: ${chave}`);
+    }
+  }
+  for (const i of itens) {
+    await fila.upsertJobScheduler(
+      i.id,
+      { pattern: i.pattern },
+      { name: i.nome, data: i.data, opts: { removeOnComplete: i.manter, removeOnFail: i.manter } },
+    );
+  }
+}
+
 // Agenda: coleta completa a cada 6h por fonte, refresh de lote quente a cada 2 min.
-for (const c of connectors) {
-  await collectQueue.add(
-    `collect:${c.def.id}`,
+await agendar(
+  collectQueue,
+  connectors.map((c) => ({
+    id: `collect-${c.def.id}`,
+    nome: `collect:${c.def.id}`,
+    pattern: '17 */6 * * *',
     // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
     // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
     // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
     // caras por lote e continuam com teto menor.
-    { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
-    { repeat: { pattern: '17 */6 * * *' }, jobId: `repeat-collect-${c.def.id}`, removeOnComplete: 20, removeOnFail: 20 },
-  );
-}
-await refreshQueue.add(
-  'refresh:hot',
-  { reason: 'lotes encerrando' },
-  { repeat: { pattern: '*/2 * * * *' }, jobId: 'repeat-refresh', removeOnComplete: 20, removeOnFail: 20 },
+    data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
+    manter: 20,
+  })),
 );
+
+await agendar(refreshQueue, [
+  { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },
+]);
 
 // Descoberta é semanal porque cadastro de junta comercial muda devagar, e a
 // sonda vai em fatia diária: são 1.023 sites a 1 req/s por host, uns 17 min de
 // uma vez só. A fatia de 150 cobre o catálogo inteiro em uma semana.
-await discoverQueue.add(
-  'discover:fenaju',
-  { qual: 'fenaju' },
-  { repeat: { pattern: '23 4 * * 1' }, jobId: 'repeat-discover-fenaju', removeOnComplete: 10, removeOnFail: 10 },
-);
-await discoverQueue.add(
-  'discover:sonda',
-  { qual: 'sonda', limite: 150 },
-  { repeat: { pattern: '41 5 * * *' }, jobId: 'repeat-discover-sonda', removeOnComplete: 10, removeOnFail: 10 },
-);
+await agendar(discoverQueue, [
+  { id: 'discover-fenaju', nome: 'discover:fenaju', pattern: '23 4 * * 1', data: { qual: 'fenaju' }, manter: 10 },
+  { id: 'discover-sonda', nome: 'discover:sonda', pattern: '41 5 * * *', data: { qual: 'sonda', limite: 150 }, manter: 10 },
+]);
 
 console.log('worker de coleta no ar (filas: collect, refresh, discover)');
