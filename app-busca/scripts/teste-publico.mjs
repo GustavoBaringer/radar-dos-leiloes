@@ -60,6 +60,39 @@ const b = await chromium.launch({ executablePath: ach() });
   await ctx.close();
 }
 
+/* a volta: quem entra pelo link compartilhado tem de VOLTAR para o anúncio */
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage();
+  await p.goto(`${API}/lote/${SLUG}`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+
+  await p.click('.topo-entrar');
+  await p.waitForLoadState('load');
+  const noLogin = p.url().includes('/login');
+  const destino = await p.locator('input[name="de"]').getAttribute('value').catch(() => null);
+  noLogin && destino === `/lote/${SLUG}`
+    ? ok('o login recebe o destino', destino)
+    : falha('o login recebe o destino', `url=${p.url()} de=${destino}`);
+
+  await p.fill('#usuario', process.env.APP_USUARIO);
+  await p.fill('#senha', process.env.APP_SENHA);
+  await Promise.all([p.waitForNavigation(), p.click('button[type=submit]')]);
+  await p.waitForTimeout(1800);
+
+  const voltou = p.url().endsWith(`/lote/${SLUG}`);
+  voltou ? ok('depois de entrar, volta para o anúncio', p.url().replace(API, ''))
+         : falha('depois de entrar, volta para o anúncio', `terminou em ${p.url()}`);
+
+  // E volta AUTENTICADO, não na versão pública.
+  const gaveta = await p.locator('.drawer .painel').count();
+  const titulo = await p.textContent('#drawerTitle').catch(() => null);
+  gaveta === 1 && titulo
+    ? ok('volta como usuário logado', `gaveta aberta em "${titulo.slice(0, 32)}"`)
+    : falha('volta como usuário logado', `gaveta=${gaveta} titulo=${titulo}`);
+  await ctx.close();
+}
+
 /* com sessão: a gaveta sobre a busca continua funcionando */
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });

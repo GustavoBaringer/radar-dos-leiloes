@@ -203,10 +203,14 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
    * facetas e os alertas ficam atrás da conta.
    */
   if (publico) {
+    // Derivado do próprio lote, não de `window.location`: o servidor não tem
+    // location, e um valor diferente dos dois lados quebraria a hidratação.
+    const voltarPara = lote ? `/lote/${slugDoLote(lote)}` : undefined;
     return (
       <>
         <AppHeader
           publico
+          voltarPara={voltarPara}
           aba="busca" aoTrocarAba={() => {}} termo="" aoDigitar={() => {}} aoBuscar={() => {}}
           aoVivo={false} naoVistos={0} mostraCobertura={false}
         />
@@ -219,7 +223,9 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
               estado, cidade, comitente e leiloeiro, e alerta quando entrar um lote como este.
             </p>
           </div>
-          <a className="btn-pri" href="/login">Entrar e buscar</a>
+          {/* Este vai para a busca de propósito: o texto promete buscar. Quem
+              quer voltar ao anúncio usa o "Entrar" do topo. */}
+          <a className="btn-pri" href="/login?de=%2Fbusca">Entrar e buscar</a>
         </section>
         <Rodape />
       </>

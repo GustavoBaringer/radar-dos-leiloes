@@ -16,10 +16,12 @@ interface Props {
   mostraCobertura: boolean;
   /** Visitante sem sessão: nada que exija conta aparece. */
   publico?: boolean;
+  /** Caminho para onde voltar depois de entrar. */
+  voltarPara?: string;
 }
 
 export function AppHeader({
-  aba, aoTrocarAba, termo, aoDigitar, aoBuscar, aoVivo, naoVistos, mostraCobertura, publico = false,
+  aba, aoTrocarAba, termo, aoDigitar, aoBuscar, aoVivo, naoVistos, mostraCobertura, publico = false, voltarPara,
 }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -52,7 +54,14 @@ export function AppHeader({
             <MarcaRadar tamanho={32} />
             <span className="logo-txt">Radar de Leilões</span>
           </a>
-          <a className="btn-buscar topo-entrar" href="/login">Entrar</a>
+          {/* Leva o destino junto: sem `?de=`, entrar mandava o visitante para
+              /busca e ele perdia o anúncio que tinha acabado de abrir. */}
+          <a
+            className="btn-buscar topo-entrar"
+            href={voltarPara ? `/login?de=${encodeURIComponent(voltarPara)}` : '/login'}
+          >
+            Entrar
+          </a>
         </div>
       </header>
     );
