@@ -1,0 +1,6 @@
+node_modules/
+dist/
+shots/
+shots-prod/
+shots-final/
+dev.log

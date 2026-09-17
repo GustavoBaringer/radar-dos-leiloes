@@ -49,16 +49,23 @@ async function hrefDoBotao(caminho) {
   await p.waitForTimeout(1800);
   const naoRecarregou = await p.evaluate(() => typeof window.__sentinela === 'number');
   const href = await p.locator('a.open-src').getAttribute('href').catch(() => null);
-  return { href, naoRecarregou };
+  // Com SSR o lote chega no HTML (window.__LOTE__) e NÃO há requisição a
+  // /api/lot. A asserção de frescor tem de aceitar os dois caminhos, senão
+  // mede o mecanismo de entrega em vez do que interessa: o href veio do
+  // servidor nesta navegação, não de cache do cliente.
+  const doSsr = await p.evaluate(() => window.__LOTE__?.lot_url ?? null);
+  return { href, naoRecarregou, doSsr };
 }
 
 console.log('\n1. Lote de referência, na tela');
 const ref = await hrefDoBotao(SLUG_REF);
 ok(ref.href === ESPERADO_REF, 'href é o anúncio, não a home', ref.href ?? '(sem botão)');
 ok(ref.naoRecarregou, 'a página não recarregou durante a asserção');
-ok(rede.some((r) => r.url.endsWith(`/api/lot/${LOTE_REF}`) && r.status === 200),
-   'o href veio de /api/lot respondido nesta navegação',
-   rede.map((r) => `${r.url.split('/api')[1]}=${r.status}`).join(' '));
+const veioDoServidor =
+  rede.some((r) => r.url.endsWith(`/api/lot/${LOTE_REF}`) && r.status === 200) || ref.doSsr === ref.href;
+ok(veioDoServidor,
+   'o href veio do servidor nesta navegação (SSR ou /api/lot)',
+   ref.doSsr ? `SSR: ${ref.doSsr}` : rede.map((r) => `${r.url.split('/api')[1]}=${r.status}`).join(' '));
 
 console.log('\n2. População no banco (o par que discrimina)');
 const [[deep, home, total]] = sql(

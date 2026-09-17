@@ -3,6 +3,7 @@ import { request as undiciRequest } from 'undici';
 import sharp from 'sharp';
 import { insecureDispatcher, HOSTS_TLS_INCOMPLETO } from './connectors/http.js';
 import fastifyStatic from '@fastify/static';
+import { pathToFileURL } from 'node:url';
 import formbody from '@fastify/formbody';
 import websocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
@@ -37,7 +38,7 @@ await app.register(formbody);
  * local continua sem atrito. O service worker do push precisa passar livre:
  * o navegador o busca sem cookie de sessão e um 302 ali quebraria o push.
  */
-const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/styles.css']);
+const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt']);
 
 /**
  * Superfície pública.
@@ -169,7 +170,7 @@ if (authLigada()) {
     if (!v.startsWith('/') || v.startsWith('//')) return DESTINO_PADRAO;
     const caminho = v.split('?')[0];
     const permitido =
-      caminho === '/' || caminho === '/home' || APP_ROTAS.includes(caminho) || caminho.startsWith('/lote/');
+      caminho === '/' || APP_ROTAS.includes(caminho) || caminho.startsWith('/lote/');
     return permitido ? v : DESTINO_PADRAO;
   }
   const escapaAtributo = (v: string) =>
@@ -357,6 +358,51 @@ await app.register(websocket);
 await app.register(fastifyStatic, { root: join(here, 'web'), prefix: '/', index: false });
 
 /**
+ * O app de busca (React/Vite) vive em app-busca/ e é servido daqui.
+ *
+ * `decorateReply: false` porque o primeiro registro de fastify-static já
+ * decorou o reply com sendFile; um segundo registro sem isso derruba o boot
+ * com "reply.sendFile already exists".
+ */
+const APP_DIST = join(here, '..', 'app-busca', 'dist');
+const APP_CLIENTE = join(APP_DIST, 'client');
+const temAppNovo = existsSync(join(APP_CLIENTE, 'index.html'));
+if (temAppNovo) {
+  await app.register(fastifyStatic, {
+    root: join(APP_CLIENTE, 'assets'),
+    prefix: '/assets/',
+    decorateReply: false,
+    // Nome com hash do conteúdo: mudou o arquivo, mudou a URL. Pode cachear
+    // forte, e é o que tira a Cloudflare do caminho crítico do deploy.
+    maxAge: '1y',
+    immutable: true,
+  });
+}
+
+/** Casca do app novo, lida uma vez por requisição para o deploy não exigir restart. */
+const cascaDoApp = () => readFileSync(join(APP_CLIENTE, 'index.html'), 'utf8');
+
+/**
+ * Render do lote no servidor.
+ *
+ * O bundle é carregado sob demanda e memorizado: importar a cada requisição
+ * refaria o parse de 82 KB por lote aberto, e importar no topo quebraria o boot
+ * em ambiente onde o app ainda não foi construído.
+ */
+let renderLote: ((lot: any) => string) | null = null;
+async function carregarRender(): Promise<((lot: any) => string) | null> {
+  if (renderLote) return renderLote;
+  try {
+    const mod = await import(pathToFileURL(join(APP_DIST, 'server', 'entry-server.js')).href);
+    renderLote = mod.renderLote;
+    return renderLote;
+  } catch (e: any) {
+    app.log.error({ err: e.message }, 'SSR do lote indisponível; caindo para a casca');
+    return null;
+  }
+}
+
+/**
  * URLs amigáveis. O app é uma página só, então toda rota de navegação devolve
  * a mesma casca e o cliente decide o que mostrar pelo caminho. Sem isto, abrir
  * /alertas direto (ou recarregar com o drawer aberto) dava 404 do estático.
@@ -369,7 +415,7 @@ const APP_ROTAS = ['/busca', '/alertas', '/cobertura'];
  * que cacheia .js e .css por conta própria e serviu versão velha por horas.
  * Mudando a URL, nenhuma camada de cache tem o que reaproveitar.
  */
-const ESTATICOS = ['app.js', 'styles.css', 'slug.js', 'cartao.js', 'landing.js', 'landing.css', 'home.js', 'cartao.css'];
+const ESTATICOS = ['slug.js', 'cartao.js', 'landing.js', 'landing.css', 'cartao.css'];
 /** Origem pública do site, usada em canonical, Open Graph, JSON-LD e sitemap. */
 const SITE = (process.env.SITE_URL ?? 'http://localhost:4500').replace(/\/$/, '');
 
@@ -384,11 +430,23 @@ function paginaVersionada(arquivo: string): string {
 const enviaPagina = (arquivo: string) => async (_req: any, reply: any) =>
   reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(paginaVersionada(arquivo));
 
-// A landing de venda ocupa a raiz; a home de navegação (carrosséis do índice)
-// passou a viver em /home para abrir espaço para ela.
+// A landing de venda ocupa a raiz. A /home (carrosséis do índice) era tela
+// morta e foi removida em 17/09; quem chegava nela ia para a busca de qualquer
+// jeito, e mantê-la significava um terceiro renderizador de cartão para
+// divergir dos outros dois.
 app.get('/', enviaPagina('landing.html'));
-app.get('/home', enviaPagina('home.html'));
-for (const rota of APP_ROTAS) app.get(rota, enviaPagina('index.html'));
+/**
+ * As rotas de navegação devolvem a casca do app React, que decide a tela pelo
+ * caminho. Sem o build não há tela: é erro de implantação, e 503 com a causa
+ * escrita é melhor do que servir uma versão antiga que ninguém mandou servir.
+ */
+for (const rota of APP_ROTAS) {
+  app.get(rota, async (_req, reply) =>
+    temAppNovo
+      ? reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(cascaDoApp())
+      : reply.code(503).type('text/plain; charset=utf-8').send('app-busca não construído: rode `npm run build` em app-busca/'),
+  );
+}
 
 const esc = (v: unknown) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -403,16 +461,16 @@ const dinheiroBR = (v: number | null) =>
  * injetados no servidor. O conteúdo visível continua sendo montado no cliente.
  */
 app.get('/lote/:slug', async (req, reply) => {
-  const html = paginaVersionada('index.html');
+  if (!temAppNovo) {
+    return reply.code(503).type('text/plain; charset=utf-8').send('app-busca não construído');
+  }
+  const html = cascaDoApp();
   const id = Number(/-(\d+)$/.exec(String((req.params as any).slug ?? ''))?.[1]);
-  const [lot] = Number.isFinite(id)
-    ? await query<any>(
-        `SELECT id, title_display, title_raw, brand, model, year_model, city, state, source_id,
-                lot_url, photos, current_bid, min_bid, appraisal, asset_type, auction_end_utc, auctioneer_name
-           FROM lots WHERE id = $1`,
-        [id],
-      )
-    : [];
+  // O SSR renderiza a gaveta inteira, então precisa do MESMO objeto que
+  // /api/lot/:id entrega — o SELECT curto de antes só servia para montar meta,
+  // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
+  // divergir campo a campo.
+  const lot = Number.isFinite(id) ? await getLot(id) : null;
   if (!lot) return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(html);
 
   const titulo = lot.title_display || lot.title_raw;
@@ -458,10 +516,44 @@ app.get('/lote/:slug', async (req, reply) => {
     `<script type="application/ld+json">${JSON.stringify(jsonld).replaceAll('<', '\\u003c')}</script>`,
   ].filter(Boolean).join('\n');
 
-  return reply
-    .type('text/html; charset=utf-8')
-    .header('cache-control', 'no-cache')
-    .send(html.replace(/<title>[\s\S]*?<\/title>/, cabeca));
+  let corpo = html.replace(/<title>[\s\S]*?<\/title>/, cabeca);
+
+  // SSR de verdade: o robô recebe o lote já renderizado no HTML, e o cliente
+  // hidrata sobre a mesma árvore com o mesmo objeto em `window.__LOTE__`.
+  // Falha no render NÃO derruba a página: cai na casca e o cliente busca o
+  // lote sozinho, que é exatamente o comportamento anterior.
+  const render = temAppNovo ? await carregarRender() : null;
+  if (render) {
+    try {
+      const marcado = render(lot);
+      /**
+       * O React 19 emite `<link rel="preload">` para as fotos do lote. São
+       * elementos HOISTABLE: pertencem ao `<head>`, e o `renderToString`
+       * devolve todos no meio da marcação porque não tem documento para
+       * hoistá-los.
+       *
+       * Injetar isso dentro de `<div id="root">` quebrava a hidratação com
+       * React #418 — o servidor mandava um `<link>` que o cliente não
+       * renderiza ali. Mover para o head conserta a hidratação E é o lugar
+       * certo: o navegador começa a baixar a foto antes de avaliar o bundle.
+       */
+      const preloads: string[] = [];
+      const html = marcado.replace(/<link\b[^>]*\brel="(?:preload|preconnect|dns-prefetch|stylesheet)"[^>]*>/g, (m) => {
+        preloads.push(m);
+        return '';
+      });
+      // `</script` dentro do JSON fecharia a tag e viraria injeção de HTML a
+      // partir de um título escrito pelo leiloeiro.
+      const estado = JSON.stringify(lot).replaceAll('<', '\\u003c');
+      corpo = corpo
+        .replace('<div id="root"></div>', `<div id="root">${html}</div>`)
+        .replace('</head>', `${preloads.join('')}<script>window.__LOTE__=${estado}</script></head>`);
+    } catch (e: any) {
+      app.log.error({ err: e.message, lote: id }, 'SSR do lote falhou; servindo a casca');
+    }
+  }
+
+  return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(corpo);
 });
 
 /**
@@ -482,7 +574,6 @@ app.get('/robots.txt', async (_req, reply) =>
       'Disallow: /alertas',
       'Disallow: /cobertura',
       'Disallow: /lote/',
-      'Disallow: /home',
       'Allow: /',
       '',
       `Sitemap: ${SITE}/sitemap.xml`,
@@ -720,6 +811,7 @@ app.get('/api/search', async (req) => {
     sellerType: q.sellerType,
     sourceId: q.sourceId,
     auctioneer: q.auctioneer,
+    seller: q.seller,
     assetType: q.assetType,
     vehicleType: q.vehicleType,
     propertyType: q.propertyType,

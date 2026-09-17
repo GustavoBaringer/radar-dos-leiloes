@@ -19,9 +19,9 @@ const ok = (c, m) => (c ? console.log(`  PASSA  ${m}`) : falhas.push(m));
 const p = await (await b.newContext()).newPage();
 await entrarComSenha(p, BASE);
 await p.goto(`${BASE}/busca`);
-await p.waitForSelector('#grid .card', { timeout: 20000 });
+await p.waitForSelector('.grade .card', { timeout: 20000 });
 // Espera o WebSocket abrir antes de publicar, senão a mensagem passa em branco.
-await p.waitForFunction(() => window.__wsAberto === true || document.querySelectorAll('#grid .card').length > 0, { timeout: 10000 });
+await p.waitForFunction(() => window.__wsAberto === true || document.querySelectorAll('.grade .card').length > 0, { timeout: 10000 });
 await p.waitForTimeout(1500);
 
 await pub.publish(CHANNEL_UPDATES, JSON.stringify({ type: 'encerrados', total: 37, porPrazo: 30, porAusencia: 7 }));

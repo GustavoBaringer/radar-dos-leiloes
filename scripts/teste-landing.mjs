@@ -150,7 +150,7 @@ if (ruim.status !== 400) falhas.push(`lista de espera: e-mail inválido devolveu
   await p.waitForSelector('#lotesGrade .card', { timeout: 20000 });
   ok2((await p.locator('#lotesGrade .card').count()) > 0, 'a vitrine desenha lotes para o visitante');
   ok2((await p.locator('#lotesGrade .card img[src^="/api/img"]').count()) > 0, 'as fotos da vitrine carregam pelo proxy');
-  for (const rota of ['/busca', '/lote/x-319', '/home', '/alertas']) {
+  for (const rota of ['/busca', '/lote/x-319', '/alertas']) {
     const resp = await p.goto(`${BASE}${rota}`);
     ok2(p.url().includes('/login'), `${rota} exige conta (terminou em ${p.url()})`);
   }
