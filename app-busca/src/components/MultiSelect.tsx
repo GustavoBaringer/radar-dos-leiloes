@@ -58,6 +58,20 @@ export function MultiSelect({ def, linhas, escolhidos, rotulosServidor, aoMudar 
     };
   }, [aberto]);
 
+  /**
+   * A lateral virou contêiner de rolagem (ela é mais alta que a janela), e a
+   * lista é `position: absolute` — abrir uma faceta perto do fim deixaria a
+   * lista cortada pela borda do contêiner. Rolar o suficiente para mostrá-la
+   * resolve sem tirar a lista do fluxo.
+   */
+  useEffect(() => {
+    if (!aberto) return;
+    const t = setTimeout(() => {
+      caixa.current?.querySelector('.multi-lista')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [aberto]);
+
   const marcados = useMemo(() => new Set(escolhidos), [escolhidos]);
 
   const opcoes = useMemo(() => {

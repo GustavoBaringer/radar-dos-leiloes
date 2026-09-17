@@ -374,7 +374,23 @@
     align-items: start; padding-block: 20px 8px;
   }
   .resultados { min-width: 0 }
-  .lateral-desktop { position: sticky; top: 76px }
+  /* MEDIDO: a lateral tem 1003px e a janela de 1440x900 tem 900 — ela passava
+     179px do fim da tela (359px em 1280x720), e "Limpar filtros" só aparecia
+     rolando a PÁGINA inteira até o rodapé. Agora ela rola por dentro.
+     `overscroll-behavior: contain` evita o encadeamento: chegar ao fim da
+     lateral não deve continuar rolando a página atrás. */
+  .lateral-desktop {
+    position: sticky;
+    top: 76px;
+    max-height: calc(100vh - 76px - 20px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Espaço para a lista da última faceta não encostar na borda ao abrir. */
+    padding-bottom: 4px;
+  }
+  .lateral-desktop::-webkit-scrollbar { width: 8px }
+  .lateral-desktop::-webkit-scrollbar-thumb { background: var(--brand-panel-2); border-radius: 8px }
+  .lateral-desktop::-webkit-scrollbar-thumb:hover { background: var(--border) }
   .filtros-toggle { display: none }
 
   @media (max-width: 980px) {
