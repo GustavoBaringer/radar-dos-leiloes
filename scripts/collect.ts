@@ -27,7 +27,9 @@ for (const c of targets) {
         ` ${(Date.now() - t0) / 1000}s`,
     );
   } catch (err: any) {
-    await finishRun(runId, { ok: false, error: String(err?.message ?? err) });
+    // Sem httpStatus aqui, a tela de cobertura mostra "falhou" sem o código:
+    // rodar pela CLI (este script) escondia 302/403/429 que o worker grava.
+    await finishRun(runId, { ok: false, error: String(err?.message ?? err), httpStatus: Number(err?.httpStatus) || undefined });
     console.error(`${c.def.id.padEnd(10)} FALHOU: ${err?.message ?? err}`);
   }
 }

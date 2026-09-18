@@ -82,10 +82,12 @@ curl -X POST localhost:4500/api/collect -H 'content-type: application/json' -d '
   `count: 0` em silêncio. Os valores reais são `Carros`, `Motos`, `Utilitarios`,
   `Sucatas`, `Pesados`, `Equipamentos`, `Imoveis`.
 
-- **Caixa: o antibot responde HTTP 200.** O Radware devolve uma página de CAPTCHA com
-  status 200. A detecção é por conteúdo; checar só o código gravaria CAPTCHA no banco.
-  O bloqueio é por IP e dura dezenas de minutos, então são 2 requisições por ciclo.
-  Para desenvolver com o IP em cooldown, `CAIXA_CSV_PATH` aponta para um arquivo local.
+- **Caixa: o antibot responde HTTP 200 OU 302.** O Radware devolve uma página de
+  CAPTCHA com status 200 (detecção por conteúdo) ou, desde 15/09/2026, redireciona
+  (302) para `validate.perfdrive.com` — mesmo antibot, mecanismo novo. Confirmado por
+  curl: não é header faltando nem URL trocada, e persistiu 4+ dias corridos, bem além
+  dos "dezenas de minutos" antigos. Para desenvolver com o IP bloqueado, `CAIXA_CSV_PATH`
+  aponta para um arquivo local.
 - **A coluna "Preço" da Caixa não é preço.** É o mínimo do 1º leilão, e supera a
   avaliação em 2.424 dos 5.189 lotes de leilão. Vai para `min_bid`, nunca exibida como
   preço, e a avaliação riscada só aparece quando é maior que o lance.

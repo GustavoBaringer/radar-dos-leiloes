@@ -25,10 +25,23 @@ const UA =
  *    avaliação no Leilão SFI). Exibi-la como preço anunciaria 1 em 3 imóveis mais caro
  *    que a avaliação, com "desconto 0" enganoso. Por isso vai para `minBid`, e a
  *    avaliação para `appraisal`.
+ *
+ * 4. **Desde 15/09/2026 o MESMO antibot (confirmado pelo `ssk=support@shieldsquare.com`
+ *    no Location) passou a bloquear por 302 para validate.perfdrive.com em vez de HTML
+ *    200 — em TODA rota do site, não só nas duas URLs abaixo. Não é mudança de URL nem
+ *    header faltando (testado com headers completos de browser, sem efeito); o `ssr` do
+ *    redirect é o nosso IP em base64, então é bloqueio por IP — mas já passou de 4 dias
+ *    contínuos, muito além dos "dezenas de minutos" do item 2.
  */
 
 function pareceCaptcha(body: string): boolean {
   return /Radware Bot Manager|CAPTCHA|perfdrive\.com/i.test(body.slice(0, 4000));
+}
+
+// Discrimina o antibot conhecido (não precisa reabrir investigação) de um
+// redirect para outro lugar (aí sim pode ser URL trocada pela Caixa).
+function ehRedirectAntibot(location?: string): boolean {
+  return !!location && /perfdrive\.com|shieldsquare/i.test(location);
 }
 
 /** Colunas 6 e 7 usam vírgula decimal; a 8 usa ponto. Dois parsers no mesmo arquivo. */
@@ -81,7 +94,7 @@ function parseDescricao(desc: string): Descricao {
   };
 }
 
-async function baixarCsv(): Promise<{ texto: string; status: number }> {
+async function baixarCsv(): Promise<{ texto: string; status: number; location?: string }> {
   // Caminho local para desenvolvimento e para quando o IP estiver em cooldown.
   const local = process.env.CAIXA_CSV_PATH;
   if (local) return { texto: readFileSync(local, 'latin1'), status: 200 };
@@ -111,7 +124,8 @@ async function baixarCsv(): Promise<{ texto: string; status: number }> {
     bodyTimeout: 60000,
   });
   const buf = Buffer.from(await res.body.arrayBuffer());
-  return { texto: buf.toString('latin1'), status: res.statusCode };
+  const location = ([] as string[]).concat((res.headers['location'] as any) ?? [])[0];
+  return { texto: buf.toString('latin1'), status: res.statusCode, location };
 }
 
 export const caixa: Connector = {
@@ -123,10 +137,10 @@ export const caixa: Connector = {
     tier: 1,
     siteUrl: 'https://venda-imoveis.caixa.gov.br',
     notes:
-      'CSV nacional, 1 requisição por ciclo. Antibot Radware responde 200 com CAPTCHA: detectar por conteúdo. Coluna "Preço" é o mínimo do 1º leilão, não preço de venda. Sem data de praça no arquivo.',
+      'CSV nacional, 1 requisição por ciclo. Antibot Radware responde 200 com CAPTCHA OU 302 para validate.perfdrive.com: detectar por conteúdo e por status. Coluna "Preço" é o mínimo do 1º leilão, não preço de venda. Sem data de praça no arquivo. Desde 15/09/2026 bloqueado por IP (ver collection_runs).',
   },
   async collect({ limit }): Promise<CollectResult> {
-    const { texto, status } = await baixarCsv();
+    const { texto, status, location } = await baixarCsv();
     if (pareceCaptcha(texto)) {
       const err: any = new Error('Caixa respondeu CAPTCHA do Radware (IP em cooldown)');
       err.httpStatus = status;
@@ -136,7 +150,10 @@ export const caixa: Connector = {
     // devolvia fetched=0 como sucesso: 5 execuções em 302 apareceram na tela
     // de cobertura como "coleta ok".
     if (status < 200 || status >= 300) {
-      const err: any = new Error(`Caixa respondeu HTTP ${status} em vez do CSV`);
+      let msg = `Caixa respondeu HTTP ${status} em vez do CSV`;
+      if (ehRedirectAntibot(location)) msg = `Caixa redirecionou para o CAPTCHA do Radware (IP bloqueado): ${location}`;
+      else if (location) msg += ` (redirect para ${location})`;
+      const err: any = new Error(msg);
       err.httpStatus = status;
       throw err;
     }
