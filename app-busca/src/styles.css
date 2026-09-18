@@ -897,11 +897,13 @@ a { color: inherit; text-decoration: none }
 }
 
 .folha-mapa {
-  position: absolute;
+  /* Presa à JANELA, não ao mapa: ancorada no palco, a altura cheia dava 62% da
+     tela porque o cabeçalho ocupa 289px que não saem da frente. */
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 6;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   background: var(--brand-panel);
@@ -937,6 +939,14 @@ a { color: inherit; text-decoration: none }
 }
 .folha-cabecalho b { color: var(--foreground); font-weight: 500; }
 .folha-cabecalho .btn-clear { width: auto; flex: none; padding: 4px 10px; }
+
+/* A folha inteira é área de arrasto; a lista só fica com o gesto quando a
+   folha está cheia, senão puxar um card não levantaria nada. E puxar por cima
+   da FOTO iniciava o arrasto nativo de imagem, que mata os pointermove
+   seguintes — o gesto morria depois do primeiro movimento. */
+.folha-mapa { touch-action: none; user-select: none; -webkit-user-select: none; }
+.folha-mapa img { -webkit-user-drag: none; user-drag: none; }
+.folha-mapa.cheia .folha-rolo { touch-action: pan-y; }
 
 .folha-rolo {
   flex: 1;

@@ -8,37 +8,39 @@ interface Props {
   gatilho: string;
 }
 
-/** Espiada, metade e cheia. É o que separa "vejo o mapa" de "leio a lista". */
+/** Espiada, metade e cheia — frações da JANELA, não do mapa. */
 const ALTURAS = [0.22, 0.56, 0.94];
+
+const janela = () => window.visualViewport?.height ?? window.innerHeight;
 
 /**
  * A lista sobre o mapa, no celular.
  *
- * Padrão escolhido depois de comparar os três possíveis: a pergunta que o mapa
- * responde é "o que tem AQUI", e alternar ou dividir fazem perder o "aqui" na
- * hora de ler a resposta.
+ * Medido em 390x844: ancorada na área do mapa, a altura cheia dava 522px — 94%
+ * do mapa e só 62% da tela, porque o cabeçalho ocupa 289px que não saem da
+ * frente. Por isso a folha é presa à JANELA: no topo ela cobre o cabeçalho, que
+ * volta assim que se puxa para baixo.
  */
 export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
   const caixa = useRef<HTMLDivElement>(null);
+  const rolo = useRef<HTMLDivElement>(null);
   const [nivel, setNivel] = useState(0);
   const [arrastando, setArrastando] = useState(false);
   const [altura, setAltura] = useState<number | null>(null);
-  const arrasto = useRef<{ y: number; h: number } | null>(null);
+  const gesto = useRef<{ y: number; h: number; doRolo: boolean; ativo: boolean } | null>(null);
 
-  const disponivel = useCallback(() => {
-    const pai = caixa.current?.parentElement;
-    return pai ? pai.getBoundingClientRect().height : window.innerHeight;
-  }, []);
+  const alturaDe = useCallback((n: number) => Math.round(janela() * ALTURAS[n]), []);
 
+  useEffect(() => { setAltura(alturaDe(nivel)); }, [nivel, alturaDe]);
   useEffect(() => {
-    setAltura(Math.round(disponivel() * ALTURAS[nivel]));
-  }, [nivel, disponivel]);
-
-  useEffect(() => {
-    const onR = () => setAltura(Math.round(disponivel() * ALTURAS[nivel]));
+    const onR = () => setAltura(alturaDe(nivel));
     window.addEventListener('resize', onR);
-    return () => window.removeEventListener('resize', onR);
-  }, [nivel, disponivel]);
+    window.visualViewport?.addEventListener('resize', onR);
+    return () => {
+      window.removeEventListener('resize', onR);
+      window.visualViewport?.removeEventListener('resize', onR);
+    };
+  }, [nivel, alturaDe]);
 
   // Escolher um ponto levanta a folha até a metade: sem isso o usuário toca e
   // não vê resposta nenhuma, porque ela nasceu fora da tela.
@@ -46,11 +48,76 @@ export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
     if (gatilho) setNivel((n) => (n === 0 ? 1 : n));
   }, [gatilho]);
 
+  const noMaximo = nivel === ALTURAS.length - 1;
+
+  /**
+   * Quem manda no gesto: a folha ou a rolagem da lista.
+   *
+   * Arrastar só pela alça é o que o usuário reclamou. Mas entregar a folha o
+   * gesto inteiro quebraria a rolagem da lista quando ela está cheia — daí a
+   * regra: a lista só fica com o gesto quando está no máximo E já rolada, ou
+   * quando está no máximo e o dedo sobe.
+   */
+  const donoEhAFolha = (doRolo: boolean, deltaY: number) => {
+    if (!doRolo) return true;
+    if (!noMaximo) return true;
+    const rolado = (rolo.current?.scrollTop ?? 0) > 0;
+    if (rolado) return false;
+    return deltaY > 0; // dedo descendo com a lista no topo: a folha desce junto
+  };
+
+  const encaixa = () => {
+    const f = (caixa.current?.getBoundingClientRect().height ?? 0) / janela();
+    let melhor = 0;
+    for (let i = 1; i < ALTURAS.length; i++) {
+      if (Math.abs(ALTURAS[i] - f) < Math.abs(ALTURAS[melhor] - f)) melhor = i;
+    }
+    setNivel(melhor);
+    setAltura(alturaDe(melhor));
+  };
+
   return (
     <div
-      className={`folha-mapa${arrastando ? ' arrastando' : ''}`}
+      className={`folha-mapa${arrastando ? ' arrastando' : ''}${noMaximo ? ' cheia' : ''}`}
       ref={caixa}
       style={altura != null ? { height: `${altura}px` } : undefined}
+      onDragStart={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest('a, button, select, input')) return;
+        gesto.current = {
+          y: e.clientY,
+          h: caixa.current?.getBoundingClientRect().height ?? 0,
+          doRolo: !!(e.target as HTMLElement).closest('.folha-rolo'),
+          ativo: false,
+        };
+      }}
+      onPointerMove={(e) => {
+        const g = gesto.current;
+        if (!g) return;
+        const dy = e.clientY - g.y;
+        if (!g.ativo) {
+          if (Math.abs(dy) < 6) return;
+          // A decisão é tomada UMA vez, no primeiro movimento: trocar de dono no
+          // meio do gesto faz a folha pular enquanto a lista rola.
+          if (!donoEhAFolha(g.doRolo, dy)) { gesto.current = null; return; }
+          g.ativo = true;
+          setArrastando(true);
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        }
+        const max = janela();
+        setAltura(Math.max(46, Math.min(max, Math.round(g.h - dy))));
+      }}
+      onPointerUp={() => {
+        const g = gesto.current;
+        gesto.current = null;
+        if (!g?.ativo) return;
+        setArrastando(false);
+        encaixa();
+      }}
+      onPointerCancel={() => {
+        if (gesto.current?.ativo) { setArrastando(false); encaixa(); }
+        gesto.current = null;
+      }}
     >
       <div
         className="folha-puxador"
@@ -60,29 +127,6 @@ export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
         aria-valuemin={0}
         aria-valuemax={ALTURAS.length - 1}
         aria-valuenow={nivel}
-        onPointerDown={(e) => {
-          arrasto.current = { y: e.clientY, h: caixa.current?.getBoundingClientRect().height ?? 0 };
-          setArrastando(true);
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          const a = arrasto.current;
-          if (!a) return;
-          const max = disponivel();
-          setAltura(Math.max(46, Math.min(max, Math.round(a.h + (a.y - e.clientY)))));
-        }}
-        onPointerUp={() => {
-          if (!arrasto.current) return;
-          arrasto.current = null;
-          setArrastando(false);
-          // Encaixa na altura mais próxima: folha parada no meio não é estado, é acidente.
-          const f = (caixa.current?.getBoundingClientRect().height ?? 0) / disponivel();
-          let melhor = 0;
-          for (let i = 1; i < ALTURAS.length; i++) {
-            if (Math.abs(ALTURAS[i] - f) < Math.abs(ALTURAS[melhor] - f)) melhor = i;
-          }
-          setNivel(melhor);
-        }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowUp') { setNivel((n) => Math.min(ALTURAS.length - 1, n + 1)); e.preventDefault(); }
           else if (e.key === 'ArrowDown') { setNivel((n) => Math.max(0, n - 1)); e.preventDefault(); }
@@ -91,7 +135,7 @@ export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
         <i />
       </div>
       <div className="folha-cabecalho">{cabecalho}</div>
-      <div className="folha-rolo">{children}</div>
+      <div className="folha-rolo" ref={rolo}>{children}</div>
     </div>
   );
 }
