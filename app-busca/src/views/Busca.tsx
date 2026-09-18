@@ -7,6 +7,7 @@ import { type EstadoBusca, contaFiltros, paramsDaBusca } from '@/lib/filtros';
 import { FilterSidebar } from '@/components/FilterSidebar';
 import { LotCard } from '@/components/LotCard';
 import { MapaLotes } from '@/components/MapaLotes';
+import { FolhaMapa } from '@/components/FolhaMapa';
 
 interface Props {
   estado: EstadoBusca;
@@ -29,6 +30,7 @@ export function Busca({
   const [gavetaFiltros, setGavetaFiltros] = useState(false);
   const [rotulosServidor, setRotulos] = useState<Record<string, Record<string, string>>>({});
   const [mapa, setMapa] = useState<RespostaMapa | null>(null);
+  const [ehCelular, setEhCelular] = useState(false);
   const [mapaCarregando, setMapaCarregando] = useState(false);
   const seq = useRef(0);
   const seqMapa = useRef(0);
@@ -86,6 +88,32 @@ export function Busca({
     return () => ac.abort();
   }, [qsMapa, estado.vista]);
 
+  const barraRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!(ehCelular && estado.vista === 'mapa')) return;
+    const medir = () => {
+      const b = barraRef.current?.getBoundingClientRect().bottom ?? 0;
+      document.documentElement.style.setProperty('--topo-mapa', `${Math.max(0, Math.round(b))}px`);
+    };
+    medir();
+    window.addEventListener('resize', medir);
+    window.addEventListener('scroll', medir, { passive: true });
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('resize', medir);
+      window.removeEventListener('scroll', medir);
+      document.body.style.overflow = '';
+    };
+  }, [ehCelular, estado.vista]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 860px)');
+    const ver = () => setEhCelular(mq.matches);
+    ver();
+    mq.addEventListener('change', ver);
+    return () => mq.removeEventListener('change', ver);
+  }, []);
+
   const facetas: Facets | null = dados?.facets ?? null;
   const ehImovel = estado.assetType === 'imovel';
   // O rótulo só afirma o tipo quando o FILTRO garante o tipo. Sem filtro de bem
@@ -98,6 +126,73 @@ export function Busca({
   // Esqueleto só na primeira carga: trocar a grade inteira a cada filtro faz a
   // página pular. Com resultado na tela, o sinal é a barra e a opacidade.
   const primeiraCarga = carregando && !dados;
+
+  const grade = (
+    <div className={`grade${carregando ? ' carregando' : ''}`}>
+      {itens.map((lot) => (
+        <LotCard
+          key={lot.id}
+          lot={lot}
+          aoAbrir={aoAbrirLote}
+          lanceAoVivo={lancesAoVivo[lot.id]}
+          piscando={piscando.has(lot.id)}
+        />
+      ))}
+    </div>
+  );
+
+  const pontoEscolhido = estado.local
+    ? mapa?.pontos.find((p) => estado.local.split(';').includes(p.k))
+    : undefined;
+  const ehCidade = !!estado.local && !!mapa?.pontos.some((p) => estado.local.split(';').includes(p.k) && p.camada === 'cidade');
+  const lotesNoPonto = estado.local
+    ? mapa?.pontos.filter((p) => estado.local.split(';').includes(p.k)).reduce((t, p) => t + p.n, 0)
+    : undefined;
+
+  const conteudo = erro ? (
+    <div className="empty">
+      Não foi possível carregar os resultados ({erro}).
+      <button className="btn-clear tentar" onClick={() => aoMudar({})}>
+        Tentar de novo
+      </button>
+    </div>
+  ) : primeiraCarga ? (
+    <div className="grade">
+      {Array.from({ length: 8 }, (_, i) => (
+        <div className="skeleton" key={i} />
+      ))}
+    </div>
+  ) : itens.length === 0 ? (
+    <div className="empty">
+      Nenhum {ehImovel ? 'imóvel' : estado.assetType === 'veiculo' ? 'veículo' : 'lote'} encontrado
+      com esses filtros.
+    </div>
+  ) : (
+    grade
+  );
+
+  const cabecalhoDoPonto = estado.local ? (
+    <>
+      <span>
+        Mostrando só os lotes de <b>{pontoEscolhido?.cidade ?? 'um ponto'}</b>
+        {lotesNoPonto != null && ` · ${lotesNoPonto.toLocaleString('pt-BR')} lotes`}
+        {ehCidade && ' — a fonte publica a cidade, não o endereço'}
+      </span>
+      <span className="folha-acoes">
+        <button type="button" className="btn-pri btn-ver-lotes" onClick={() => aoMudar({ vista: 'grade', page: 1 })}>
+          ver os lotes
+        </button>
+        <button type="button" className="btn-clear" onClick={() => aoMudar({ local: '', page: 1 })}>
+          limpar
+        </button>
+      </span>
+    </>
+  ) : (
+    <span className="folha-resumo">
+      <b className="mono">{dados ? dados.total.toLocaleString('pt-BR') : '—'}</b> {rotuloTotal}
+      {ehCelular ? ' · toque num ponto' : ' · clique num ponto para filtrar'}
+    </span>
+  );
 
   const lateral = (
     <FilterSidebar
@@ -151,7 +246,7 @@ export function Busca({
         {/* A faixa só quebra em duas quando há chips de interpretação: eles têm
             largura imprevisível e esmagavam o seletor. Sem eles, os três
             controles cabem numa linha só e a dobra fica 36px mais curta. */}
-        <div className={`resultbar${interpretado.length ? ' tem-interpretacao' : ''}`}>
+        <div className={`resultbar${interpretado.length ? ' tem-interpretacao' : ''}`} ref={barraRef}>
           <div>
             <div className="count">
               <b className="mono">{dados ? dados.total.toLocaleString('pt-BR') : '—'}</b>{' '}
@@ -214,8 +309,10 @@ export function Busca({
           <i />
         </div>
 
-        {estado.vista === 'mapa' && (
-          <>
+        {/* Mapa e grade nunca juntos: são duas formas de ver a MESMA busca, e
+            mostrar as duas ao mesmo tempo dobra a rolagem sem dobrar a resposta. */}
+        {estado.vista === 'mapa' ? (
+          <div className={`mapa-area${ehCelular ? ' mapa-cheio' : ''}`}>
             <MapaLotes
               dados={mapa}
               carregando={mapaCarregando}
@@ -223,55 +320,21 @@ export function Busca({
               ufAtiva={estado.multi.uf.length === 1 ? estado.multi.uf[0] : undefined}
               aoEscolherLocal={(k) => aoMudar({ local: k, page: 1 })}
             />
-            {estado.local && (
-              <div className="mapa-selecao">
-                <span>
-                  Mostrando só os lotes de{' '}
-                  <b>{mapa?.pontos.find((p) => estado.local.split(';').includes(p.k))?.cidade ?? 'um ponto'}</b>
-                  {mapa?.pontos.some((p) => estado.local.split(';').includes(p.k) && p.camada === 'cidade') &&
-                    ' — a fonte publica a cidade, não o endereço'}
-                </span>
-                <button type="button" className="btn-clear" onClick={() => aoMudar({ local: '', page: 1 })}>
-                  limpar
-                </button>
-              </div>
+            {/* No celular a lista vive SOBRE o mapa, na folha. No desktop o mapa é a
+                única vista: a grade some, e a faixa leva de volta a ela. */}
+            {ehCelular ? (
+              <FolhaMapa gatilho={estado.local} cabecalho={cabecalhoDoPonto}>
+                {conteudo}
+              </FolhaMapa>
+            ) : (
+              <div className="mapa-selecao">{cabecalhoDoPonto}</div>
             )}
-          </>
-        )}
-
-        {erro ? (
-          <div className="empty">
-            Não foi possível carregar os resultados ({erro}).
-            <button className="btn-clear tentar" onClick={() => aoMudar({})}>
-              Tentar de novo
-            </button>
-          </div>
-        ) : primeiraCarga ? (
-          <div className="grade">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div className="skeleton" key={i} />
-            ))}
-          </div>
-        ) : itens.length === 0 ? (
-          <div className="empty">
-            Nenhum {ehImovel ? 'imóvel' : estado.assetType === 'veiculo' ? 'veículo' : 'lote'} encontrado
-            com esses filtros.
           </div>
         ) : (
-          <div className={`grade${carregando ? ' carregando' : ''}`}>
-            {itens.map((lot) => (
-              <LotCard
-                key={lot.id}
-                lot={lot}
-                aoAbrir={aoAbrirLote}
-                lanceAoVivo={lancesAoVivo[lot.id]}
-                piscando={piscando.has(lot.id)}
-              />
-            ))}
-          </div>
+          conteudo
         )}
 
-        {dados && dados.total > 0 && (
+        {estado.vista === 'grade' && dados && dados.total > 0 && (
           <div className="pager">
             <button
               disabled={estado.page <= 1}

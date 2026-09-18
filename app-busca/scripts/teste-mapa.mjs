@@ -114,8 +114,55 @@ if (!empilhado) {
     : falha('7. ponto empilhado seleciona o conjunto', `esperado ${empilhado.soma}, lista ${t}`);
 }
 
-/* 8 — console limpo */
-erros.length === 0 ? ok('8. console limpo') : falha('8. console limpo', erros.slice(0, 3).join(' | '));
+/* 8 — mapa e grade nunca juntos */
+await page.goto(`${API}/busca?vista=mapa`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const noMapa = await page.evaluate(() => ({ canvas: !!document.querySelector('.mapa-canvas'), grades: document.querySelectorAll('.grade').length }));
+await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2000);
+const naGrade = await page.evaluate(() => ({ canvas: !!document.querySelector('.mapa-canvas'), grades: document.querySelectorAll('.grade').length }));
+noMapa.canvas && noMapa.grades === 0 && naGrade.grades === 1 && !naGrade.canvas
+  ? ok('8. mapa e grade se excluem', `mapa: canvas sim, 0 grades | grade: 1 grade, sem canvas`)
+  : falha('8. mapa e grade se excluem', JSON.stringify({ noMapa, naGrade }));
+
+/* 9 — o botão da visualização ativa está MARCADO, com cor de fato aplicada */
+await page.goto(`${API}/busca?vista=mapa`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+const bot = await page.evaluate(() => {
+  const bs = [...document.querySelectorAll('.seg-vista button')];
+  const ativo = bs.find((b) => b.getAttribute('aria-pressed') === 'true');
+  const inativo = bs.find((b) => b.getAttribute('aria-pressed') === 'false');
+  const cor = (el) => getComputedStyle(el).backgroundColor;
+  return { rotulo: ativo?.textContent?.trim(), ativo: cor(ativo), inativo: cor(inativo),
+           caixa: getComputedStyle(document.querySelector('.seg-vista')).backgroundColor };
+});
+const pintado = bot.ativo !== 'rgba(0, 0, 0, 0)' && bot.ativo !== bot.inativo;
+pintado
+  ? ok('9. o botão ativo fica marcado', `${bot.rotulo}: ${bot.ativo} contra ${bot.inativo}`)
+  : falha('9. o botão ativo fica marcado', JSON.stringify(bot));
+
+/* 10 — no celular a lista vira folha sobre o mapa */
+const cel = await ctx.newPage();
+await cel.setViewportSize({ width: 390, height: 844 });
+await cel.goto(`${API}/busca?vista=mapa`, { waitUntil: 'networkidle' });
+await cel.waitForTimeout(2600);
+const folha = await cel.evaluate(() => {
+  const f = document.querySelector('.folha-mapa');
+  const area = document.querySelector('.mapa-area.mapa-cheio');
+  if (!f || !area) return null;
+  const r = f.getBoundingClientRect(), a = area.getBoundingClientRect();
+  return { alturaFolha: Math.round(r.height), alturaArea: Math.round(a.height),
+           sobreOMapa: r.top < a.bottom && r.bottom >= a.bottom - 2,
+           overflowH: document.documentElement.scrollWidth - innerWidth };
+});
+folha && folha.sobreOMapa && folha.alturaFolha < folha.alturaArea && folha.overflowH === 0
+  ? ok('10. no celular a lista vira folha sobre o mapa', `${folha.alturaFolha}px de ${folha.alturaArea}px`)
+  : falha('10. no celular a lista vira folha sobre o mapa', JSON.stringify(folha));
+await cel.screenshot({ path: 'app-busca/shots/mapa-celular.png' });
+await cel.close();
+
+/* 11 — console limpo */
+erros.length === 0 ? ok('11. console limpo') : falha('11. console limpo', erros.slice(0, 3).join(' | '));
 
 await page.screenshot({ path: 'app-busca/shots/mapa-desktop.png', fullPage: false });
 await browser.close();

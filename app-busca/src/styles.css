@@ -793,8 +793,8 @@ a { color: inherit; text-decoration: none }
   display: flex;
   gap: 2px;
   padding: 3px;
-  background: var(--panel-2);
-  border: 1px solid var(--hairline);
+  background: var(--brand-panel-2);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 .seg-vista button {
@@ -805,25 +805,26 @@ a { color: inherit; text-decoration: none }
   border: 0;
   border-radius: 7px;
   background: none;
-  color: var(--ink-soft);
+  color: var(--brand-ink-soft);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
-.seg-vista button:hover { color: var(--ink); }
-.seg-vista button[aria-pressed='true'] { background: var(--brand); color: #fff; font-weight: 500; }
+.seg-vista button:hover { color: var(--foreground); background: color-mix(in srgb, var(--brand-core) 22%, transparent); }
+.seg-vista button[aria-pressed='true']:hover { background: var(--brand-bright); }
+.seg-vista button[aria-pressed='true'] { background: var(--brand-core); color: #fff; font-weight: 500; }
 
 .mapa-palco {
   position: relative;
-  height: min(68vh, 640px);
+  height: min(78vh, 760px);
   margin-bottom: 14px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 1rem);
   overflow: hidden;
   background:
-    radial-gradient(70% 55% at 22% -8%, color-mix(in srgb, var(--brand) 13%, transparent), transparent 70%),
-    var(--canvas);
+    radial-gradient(70% 55% at 22% -8%, color-mix(in srgb, var(--brand-core) 13%, transparent), transparent 70%),
+    var(--brand-canvas);
 }
 .mapa-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .mapa-canvas:active { cursor: grabbing; }
@@ -831,38 +832,38 @@ a { color: inherit; text-decoration: none }
 .mapa-zoom { position: absolute; left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
 .mapa-zoom button {
   width: 30px; height: 30px; display: grid; place-items: center;
-  border: 1px solid var(--hairline); border-radius: 9px;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--ink); cursor: pointer; backdrop-filter: blur(6px);
+  border: 1px solid var(--border); border-radius: 9px;
+  background: color-mix(in srgb, var(--brand-panel) 88%, transparent);
+  color: var(--foreground); cursor: pointer; backdrop-filter: blur(6px);
 }
-.mapa-zoom button:hover { border-color: var(--brand); }
+.mapa-zoom button:hover { border-color: var(--brand-core); }
 
-.mapa-escala { position: absolute; right: 12px; bottom: 12px; font-size: 11px; color: var(--ink-soft); }
-.mapa-carregando { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-soft); font-size: 13px; }
+.mapa-escala { position: absolute; right: 12px; bottom: 12px; font-size: 11px; color: var(--brand-ink-soft); }
+.mapa-carregando { position: absolute; inset: 0; display: grid; place-items: center; color: var(--brand-ink-soft); font-size: 13px; }
 
 .mapa-dica {
   position: absolute; z-index: 5; pointer-events: none; max-width: 230px; padding: 7px 10px;
-  border: 1px solid var(--hairline); border-radius: 9px; font-size: 12px; line-height: 1.4;
-  background: color-mix(in srgb, var(--panel-2) 96%, transparent);
+  border: 1px solid var(--border); border-radius: 9px; font-size: 12px; line-height: 1.4;
+  background: color-mix(in srgb, var(--brand-panel-2) 96%, transparent);
   box-shadow: 0 10px 30px -12px #000;
 }
-.mapa-dica em { display: block; font-style: normal; color: var(--ink-soft); font-size: 11.5px; margin-top: 2px; }
+.mapa-dica em { display: block; font-style: normal; color: var(--brand-ink-soft); font-size: 11.5px; margin-top: 2px; }
 
 /* Contagem honesta do que o mapa NÃO consegue mostrar. */
 .mapa-fora {
   position: absolute; left: 12px; top: 12px; padding: 7px 11px; max-width: 250px;
-  border: 1px dashed color-mix(in srgb, var(--ink-soft) 45%, transparent);
-  border-radius: 10px; font-size: 12px; color: var(--ink-soft);
-  background: color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter: blur(6px);
+  border: 1px dashed color-mix(in srgb, var(--brand-ink-soft) 45%, transparent);
+  border-radius: 10px; font-size: 12px; color: var(--brand-ink-soft);
+  background: color-mix(in srgb, var(--brand-panel) 82%, transparent); backdrop-filter: blur(6px);
 }
-.mapa-fora b { color: var(--ink); font-weight: 500; }
+.mapa-fora b { color: var(--foreground); font-weight: 500; }
 .mapa-fora span { display: block; font-size: 11px; margin-top: 2px; }
 
 .mapa-selecao {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 14px; padding: 9px 13px; border-radius: var(--r);
-  border: 1px solid color-mix(in srgb, var(--brand) 40%, transparent);
-  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  margin-bottom: 14px; padding: 9px 13px; border-radius: var(--radius, 0.875rem);
+  border: 1px solid color-mix(in srgb, var(--brand-core) 40%, transparent);
+  background: color-mix(in srgb, var(--brand-core) 10%, transparent);
   font-size: 13px;
 }
 /* .btn-clear da barra lateral nasce com width:100%; aqui ele é um link curto. */
@@ -873,3 +874,77 @@ a { color: inherit; text-decoration: none }
   .seg-vista button span { display: none; }
   .seg-vista button { padding: 6px 10px; }
 }
+
+/* ---------- mapa em tela cheia no celular, com a lista em folha ---------- */
+.mapa-area { display: contents; }
+
+@media (max-width: 860px) {
+  /* A folha é ancorada no palco, então ele precisa deixar de rolar com a página:
+     lista sobre mapa só funciona se o mapa ficar parado atrás dela. */
+  .mapa-area.mapa-cheio {
+    display: block;
+    position: fixed;
+    inset: auto 0 0 0;
+    top: var(--topo-mapa, 0px);
+    z-index: 30;
+  }
+  .mapa-area.mapa-cheio .mapa-palco {
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+.folha-mapa {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background: var(--brand-panel);
+  border-top: 1px solid var(--border);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -18px 40px -22px #000;
+  transition: height 0.26s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.folha-mapa.arrastando { transition: none; }
+@media (prefers-reduced-motion: reduce) { .folha-mapa { transition: none; } }
+
+.folha-puxador {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 10px 0 6px;
+  cursor: grab;
+  touch-action: none;
+}
+.folha-puxador i { width: 40px; height: 4px; border-radius: 3px; background: #2c3c5c; }
+.folha-puxador:active { cursor: grabbing; }
+
+.folha-cabecalho {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 15px 10px;
+  font-size: 13px;
+  color: var(--brand-ink-soft);
+  border-bottom: 1px solid var(--border);
+}
+.folha-cabecalho b { color: var(--foreground); font-weight: 500; }
+.folha-cabecalho .btn-clear { width: auto; flex: none; padding: 4px 10px; }
+
+.folha-rolo {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 13px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.folha-rolo .grade { grid-template-columns: 1fr; }
+.folha-acoes { display: flex; align-items: center; gap: 8px; flex: none; }
+.btn-ver-lotes { padding: 5px 13px; border-radius: 9px; font-size: 12.5px; white-space: nowrap; }
+.folha-cabecalho .folha-acoes .btn-clear { padding: 5px 10px; }
