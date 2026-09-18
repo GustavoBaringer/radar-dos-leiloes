@@ -224,7 +224,9 @@ function mapCard(c: Card, asset: AssetType, host: string, ev: DadosDoLeilao | nu
     minBid: c.minBid,
     // Metade dos lotes não traz o rótulo de local; o título e a URL trazem
     // ("Vacaria/Rio Grande do Sul: Terreno…").
-    city: c.city ?? campos.localDeTexto(c.titulo)?.city ?? campos.localDeTexto(c.url)?.city ?? null,
+    // O card às vezes traz o comitente no lugar do local ("Prefeitura
+    // Municipal de Verdelandia") — o aparador tira o rótulo e sobra a cidade.
+    city: campos.apararCidade(c.city ?? '') || campos.localDeTexto(c.titulo)?.city || campos.localDeTexto(c.url)?.city || null,
     state: c.state ?? campos.localDeTexto(c.titulo)?.uf ?? campos.localDeTexto(c.url)?.uf ?? null,
     photos: c.foto ? [c.foto] : [],
     photoCount: c.foto ? 1 : 0,

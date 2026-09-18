@@ -401,7 +401,9 @@ export function localDeTexto(texto?: string | null): { city: string; uf: string 
  * Pinhais" são nomes legítimos.
  */
 /** Rótulo institucional colado no nome do lugar: "Município de X", "Fórum de X". */
-const RÓTULO_DE_LUGAR = /\b(munic[íi]pio|f[óo]rum|comarca|prefeitura|cart[óo]rio|vara|distrito)\s+(de|do|da|dos|das)\s+/i;
+// 'cidade' só com preposição atrás: "Cidade Ocidental" e "Cidade Lider" são
+// municípios de verdade, e nenhum município brasileiro se chama "Cidade de X".
+const RÓTULO_DE_LUGAR = /\b(munic[íi]pio|f[óo]rum|comarca|prefeitura|cart[óo]rio|vara|distrito|cidade)(\s+(municipal|estadual|federal))?\s+(de|do|da|dos|das)\s+/i;
 
 const TIPOS_DE_BEM =
   /^(leilao|leilão|judicial|extrajudicial|im[óo]vel|imoveis|apartamento|apto|casa|terreno|lote|area|área|sala|loja|galpao|galpão|chacara|chácara|sitio|sítio|fazenda|vaga|predio|prédio|cobertura|duplex|sobrado|kitnet|comercial|residencial|rural|unidade|ha|m2)\b[\s-]*/i;
@@ -412,7 +414,7 @@ export function apararCidade(bruto: string): string {
   const rotulo = [...v.matchAll(new RegExp(RÓTULO_DE_LUGAR.source, 'gi'))].pop();
   if (rotulo) v = v.slice(rotulo.index! + rotulo[0].length);
   // A última preposição de lugar marca onde o nome começa.
-  const prep = [...v.matchAll(/\b(?:em|no|na|nos|nas)\s+/gi)].pop();
+  const prep = [...v.matchAll(/\b(?:em|no|na|nos|nas|nesta|neste|desta|deste)\s+/gi)].pop();
   if (prep) v = v.slice(prep.index! + prep[0].length);
   // Vírgula e barra vertical separam o tipo do bem do lugar.
   v = v.split(/[,|]/).pop()!.trim();

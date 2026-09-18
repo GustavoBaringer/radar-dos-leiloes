@@ -1,6 +1,6 @@
 import { query, pool } from './db.js';
 import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade } from './normalize.js';
-import { VENCIDO } from './encerramento.js';
+import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
 import { connectors } from '../connectors/index.js';
@@ -294,20 +294,18 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
 
   const statuses = lista(p.status);
   if (statuses.length) {
-    // 'encerrado' na seleção precisa arrastar o que venceu pela hora, senão o
-    // lote de pregão que passou some das duas pontas: não está 'encerrado' na
-    // fonte e o NOT VENCIDO o excluiria.
-    const querEncerrado = statuses.includes('encerrado');
+    // Pedir 'encerrado' tem de arrastar o que a faceta colapsa em encerrado:
+    // o que venceu pela hora (não está 'encerrado' na fonte) e o vendido.
+    const querEncerrado = statuses.includes('encerrado') || statuses.includes('vendido');
     const alvo = statuses.length === 1 ? `status = ${'?'}` : `status = ANY(${'?'})`;
     const valor: any = statuses.length === 1 ? statuses[0] : statuses;
-    if (querEncerrado) P(`(${alvo} OR ${VENCIDO})`, valor, 'statuses');
+    if (querEncerrado) P(`(${alvo} OR ${TERMINAL})`, valor, 'statuses');
     else {
       P(alvo, valor, 'statuses');
-      P(`NOT ${VENCIDO}`, undefined, 'statuses');
+      P(`NOT ${TERMINAL}`, undefined, 'statuses');
     }
   } else if (!p.includeEnded) {
-    P(`status <> 'encerrado'`);
-    P(`NOT ${VENCIDO}`);
+    P(`NOT ${TERMINAL}`);
   }
 
   PLista('seller_type', p.sellerType, 'sellerTypes');
@@ -380,7 +378,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
             seller_name, seller_type, yard, city, state, photos, photo_count, financeable, has_report,
             collected_at, first_seen_at,
             first_seen_at > now() - interval '24 hours' AS is_novo,
-            CASE WHEN ${VENCIDO} THEN 'encerrado' ELSE status END AS effective_status,
+            CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END AS effective_status,
             CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0
                  THEN ROUND((1 - COALESCE(current_bid,min_bid)/appraisal) * 100) ELSE NULL END AS discount_pct
      FROM lots ${whereSql} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${offset}`,
@@ -440,7 +438,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     facet('seller_name', 'sellers', 80),
     // Situação conta pelo status EFETIVO: lote de pregão cuja hora passou
     // aparece como aberto na coluna e como encerrado na tela.
-    facet(`CASE WHEN ${VENCIDO} THEN 'encerrado' ELSE status END`, 'statuses', 10),
+    facet(`CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END`, 'statuses', 10),
   ]);
 
   return {
