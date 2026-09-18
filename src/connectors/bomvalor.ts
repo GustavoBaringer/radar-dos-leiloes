@@ -14,6 +14,7 @@
  * HTML, e a página do lote traz o objeto inteiro num `<script>`.
  */
 import { fetchText } from './http.js';
+import * as campos from '../core/campos.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
@@ -66,6 +67,17 @@ function pracaVigente(pracas: any[]): any | null {
  * É objeto JS, não JSON: as chaves de primeiro nível vêm sem aspas. O valor de `lote`
  * é JSON puro, então basta citar as chaves do topo antes do parse.
  */
+/**
+ * Só grava quando o leilão tem UM leiloeiro: `leiloeiros_ids` às vezes vem com a
+ * lista inteira da plataforma (108 ids medidos num lote), e aí pegar o primeiro
+ * seria sorteio. Medido: 11 de 12 lotes trazem exatamente um.
+ */
+function leiloeiroUnico(leilao: any): string | null {
+  const ids = leilao?.leiloeiros_ids;
+  if (!Array.isArray(ids) || ids.length !== 1) return null;
+  return campos.nomeDeLeiloeiro(leilao?.leiloeiros?.[ids[0]]?.nm);
+}
+
 function lerSharedData(html: string): any | null {
   const i = html.indexOf('sharedData');
   if (i < 0) return null;
@@ -178,6 +190,7 @@ function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
     feesPct: num(detalhe?.nu_comissaoarrematantelote),
     // `nome_leiloeiro` é o leiloeiro do TENANT, não do lote: o mesmo id sai com três
     // nomes diferentes conforme a fachada. O estável é o comitente.
+    auctioneerName: leiloeiroUnico(leilao),
     sellerName: detalhe?.judicial?.nm_comitente ?? null,
     sellerType: detalhe?.judicial ? 'judicial' : null,
     docType: detalhe?.rede?.nm_rede_rota === 'judicial' ? 'judicial' : null,

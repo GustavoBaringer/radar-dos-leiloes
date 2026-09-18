@@ -105,7 +105,9 @@ async function lerLeilao(urlDeUmLote: string): Promise<DadosDoLeilao | null> {
   const praca = Number(le.praca ?? 1);
   return {
     fim: dataDoBloco(le[`data${praca >= 3 ? 3 : praca === 2 ? 2 : 1}`]) ?? dataDoBloco(le.data1),
-    leiloeiro: le.leiloeiro?.nome ? String(le.leiloeiro.nome) : null,
+    // A fonte publica "Leiloeiro Oficial Exemplo" em leilão de teste; nome
+    // falso na faceta é pior que faceta vazia.
+    leiloeiro: campos.nomeDeLeiloeiro(le.leiloeiro?.nome),
     codigo: le.codigo ? String(le.codigo) : null,
   };
 }

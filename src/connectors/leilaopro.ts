@@ -52,6 +52,39 @@ async function tenants(limite: number): Promise<string[]> {
   return rows.map((r) => r.domain);
 }
 
+/**
+ * O leiloeiro só existe no JSON-LD da página de DETALHE (`Event.organizer`);
+ * a listagem não tem. `brand.name` é a marca do site, NÃO o leiloeiro.
+ * Cache por leilão: 589 lotes se agrupam em 199 eventos, então é ~1 requisição
+ * a cada 3 lotes, não 1 por lote.
+ */
+async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | null>): Promise<string | null> {
+  const slug = /\/leilao\/([^/]+)\/lote_id\//.exec(urlLote)?.[1];
+  if (!slug) return null;
+  const chave = `${new URL(urlLote).host}:${slug}`;
+  if (cache.has(chave)) return cache.get(chave) ?? null;
+
+  let nome: string | null = null;
+  try {
+    const r = await fetchText(urlLote, { gapMs: 1100, timeoutMs: 30000 });
+    if (r.status === 200) {
+      const $ = cheerio.load(r.body);
+      for (const el of $('script[type="application/ld+json"]').toArray()) {
+        try {
+          const dado = JSON.parse($(el).text());
+          for (const no of Array.isArray(dado['@graph']) ? dado['@graph'] : [dado]) {
+            const n = no?.organizer?.name ?? no?.offers?.seller?.name;
+            if (n) { nome = campos.nomeDeLeiloeiro(n); break; }
+          }
+        } catch { /* bloco inválido: tenta o próximo */ }
+        if (nome) break;
+      }
+    }
+  } catch { /* detalhe fora do ar não derruba a coleta */ }
+  cache.set(chave, nome);
+  return nome;
+}
+
 export const leilaopro: Connector = {
   def: {
     id: 'leilaopro',
@@ -72,6 +105,7 @@ export const leilaopro: Connector = {
     const cats = CATEGORIAS.filter((c) => !assetTypes || assetTypes.includes(c.asset));
     const cota = Math.max(20, Math.ceil(limit / Math.max(1, dominios.length)));
     const vistos = new Set<string>();
+    const leiloeiros = new Map<string, string | null>();
 
     for (const host of dominios) {
       const antes = lots.length;
@@ -96,7 +130,6 @@ export const leilaopro: Connector = {
           const href = $c.find('a[href*="/lote_id/"]').first().attr('href') ?? '';
           const id = href.match(/\/lote_id\/(\d+)/)?.[1];
           if (!id) continue;
-
           const chave = `${host}:${id}`;
           if (vistos.has(chave)) continue; // o mesmo lote aparece em mais de uma categoria
           vistos.add(chave);
@@ -108,6 +141,8 @@ export const leilaopro: Connector = {
             continue;
           }
 
+          const urlLote = href.startsWith('http') ? href : `https://${host}${href}`;
+          const leiloeiro = await leiloeiroDoLeilao(urlLote, leiloeiros);
           const inicio = dataDoCard($c.find('.info-meta').text().replace(/\s+/g, ' '));
           const rotulo = $c.find('.bid-label').first().text();
           const valor = dinheiro($c.find('.bid-value').first().text());
@@ -128,7 +163,7 @@ export const leilaopro: Connector = {
                 { city: null, state: null } as any),
             sourceId: 'leilaopro',
             externalId: chave,
-            lotUrl: href.startsWith('http') ? href : `https://${host}${href}`,
+            lotUrl: urlLote,
             titleRaw: titulo,
             assetType: cat.asset,
             sourceGroup: cat.grupo ?? (cat.asset === 'imovel' ? 'imovel' : null),
@@ -146,7 +181,7 @@ export const leilaopro: Connector = {
             // `.bid-current` é injetado por JS; o HTML servido traz o inicial.
             currentBid: /atual/i.test(rotulo) ? valor : null,
             minBid: /atual/i.test(rotulo) ? null : valor,
-            auctioneerName: null,
+            auctioneerName: leiloeiro,
             sellerName: null,
             photos: [$c.find('.card-image img').attr('src')].filter((p): p is string => Boolean(p)),
             raw: {

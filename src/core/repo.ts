@@ -431,7 +431,9 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     facet('asset_type', 'assetTypes'),
     facet('vehicle_type', 'vehicleTypes'),
     facet('property_type', 'propertyTypes'),
-    facet('auctioneer_name', 'auctioneers', 80),
+    // 80 cobria os 87 nomes da época; com a 1.4 são 220+, e o corte deixava 140
+    // leiloeiros fora da faceta — buscar por eles no componente não achava nada.
+    facet('auctioneer_name', 'auctioneers', 300),
     // Comitente: quem PÔS o bem em leilão (Caixa, Porto Seguro, um tribunal).
     // É a pergunta que o comprador faz junto com "qual leiloeiro", e 87% dos
     // lotes publicam. 80 cabe a cauda útil dos 525 distintos.

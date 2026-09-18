@@ -1,4 +1,5 @@
 import { fetchJson } from './http.js';
+import * as campos from '../core/campos.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
@@ -151,7 +152,10 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
     ),
     bidIncrement: num(l.vl_incremento),
     appraisal: num(l.vl_venda),
-    auctioneerName: null,
+    // Vem no MESMO item do get-lotes, ao lado de `nm_url_leiloeiro`. É dado por
+    // LOTE, não do tenant: api.leiloesjudiciais.com.br é catálogo agregado e
+    // serve leiloeiros diferentes na mesma resposta.
+    auctioneerName: campos.nomeDeLeiloeiro(l.nm_leiloeiro),
     sellerName: 'Justiça (leilão judicial)',
     sellerType: 'judicial',
     city: l.nm_cidade ?? null,

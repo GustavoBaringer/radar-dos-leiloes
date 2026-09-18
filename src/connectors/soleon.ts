@@ -113,6 +113,31 @@ async function tenants(limitTenants: number): Promise<string[]> {
   return rows.map((r) => r.domain);
 }
 
+/**
+ * O leiloeiro só existe no DETALHE do lote — não está na listagem nem no card,
+ * e varia por leilão dentro do mesmo tenant (rico tem 4+), então não cabe cache
+ * por domínio. O que salva o custo é que o leiloeiro de um lote NUNCA muda:
+ * quem já tem nome no banco não é buscado de novo, e o regime permanente fica
+ * sendo só os lotes novos.
+ */
+async function nomesJaConhecidos(): Promise<Map<string, string>> {
+  const rows = await query<{ external_id: string; auctioneer_name: string }>(
+    `SELECT external_id, auctioneer_name FROM lots
+      WHERE source_id = 'soleon' AND auctioneer_name IS NOT NULL`,
+  );
+  return new Map(rows.map((r) => [r.external_id, r.auctioneer_name]));
+}
+
+async function lerLeiloeiro(url: string): Promise<string | null> {
+  try {
+    const r = await fetchText(url, { gapMs: 1100, timeoutMs: 30000 });
+    if (r.status !== 200) return null;
+    return campos.nomeDeLeiloeiro(/LEILOEIRO OFICIAL<\/h5>\s*([^<]+)<br>/i.exec(r.body)?.[1]);
+  } catch {
+    return null;
+  }
+}
+
 export const soleon: Connector = {
   def: {
     id: 'soleon',
@@ -130,6 +155,7 @@ export const soleon: Connector = {
     let httpStatus = 0;
 
     const dominios = await tenants(Number(process.env.SOLEON_TENANTS ?? 12));
+    const conhecidos = await nomesJaConhecidos();
     const cota = Math.max(LOTES_POR_PAGINA, Math.ceil(limit / Math.max(1, dominios.length)));
 
     for (const host of dominios) {
@@ -191,6 +217,7 @@ export const soleon: Connector = {
             .pop();
           const km = Number(corpo.match(/\bKM\s*:?\s*([\d.]+)/i)?.[1]?.replace(/\./g, '')) || null;
           const maiorLance = /maior\s+lance/i.test(c.rotuloValor ?? '');
+          const leiloeiro = conhecidos.get(`${host}:${c.itemId}`) ?? (await lerLeiloeiro(c.url));
 
           lots.push({
             sourceId: 'soleon',
@@ -215,7 +242,7 @@ export const soleon: Connector = {
             status: c.status,
             currentBid: maiorLance ? c.valor : null,
             minBid: maiorLance ? null : c.valor,
-            auctioneerName: null,
+            auctioneerName: leiloeiro,
             sellerName: null,
             sellerType: classifySeller(null) as any,
             // Mesma poda do garimpo genérico: "Município de Vale do Sol" é

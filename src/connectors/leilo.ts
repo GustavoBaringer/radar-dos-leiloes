@@ -1,4 +1,5 @@
-import { fetchJson } from './http.js';
+import { fetchJson, fetchText } from './http.js';
+import * as campos from '../core/campos.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
@@ -7,10 +8,65 @@ const URL_SEARCH = 'https://api.leilo.com.br/v1/lote/busca-elastic';
 
 /**
  * A fonte mais rica do levantamento: traz km, valor de mercado, laudo e custos.
- * Não traz leiloeiro. A busca `campo:geral` da própria API é fuzzy demais
- * ("mercedes b 200" devolveu GLA 200), então ingerimos a categoria inteira
- * e a busca fica no nosso índice.
+ * A busca `campo:geral` da própria API é fuzzy demais ("mercedes b 200"
+ * devolveu GLA 200), então ingerimos a categoria inteira e a busca fica no
+ * nosso índice.
  */
+
+interface Leiloeiro {
+  nome: string;
+  inscricao: string | null;
+}
+
+/**
+ * A busca-elastic não tem leiloeiro; a home tem, no blob de hidratação, e o
+ * `uid` do evento ali é a MESMA string que `lote.leilao.id` — join sem casar
+ * texto. Uma requisição cobre o catálogo inteiro.
+ */
+async function leiloeirosPorEvento(): Promise<Map<string, Leiloeiro>> {
+  const mapa = new Map<string, Leiloeiro>();
+  try {
+    const { body } = await fetchText('https://www.leilo.com.br/', { gapMs: 900 });
+    const marcador = 'window.__INITIAL_STATE__=';
+    const inicio = body.indexOf(marcador);
+    if (inicio < 0) return mapa;
+    const corte = fimDoObjeto(body, inicio + marcador.length);
+    if (corte < 0) return mapa;
+    const estado = JSON.parse(body.slice(inicio + marcador.length, corte));
+    for (const ev of estado?.leiloesSite?.leiloes ?? []) {
+      // Leilão ainda não aberto vem com `leiloeiro:{}` — a origem não atribuiu
+      // ninguém. Fica nulo e a próxima coleta preenche.
+      const nome = campos.nomeDeLeiloeiro(ev?.leiloeiro?.nome);
+      if (ev?.uid && nome) {
+        mapa.set(String(ev.uid), {
+          nome,
+          inscricao: ev.leiloeiro.inscricao ? String(ev.leiloeiro.inscricao) : null,
+        });
+      }
+    }
+  } catch {
+    // Home fora do ar não derruba a coleta: os lotes entram sem leiloeiro.
+  }
+  return mapa;
+}
+
+/** Contador de chaves ciente de string: a descrição dos leilões tem `}` em texto livre. */
+function fimDoObjeto(s: string, inicio: number): number {
+  let nivel = 0;
+  let emString = false;
+  let escapado = false;
+  for (let i = inicio; i < s.length; i++) {
+    const c = s[i];
+    if (emString) {
+      if (escapado) escapado = false;
+      else if (c === '\\') escapado = true;
+      else if (c === '"') emString = false;
+    } else if (c === '"') emString = true;
+    else if (c === '{') nivel++;
+    else if (c === '}' && --nivel === 0) return i + 1;
+  }
+  return -1;
+}
 /** "ABC Def/GHI" -> "abc-def-ghi" */
 function slug(v?: string | null): string {
   return (v ?? '')
@@ -48,7 +104,7 @@ function mediaPhoto(url: string): string {
   return url.replace(/(\.[a-z]+)$/i, '_media$1');
 }
 
-function mapLot(l: any): CanonicalLot | null {
+function mapLot(l: any, eventos: Map<string, Leiloeiro>): CanonicalLot | null {
   const title = l.nome ?? '';
   if (!title || looksLikePart(title)) return null;
   const v = l.veiculo ?? {};
@@ -84,7 +140,8 @@ function mapLot(l: any): CanonicalLot | null {
     appraisal: v.valorMercado ?? null,
     feesPct: valor.comissaoPorcentagem ?? null,
     feesAmount: valor.totalDespesas ?? null,
-    auctioneerName: null,
+    auctioneerName: eventos.get(String(l.leilao?.id))?.nome ?? null,
+    auctioneerReg: eventos.get(String(l.leilao?.id))?.inscricao ?? null,
     sellerName: l.comitente?.nome ?? null,
     sellerType: classifySeller(l.comitente?.nome) as any,
     yard: loc.nome ?? null,
@@ -112,7 +169,7 @@ export const leilo: Connector = {
     method: 'api',
     tier: 1,
     siteUrl: 'https://www.leilo.com.br',
-    notes: 'API Elastic aberta, sem auth e sem Origin. Total no header count. Não expõe leiloeiro.',
+    notes: 'API Elastic aberta, sem auth e sem Origin. Total no header count. O leiloeiro não vem na busca: vem do blob da home, casado por uid.',
   },
   async collect({ limit }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
@@ -120,6 +177,7 @@ export const leilo: Connector = {
     let skipped = 0;
     let status = 0;
     const pageSize = 100;
+    const eventos = await leiloeirosPorEvento();
 
     // Os valores do campo `tipo` NÃO têm acento. Pedir 'Caminhões' e
     // 'Utilitários' devolvia count:0 em silêncio — duas categorias inteiras
@@ -142,7 +200,7 @@ export const leilo: Connector = {
         if (!items.length) break;
         fetched += items.length;
         for (const l of items) {
-          const mapped = mapLot(l);
+          const mapped = mapLot(l, eventos);
           if (mapped) lots.push(mapped);
           else skipped++;
         }

@@ -427,3 +427,16 @@ export function apararCidade(bruto: string): string {
   const palavras = v.split(/\s+/).filter(Boolean);
   return palavras.slice(-5).join(' ');
 }
+
+/**
+ * Nome de leiloeiro publicado pela fonte, ou nulo. Leilão de teste da própria
+ * plataforma vaza "Leiloeiro Oficial Exemplo" para a faceta, e rótulo sem nome
+ * atrás ("Leiloeiro Oficial") não identifica ninguém.
+ */
+export function nomeDeLeiloeiro(v: unknown): string | null {
+  const nome = String(v ?? '').replace(/\s+/g, ' ').trim();
+  if (!nome) return null;
+  if (/\b(exemplo|teste|placeholder|sem nome)\b/i.test(nome)) return null;
+  if (/^(leiloeir[ao]|comiss|cadastrad|lance|lote|edital|aguarde)(\s+(oficial|p[úu]blic[oa]))*$/i.test(nome)) return null;
+  return nome;
+}
