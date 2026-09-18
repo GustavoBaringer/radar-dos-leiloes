@@ -39,7 +39,7 @@ export const api = {
   alertas: () => get<Alerta[]>('/api/alerts'),
   hits: () => get<Hit[]>('/api/alerts/hits'),
   marcarHitsVistos: () => envia<unknown>('/api/alerts/hits/seen', 'POST'),
-  criarAlerta: (corpo: unknown) => envia<{ casados_agora?: number }>('/api/alerts', 'POST', corpo),
+  criarAlerta: (corpo: unknown) => envia<{ no_indice_agora?: number }>('/api/alerts', 'POST', corpo),
   // PATCH e não PUT: o servidor aceita só rótulo, canais e e-mail (server.ts:821).
   editarAlerta: (id: number, corpo: unknown) => envia<unknown>(`/api/alerts/${id}`, 'PATCH', corpo),
   apagarAlerta: (id: number) => envia<unknown>(`/api/alerts/${id}`, 'DELETE'),

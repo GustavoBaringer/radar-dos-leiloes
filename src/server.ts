@@ -10,7 +10,8 @@ import { join, dirname } from 'node:path';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { searchLots, getLot, getStats, ensureSources } from './core/repo.js';
-import { avaliarAlertas } from './core/alerts.js';
+import { VENCIDO } from './core/encerramento.js';
+import { contarCasaveis, avaliarAlertas } from './core/alerts.js';
 import { authLigada, papelDasCredenciais, criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
 import { oidcLigado, iniciarLogin, concluirLogin, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
 import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Identidade } from './core/identidade.js';
@@ -965,13 +966,21 @@ app.post('/api/alerts', async (req, reply) => {
     `INSERT INTO alerts (label, q, filters, channels, email, owner_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
     [String(b.label ?? q ?? 'Alerta').slice(0, 80), q || null, JSON.stringify(filters), canais, b.email ?? null, (await donoDe(req)).userId],
   );
-  // Casa contra o índice atual: alerta criado hoje já mostra o que existe,
-  // em vez de ficar vazio esperando a próxima coleta.
-  const ids = await query<{ id: string }>(
-    `SELECT id FROM lots WHERE first_seen_at > now() - interval '7 days' ORDER BY id DESC LIMIT 4000`,
-  );
-  const disparos = await avaliarAlertas(ids.map((r) => Number(r.id)));
-  return { ...a, casados_agora: disparos.length };
+  /**
+   * NÃO casa contra o passado.
+   *
+   * A versão anterior varria 7 dias de lotes e gravava disparo de tudo que
+   * achasse, com a intenção de "não nascer vazio". O efeito medido foi outro:
+   * um alerta criado às 03:45 aparecia na mesma hora com três lotes que
+   * entraram na base 12 horas antes — o usuário lê isso como aviso de novidade,
+   * e não era novidade nenhuma.
+   *
+   * O contador continua, porque a informação é útil, mas é só contagem: os
+   * lotes atuais não viram disparo. O que aparecer na aba de alertas entrou
+   * DEPOIS do alerta existir.
+   */
+  const casaveis = await contarCasaveis(a);
+  return { ...a, casados_agora: 0, no_indice_agora: casaveis };
 });
 
 app.patch('/api/alerts/:id', async (req, reply) => {
@@ -1029,6 +1038,15 @@ app.get('/api/alerts/hits', async (req) => {
       JOIN alerts a ON a.id = h.alert_id
       JOIN lots l ON l.id = h.lot_id
      WHERE a.owner_id = $1 ${naoVistos === 'true' ? 'AND NOT h.seen' : ''}
+       -- Lote encerrado sai da aba: avisar sobre leilão que já passou é ruído.
+       -- Filtra na LEITURA e não apaga o hit, porque lote reabre na 2ª praça
+       -- com o mesmo id, e aí ele volta a aparecer sozinho.
+       AND l.status NOT IN ('encerrado','vendido')
+       -- VENCIDO usa nome de coluna cru: nem alerts nem alert_hits tem
+       -- closing_model/auction_*, entao nao ha ambiguidade e prefixar seria
+       -- uma segunda copia da regra para divergir. (Sem crase: isto esta
+       -- dentro de um template literal e a crase fecharia a string.)
+       AND NOT ${VENCIDO}
      GROUP BY l.id
      ORDER BY max(h.created_at) DESC LIMIT 60`, [(await donoDe(req)).userId]);
 });

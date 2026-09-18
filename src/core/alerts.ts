@@ -1,4 +1,5 @@
 import { query } from './db.js';
+import { VENCIDO } from './encerramento.js';
 import { parseQuery, fold } from './normalize.js';
 
 /**
@@ -13,6 +14,7 @@ import { parseQuery, fold } from './normalize.js';
 export interface Alerta {
   id: number;
   owner_id: number;
+  created_at: string;
   label: string;
   q: string | null;
   filters: Record<string, any>;
@@ -36,13 +38,19 @@ export interface Disparo {
 }
 
 /** Predicado SQL do alerta, no mesmo vocabulário da busca. */
-function condicoes(a: Alerta): { sql: string[]; params: any[] } {
+/**
+ * `base` é quantos parâmetros a consulta já usou antes destes. Era uma
+ * constante embutida (`+ 1`, quando só a lista de ids vinha antes), e passou a
+ * ser argumento quando a data de criação do alerta virou o $2: deixar fixo
+ * faria o WHERE apontar para o parâmetro errado — em silêncio, porque os tipos
+ * casariam e o Postgres não reclamaria.
+ */
+function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   const sql: string[] = [];
   const params: any[] = [];
-  /** $1 é sempre a lista de ids, então os parâmetros do alerta começam em $2. */
   const ph = (v: any) => {
     params.push(v);
-    return `$${params.length + 1}`;
+    return `$${params.length + base}`;
   };
 
   const p = parseQuery(a.q ?? '');
@@ -107,22 +115,61 @@ function condicoes(a: Alerta): { sql: string[]; params: any[] } {
 }
 
 /** Avalia os alertas ativos contra um conjunto de ids recém-gravados. */
+/**
+ * Quantos lotes ATIVOS do índice casariam com este alerta hoje.
+ *
+ * É só informação para a confirmação da criação ("3 lotes no índice já casam"),
+ * e de propósito NÃO grava disparo: o alerta avisa do que entra a partir de
+ * agora. Antes, a criação varria 7 dias para trás e gravava hit de tudo que
+ * achava — um alerta criado às 3h da manhã nascia com três lotes que estavam na
+ * base havia 12 horas.
+ */
+export async function contarCasaveis(a: Alerta): Promise<number> {
+  const { sql, params } = condicoes(a, 0);
+  const where = sql.length ? `AND ${sql.join(' AND ')}` : '';
+  const [r] = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM lots
+      WHERE status NOT IN ('encerrado','vendido') AND NOT ${VENCIDO} ${where}`,
+    params,
+  );
+  return r?.n ?? 0;
+}
+
 export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
   if (!lotIds.length) return [];
   const alertas = await query<Alerta>(
-    `SELECT id, owner_id, label, q, filters, channels, email FROM alerts WHERE enabled ORDER BY id`,
+    `SELECT id, owner_id, created_at, label, q, filters, channels, email FROM alerts WHERE enabled ORDER BY id`,
   );
   const disparos: Disparo[] = [];
 
   for (const a of alertas) {
-    const { sql, params } = condicoes(a);
+    // $1 = lista de ids, $2 = created_at do alerta. Os do alerta vêm a partir do $3.
+    const { sql, params } = condicoes(a, 2);
     const where = sql.length ? `AND ${sql.join(' AND ')}` : '';
+    /**
+     * Duas condições que não estavam aqui e o usuário sentiu as duas:
+     *
+     * 1. `first_seen_at >= a.created_at` — alerta avisa do que ENTRA depois
+     *    dele, nunca do passado. Sem isto, criar um alerta às 03:45 disparava
+     *    na mesma hora por lotes que estavam na base havia 12 horas.
+     *
+     * 2. `NOT VENCIDO` e status aberto — avisar sobre lote encerrado é convidar
+     *    para um leilão que já passou. A mesma expressão da busca, importada,
+     *    porque duas cópias da regra de vencimento divergiriam.
+     *
+     * Ambas moram no CASAMENTO, não só em quem chama: é o único ponto por onde
+     * todo disparo passa, venha da coleta ou de qualquer outro gatilho.
+     */
     const achados = await query<any>(
       `SELECT id, title_raw, lot_url, source_id, COALESCE(current_bid, min_bid) AS bid
          FROM lots
-        WHERE id = ANY($1::bigint[]) ${where}
+        WHERE id = ANY($1::bigint[])
+          AND first_seen_at >= $2::timestamptz
+          AND status NOT IN ('encerrado','vendido')
+          AND NOT ${VENCIDO}
+          ${where}
         LIMIT 50`,
-      [lotIds, ...params],
+      [lotIds, a.created_at, ...params],
     );
 
     for (const l of achados) {

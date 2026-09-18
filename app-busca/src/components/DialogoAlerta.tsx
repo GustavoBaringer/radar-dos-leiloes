@@ -74,13 +74,18 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
         : { label: nome, q: alvo.q.trim(), filters: alvo.filtros, channels: canais, email: canalEmail ? email.trim() : null };
 
       const r = editando
-        ? ((await api.editarAlerta(alvo.alerta!.id, corpo)) as { casados_agora?: number })
+        ? ((await api.editarAlerta(alvo.alerta!.id, corpo)) as { no_indice_agora?: number })
         : await api.criarAlerta(corpo);
 
       toast(
         editando
           ? `Alerta "${nome}" atualizado.`
-          : `Alerta "${nome}" criado${r?.casados_agora ? ` — ${r.casados_agora} lote(s) já encontrados` : ''}.`,
+          // O número é INFORMATIVO: diz quantos lotes o alerta acharia hoje,
+          // e não quantos foram avisados. O alerta avisa do que entra a partir
+          // de agora, então prometer "já encontrados" seria mentir sobre o que
+          // vai aparecer na aba.
+          : `Alerta "${nome}" criado. Você será avisado dos próximos lotes que casarem` +
+            `${r?.no_indice_agora ? ` (${r.no_indice_agora} no índice casam hoje — use a busca para vê-los)` : ''}.`,
       );
       aoSalvar();
       aoFechar();
