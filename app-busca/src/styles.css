@@ -509,7 +509,12 @@
        hipotética (a base), e `auto` aqui vale a largura natural do select —
        ditada pela opção mais longa, ~280px. Com isso a barra quebrava mesmo
        tendo folga, porque o encolhimento só é aplicado depois da quebra. */
-    .ordena { order: 2; flex: 1 1 150px; min-width: 0 }
+    /* Quatro controles, não três: a contagem toma a faixa de cima SEMPRE (não só
+       quando há chips), e os três de baixo têm base explícita. Sem isto eles
+       caíam em três alturas diferentes e o seletor sobrava com 162px. */
+    .resultbar > div:first-child { flex: 1 0 100% }
+    .seg-vista { order: 1; flex: 0 0 auto }
+    .ordena { order: 2; flex: 1 1 120px; min-width: 0 }
     /* `margin-left: auto` da regra base empurrava o botão para o fim e o fazia
        quebrar para uma linha sozinho. */
     .btn-alerta { order: 3; margin-left: 0; flex: 0 0 auto; padding: 9px 12px }
@@ -879,6 +884,12 @@ a { color: inherit; text-decoration: none }
 .mapa-area { display: contents; }
 
 @media (max-width: 860px) {
+  /* Cada pixel aqui é pixel de mapa: medido, o cabeçalho comia 289px de 844 e
+     sobrava 44% de mapa. Compactar o respiro devolve ~45px. */
+  .vista-mapa .filtros-toggle { margin-bottom: 8px; padding: 8px 12px }
+  .vista-mapa .resultbar { margin-bottom: 6px; gap: 8px }
+  .vista-mapa .barra-carga { margin-bottom: 0 }
+
   /* A folha é ancorada no palco, então ele precisa deixar de rolar com a página:
      lista sobre mapa só funciona se o mapa ficar parado atrás dela. */
   .mapa-area.mapa-cheio {

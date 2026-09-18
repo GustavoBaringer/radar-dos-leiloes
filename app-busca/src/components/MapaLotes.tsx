@@ -58,7 +58,8 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
       if (a[i] < o) o = a[i]; if (a[i] > l) l = a[i];
       if (a[i + 1] < s) s = a[i + 1]; if (a[i + 1] > n) n = a[i + 1];
     }
-    const pad = 24;
+    // Folga menor no celular: 24px de respiro custam ~10% da área útil numa tela de 390.
+    const pad = b.w < 500 ? 10 : 24;
     // A tela cresce para baixo e a latitude para cima: sem inverter, a altura do
     // enquadramento sai negativa e quase todo ponto cai fora do canvas.
     const x0 = mercX(o), x1 = mercX(l), yT = mercY(n), yB = mercY(s);

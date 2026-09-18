@@ -12,7 +12,7 @@ interface Props {
 }
 
 /** Espiada, metade e cheia — frações da JANELA, não do mapa. */
-const ALTURAS = [0.22, 0.56, 0.94];
+const ALTURAS = [0.15, 0.56, 0.94];
 
 const janela = () => window.visualViewport?.height ?? window.innerHeight;
 

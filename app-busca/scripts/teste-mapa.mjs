@@ -161,8 +161,31 @@ folha && folha.sobreOMapa && folha.alturaFolha < folha.alturaArea && folha.overf
 await cel.screenshot({ path: 'app-busca/shots/mapa-celular.png' });
 await cel.close();
 
-/* 11 — console limpo */
-erros.length === 0 ? ok('11. console limpo') : falha('11. console limpo', erros.slice(0, 3).join(' | '));
+/* 11 — a barra de resultados NUNCA fica por baixo do mapa, nem com os chips
+      de interpretação, que só chegam depois da resposta e fazem a barra crescer. */
+const cel2 = await ctx.newPage();
+await cel2.setViewportSize({ width: 390, height: 844 });
+for (const [rot, url] of [['sem match', `${API}/busca?vista=mapa`], ['com match', `${API}/busca?vista=mapa&q=onix`]]) {
+  await cel2.goto(url, { waitUntil: 'networkidle' });
+  await cel2.waitForTimeout(2800);
+  const m = await cel2.evaluate(() => {
+    const bar = document.querySelector('.resultbar').getBoundingClientRect();
+    const area = document.querySelector('.mapa-area.mapa-cheio').getBoundingClientRect();
+    const folha = document.querySelector('.folha-mapa').getBoundingClientRect();
+    const sel = document.querySelector('#sort').getBoundingClientRect();
+    return { fimDaBarra: Math.round(bar.bottom), inicioDoMapa: Math.round(area.top),
+             select: Math.round(sel.width), visivel: Math.round(folha.top - area.top), janela: innerHeight };
+  });
+  const pct = Math.round((100 * m.visivel) / m.janela);
+  m.inicioDoMapa >= m.fimDaBarra - 1 && m.select >= 140 && pct >= 50
+    ? ok(`11. barra inteira acima do mapa (${rot})`, `barra ${m.fimDaBarra} / mapa ${m.inicioDoMapa} · select ${m.select}px · mapa ${pct}%`)
+    : falha(`11. barra inteira acima do mapa (${rot})`, JSON.stringify(m));
+}
+await cel2.screenshot({ path: 'app-busca/shots/mapa-celular.png' });
+await cel2.close();
+
+/* 12 — console limpo */
+erros.length === 0 ? ok('12. console limpo') : falha('12. console limpo', erros.slice(0, 3).join(' | '));
 
 await page.screenshot({ path: 'app-busca/shots/mapa-desktop.png', fullPage: false });
 await browser.close();

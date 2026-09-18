@@ -108,10 +108,16 @@ export function Busca({
       document.documentElement.style.setProperty('--topo-mapa', `${Math.max(0, Math.round(b))}px`);
     };
     medir();
+    // A barra CRESCE quando chegam os chips de "interpretado como": só resize e
+    // scroll deixavam --topo-mapa velho, e o mapa subia por cima dela (medido:
+    // barra terminando em 309px com o mapa começando em 246px).
+    const obs = new ResizeObserver(medir);
+    if (barraRef.current) obs.observe(barraRef.current);
     window.addEventListener('resize', medir);
     window.addEventListener('scroll', medir, { passive: true });
     document.body.style.overflow = 'hidden';
     return () => {
+      obs.disconnect();
       window.removeEventListener('resize', medir);
       window.removeEventListener('scroll', medir);
       document.body.style.overflow = '';
@@ -228,7 +234,7 @@ export function Busca({
   }, [dados]);
 
   return (
-    <main className="faixa layout">
+    <main className={`faixa layout${estado.vista === 'mapa' ? ' vista-mapa' : ''}`}>
       <button
         type="button"
         className="filtros-toggle"
