@@ -89,8 +89,28 @@ async function fetchDetail(leilaoId: number, loteNumero: number): Promise<Freita
     const desp = li.match(/Despesas operacionais[^R]*R\$\s*([\d.,]+)/);
 
     const local = row('Local do leilão');
-    const localSeg = (local ?? '').split(' - ').pop()?.trim() ?? null;
-    const cityState = localSeg?.match(/^(.+?)\/([A-Za-z]{2})$/);
+    const visitacao =
+      li
+        .split('Visitação/Retirada:')[1]
+        ?.split('|')[0]
+        .trim() ?? null;
+
+    /**
+     * A cidade do lote é a do PÁTIO DE RETIRADA, não a do pregão.
+     *
+     * MEDIDO em 18/09: 691 lotes têm retirada em "…SANTA BARBARA D OESTE/SP" e
+     * 666 deles ficavam SEM cidade — o extrator lia "Local do leilão", que para
+     * esses não traz o par cidade/UF. Pior: os outros 25 recebiam "Santo André",
+     * a cidade do PREGÃO, e ficavam apontando para o lugar errado.
+     *
+     * A retirada vem primeiro porque é onde o bem está. "Local do leilão" fica
+     * como reserva, para o caso de a fonte não publicar a visitação.
+     */
+    const cidadeDe = (texto: string | null) => {
+      const seg = (texto ?? '').split(/\s-\s/).pop()?.trim() ?? '';
+      return seg.match(/^(.+?)\/([A-Za-z]{2})$/);
+    };
+    const cityState = cidadeDe(visitacao) ?? cidadeDe(local);
 
     return {
       abertura: row('Abertura p/ lances'),
@@ -99,11 +119,7 @@ async function fetchDetail(leilaoId: number, loteNumero: number): Promise<Freita
       local,
       city: cityState?.[1].trim() ?? null,
       state: cityState?.[2].toUpperCase() ?? null,
-      visitation:
-        li
-          .split('Visitação/Retirada:')[1]
-          ?.split('|')[0]
-          .trim() ?? null,
+      visitation: visitacao,
       lanceInicial: smallValue('Lance Inicial'),
       incremento: smallValue('Incremento Mínimo'),
       comissaoPct: com ? Number(com[1].replace(',', '.')) : null,

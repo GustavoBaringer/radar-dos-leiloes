@@ -408,10 +408,15 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     if (!lista(p.uf).length) return [];
     const b = build('cities');
     const w = b.sql ? `${b.sql} AND` : 'WHERE';
+    // `octet_length` e não `length`: translate troca um caractere por outro, então
+    // a contagem de CARACTERES não muda e a diferença dava sempre zero — a regra
+    // de "mais acento ganha" nunca funcionou, e o desempate caía na ordem
+    // alfabética, onde "Cuiaba" vence "Cuiabá". Em UTF-8 a letra acentuada ocupa
+    // 2 bytes e a simples 1, então a diferença em BYTES conta o acento.
     const semAcento = `translate(city,'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç','AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')`;
     return query(
       `SELECT city_key AS value, COUNT(*)::int AS count,
-              (array_agg(city ORDER BY (city = upper(city)), (length(city) - length(${semAcento})) DESC, city))[1] AS label
+              (array_agg(city ORDER BY (city = upper(city)), (octet_length(city) - octet_length(${semAcento})) DESC, city))[1] AS label
          FROM lots ${w} city_key IS NOT NULL
         GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 300`,
       b.params,
