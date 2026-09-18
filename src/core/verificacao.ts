@@ -266,6 +266,54 @@ const leilo: Verificador = {
   },
 };
 
-export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance, leilo };
+/**
+ * FREITAS — `RetornarLoteStatus` responde pelo lote, não pela listagem: com
+ * `success:false` a fonte afirma que o lote não existe mais, o que é o sinal
+ * POSITIVO de remoção que a ausência na varredura nunca dá.
+ *
+ * Existe porque o leilão em montagem ("EM LOTEAMENTO") renumera lotes: o 8048/604
+ * saiu da listagem, ficou preso como `sem_data` — sem prazo, nenhuma regra de
+ * relógio o alcançava — e a página dele devolvia 500 ao usuário.
+ */
+const freitas: Verificador = {
+  porHost: false,
+  async verificar(_host, lotes) {
+    const saida = new Map<number, Resultado>();
+    for (const l of lotes) {
+      const m = /^(\d+)-(\d+)$/.exec(l.externalId ?? '');
+      if (!m) {
+        saida.set(l.id, { veredito: 'indeterminado', sinal: 'externalId fora do formato leilao-lote' });
+        continue;
+      }
+      try {
+        const { status, data } = await fetchJson<{ success?: boolean; message?: any }>(
+          `https://www.freitasleiloeiro.com.br/Leiloes/RetornarLoteStatus?leilaoId=${m[1]}&loteNumero=${m[2]}`,
+          { insecureTls: true, gapMs: 1100, timeoutMs: 25000 },
+        );
+        if (status !== 200 || !data) {
+          saida.set(l.id, { veredito: 'indeterminado', sinal: `HTTP ${status}` });
+          continue;
+        }
+        if (data.success === false) {
+          saida.set(l.id, { veredito: 'sumiu', sinal: String(data.message ?? 'success:false') });
+          continue;
+        }
+        const nome = String(data.message?.nome ?? '').trim();
+        const n = nome.toLowerCase();
+        if (!n) saida.set(l.id, { veredito: 'indeterminado', sinal: 'sem nome de status' });
+        else if (/aberto/.test(n)) saida.set(l.id, { veredito: 'aberto', sinal: nome });
+        else if (/agendad|loteament/.test(n)) saida.set(l.id, { veredito: 'agendado', sinal: nome });
+        else if (/vendid|arrematad|encerrad|cancelad|retirad|suspens|deserto/.test(n)) {
+          saida.set(l.id, { veredito: 'encerrado', sinal: nome });
+        } else saida.set(l.id, { veredito: 'indeterminado', sinal: nome });
+      } catch (e: any) {
+        saida.set(l.id, { veredito: 'indeterminado', sinal: `erro: ${e?.message ?? e}` });
+      }
+    }
+    return saida;
+  },
+};
+
+export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance, leilo, freitas };
 
 export const temVerificador = (fonte: string) => fonte in VERIFICADORES;

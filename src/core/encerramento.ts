@@ -132,7 +132,11 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
      SELECT l.id, l.source_id, l.external_id, l.lot_url, l.source_category
        FROM lots l JOIN ult ON ult.source_id = l.source_id
       WHERE l.source_id = ANY($1)
-        AND l.status IN ('aberto','agendado')
+        -- 'sem_data' entra porque é o único estado que NENHUMA outra rotina
+        -- alcança: sem prazo o relógio não age, e fora daqui a origem nunca é
+        -- consultada. Era assim que o 8048/604 da freitas ficava no ar depois
+        -- de a fonte removê-lo do leilão em remontagem.
+        AND l.status IN ('aberto','agendado','sem_data')
         AND l.collected_at < ult.u
         -- Recuo: quem a origem já disse vivo espera; quem não deu para decidir
         -- espera mais a cada tentativa frustrada, até parar de ser reconsultado.
