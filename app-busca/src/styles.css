@@ -394,7 +394,9 @@
   .filtros-toggle { display: none }
 
   @media (max-width: 980px) {
-    .layout { grid-template-columns: 1fr }
+    /* No celular o respiro do desktop vira 50px de tela perdidos antes do
+       primeiro resultado: 20px de padding + 22px de gap + 8px do botão. */
+    .layout { grid-template-columns: 1fr; padding-top: 10px; row-gap: 8px }
     .lateral-desktop { display: none }
     .filtros-toggle {
       display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px;
@@ -886,7 +888,7 @@ a { color: inherit; text-decoration: none }
 @media (max-width: 860px) {
   /* Cada pixel aqui é pixel de mapa: medido, o cabeçalho comia 289px de 844 e
      sobrava 44% de mapa. Compactar o respiro devolve ~45px. */
-  .vista-mapa .filtros-toggle { margin-bottom: 8px; padding: 8px 12px }
+  .vista-mapa .filtros-toggle { margin-bottom: 0; padding: 8px 12px }
   .vista-mapa .resultbar { margin-bottom: 6px; gap: 8px }
   .vista-mapa .barra-carga { margin-bottom: 0 }
 
