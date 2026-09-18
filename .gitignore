@@ -11,3 +11,7 @@ certs/
 
 *.log
 .DS_Store
+
+# Saída de screenshot dos portões visuais
+shots/
+app-busca/shots*/

@@ -9,7 +9,7 @@ import websocket from '@fastify/websocket';
 import { join, dirname } from 'node:path';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { searchLots, getLot, getStats, ensureSources } from './core/repo.js';
+import { searchLots, searchLotsMapa, getLot, getStats, ensureSources } from './core/repo.js';
 import { VENCIDO } from './core/encerramento.js';
 import { contarCasaveis, avaliarAlertas } from './core/alerts.js';
 import { authLigada, papelDasCredenciais, criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
@@ -885,12 +885,39 @@ app.get('/api/search', async (req) => {
     priceMax: num(q.priceMax),
     yearMin: num(q.yearMin),
     yearMax: num(q.yearMax),
+    place: q.place,
     onlyWithDate: q.onlyWithDate === 'true',
     onlyWithPhoto: q.onlyWithPhoto === 'true',
     includeEnded: q.includeEnded === 'true',
     sort: (q.sort as any) ?? 'ending_soon',
     page: num(q.page) ?? 1,
     pageSize: num(q.pageSize) ?? 24,
+  });
+});
+
+/**
+ * Malha territorial do IBGE, servida daqui porque o desenho do mapa não pode
+ * depender de terceiro no caminho crítico. `uf` sempre; `municipio` só quando o
+ * usuário aproxima, e são 2,3 MB — nunca no carregamento inicial.
+ */
+app.get('/api/malha/:tipo', async (req, reply) => {
+  const { tipo } = req.params as { tipo: string };
+  if (tipo !== 'uf' && tipo !== 'municipio') return reply.code(404).send({ error: 'malha desconhecida' });
+  const arq = join(here, '..', 'data', 'geo', `${tipo}.json`);
+  if (!existsSync(arq)) return reply.code(404).send({ error: 'malha ausente' });
+  return reply.header('cache-control', 'public, max-age=604800, immutable').type('application/json').send(readFileSync(arq));
+});
+
+app.get('/api/search/mapa', async (req) => {
+  const q = req.query as Record<string, string>;
+  return searchLotsMapa({
+    q: q.q, uf: q.uf, status: q.status, sellerType: q.sellerType, sourceId: q.sourceId,
+    auctioneer: q.auctioneer, seller: q.seller, assetType: q.assetType,
+    vehicleType: q.vehicleType, propertyType: q.propertyType, city: q.city,
+    priceMin: num(q.priceMin), priceMax: num(q.priceMax),
+    yearMin: num(q.yearMin), yearMax: num(q.yearMax),
+    onlyWithDate: q.onlyWithDate === 'true', onlyWithPhoto: q.onlyWithPhoto === 'true',
+    includeEnded: q.includeEnded === 'true',
   });
 });
 

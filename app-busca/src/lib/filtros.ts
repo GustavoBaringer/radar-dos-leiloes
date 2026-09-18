@@ -61,6 +61,10 @@ export interface EstadoBusca {
   onlyWithPhoto: boolean;
   multi: Record<MultiId, string[]>;
   page: number;
+  /** Grade (listagem) ou mapa. É uma forma de ver a MESMA busca, não outra tela. */
+  vista: 'grade' | 'mapa';
+  /** Ponto escolhido no mapa: 'lat,lon' ou 'c:CHAVECIDADE/UF'. */
+  local: string;
 }
 
 export const ESTADO_VAZIO: EstadoBusca = {
@@ -68,6 +72,8 @@ export const ESTADO_VAZIO: EstadoBusca = {
   sort: 'ending_soon', onlyWithDate: false, onlyWithPhoto: false,
   multi: { status: [], vehicleType: [], propertyType: [], uf: [], city: [], sellerType: [], sourceId: [], auctioneer: [], seller: [] },
   page: 1,
+  vista: 'grade',
+  local: '',
 };
 
 /** Quantos filtros estão ativos — o número que aparece no botão do celular. */
@@ -89,6 +95,7 @@ export function paramsDaBusca(e: EstadoBusca): string {
   for (const id of MULTI_IDS) if (e.multi[id].length) p.set(id, e.multi[id].join(','));
   if (e.onlyWithDate) p.set('onlyWithDate', 'true');
   if (e.onlyWithPhoto) p.set('onlyWithPhoto', 'true');
+  if (e.local) p.set('place', e.local);
   p.set('page', String(e.page));
   return p.toString();
 }
@@ -106,6 +113,8 @@ export function urlDoEstado(e: EstadoBusca): string {
   if (e.onlyWithDate) p.set('onlyWithDate', '1');
   if (e.onlyWithPhoto) p.set('onlyWithPhoto', '1');
   if (e.sort && e.sort !== 'ending_soon') p.set('sort', e.sort);
+  if (e.vista === 'mapa') p.set('vista', 'mapa');
+  if (e.local) p.set('local', e.local);
   if (e.page > 1) p.set('page', String(e.page));
   const qs = p.toString();
   return `/busca${qs ? `?${qs}` : ''}`;
@@ -125,6 +134,8 @@ export function estadoDaUrl(busca: string): EstadoBusca {
   e.onlyWithPhoto = p.get('onlyWithPhoto') === '1';
   const sort = p.get('sort');
   e.sort = sort && ['ending_soon', 'discount', 'price_asc', 'price_desc', 'recent'].includes(sort) ? sort : 'ending_soon';
+  e.vista = p.get('vista') === 'mapa' ? 'mapa' : 'grade';
+  e.local = p.get('local') ?? '';
   e.page = Math.max(1, Number(p.get('page')) || 1);
   return e;
 }

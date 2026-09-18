@@ -125,3 +125,21 @@ export type WsMessage =
   | { type: 'collect'; sourceId: string; upserted: number }
   | { type: 'encerrados'; total: number; porPrazo?: number; porAusencia?: number; origem?: string }
   | { type: 'alertas'; disparos: Array<{ label: string; title: string }> };
+
+export interface PontoMapa {
+  k: string;
+  lat: number;
+  lon: number;
+  cidade: string | null;
+  uf: string | null;
+  camada: 'patio' | 'cidade';
+  n: number;
+}
+
+export interface RespostaMapa {
+  pontos: PontoMapa[];
+  total: number;
+  semLocalizacao: number;
+  soCidade: number;
+  semNada: number;
+}

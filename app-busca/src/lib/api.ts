@@ -1,4 +1,4 @@
-import type { Alerta, Hit, Lot, SearchResponse, Stats } from './types';
+import type { Alerta, Hit, Lot, RespostaMapa, SearchResponse, Stats } from './types';
 
 /**
  * Cliente da API. Um lugar só para `credentials` e para o tratamento de erro,
@@ -32,6 +32,9 @@ async function envia<T>(url: string, metodo: string, corpo?: unknown): Promise<T
 
 export const api = {
   buscar: (qs: string, sinal?: AbortSignal) => get<SearchResponse>(`/api/search?${qs}`, sinal),
+  mapa: (qs: string, sinal?: AbortSignal) => get<RespostaMapa>(`/api/search/mapa?${qs}`, sinal),
+  /** Malha do IBGE. A de município pesa 2,3 MB e só é pedida ao aproximar. */
+  malha: <T>(tipo: 'uf' | 'municipio') => get<T>(`/api/malha/${tipo}`),
   lote: (id: number) => get<Lot>(`/api/lot/${id}`),
   stats: () => get<Stats>('/api/stats'),
   eu: () => get<{ papel?: string }>('/api/me'),

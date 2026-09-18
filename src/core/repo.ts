@@ -223,6 +223,11 @@ export interface SearchParams {
   yearMax?: number;
   onlyWithDate?: boolean;
   onlyWithPhoto?: boolean;
+  /**
+   * Ponto do mapa: 'lat,lon' (coordenada da fonte) ou 'c:CHAVECIDADE/UF'
+   * (cidade sem coordenada própria). É o que o clique num ponto manda de volta.
+   */
+  place?: string;
   /** Por padrão a busca esconde lote encerrado; a tela de cobertura pede o contrário. */
   includeEnded?: boolean;
   sort?: 'ending_soon' | 'price_asc' | 'price_desc' | 'recent' | 'discount';
@@ -244,7 +249,17 @@ export interface SearchResponse {
  * Quando marca e modelo são reconhecidos, o filtro é ESTRUTURAL (igualdade),
  * e não trigram: é isso que impede "mercedes b 200" de trazer GLA 200.
  */
-export async function searchLots(p: SearchParams): Promise<SearchResponse> {
+/** 'a,b' e ['a','b'] viram a mesma lista; string única vira lista de um. */
+const lista = (v: Multi): string[] =>
+  (Array.isArray(v) ? v : String(v ?? '').split(','))
+    .map((x) => String(x).trim())
+    .filter(Boolean);
+
+/**
+ * Motor de filtro da busca, isolado porque o MAPA precisa do mesmo WHERE.
+ * Duplicar a montagem faria mapa e lista divergirem no primeiro filtro novo.
+ */
+function montaFiltro(p: SearchParams) {
   const parsed = parseQuery(p.q ?? '');
 
   // Cada filtro carrega a chave da faceta que ele representa. Isso permite
@@ -271,12 +286,6 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   // status gravado (que a página do lote lê) — foi exatamente esse o defeito.
   // O filtro continua aqui como rede: entre dois minutos do job há lote que
   // acabou de vencer e ainda não foi gravado.
-
-  /** 'a,b' e ['a','b'] viram a mesma lista; string única vira lista de um. */
-  const lista = (v: Multi): string[] =>
-    (Array.isArray(v) ? v : String(v ?? '').split(','))
-      .map((x) => String(x).trim())
-      .filter(Boolean);
 
   /**
    * Um item vira igualdade, vários viram ANY. Igualdade contra a lista inteira
@@ -325,6 +334,24 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   if (p.onlyWithDate) P('(auction_start_utc IS NOT NULL OR auction_end_utc IS NOT NULL)');
   if (p.onlyWithPhoto) P('photo_count > 0');
 
+  // Sem faceta: bbox e ponto não são dropdown, não há o que recontar. E o
+  // predicado é decomposto (city_key/state, ou lat/lon arredondado) em vez de
+  // comparar a chave montada, que não usaria índice nenhum.
+  if (p.place) {
+    const m = /^c:(.*)\/([A-Z]{2})$/.exec(p.place);
+    if (m) {
+      P('lat IS NULL');
+      P('city_key = ?', m[1]);
+      P('state = ?', m[2]);
+    } else {
+      const [la, lo] = p.place.split(',').map(Number);
+      if (Number.isFinite(la) && Number.isFinite(lo)) {
+        P('round(lat::numeric, 4) = ?', la);
+        P('round(lon::numeric, 4) = ?', lo);
+      }
+    }
+  }
+
   /** Monta WHERE e parâmetros, opcionalmente pulando os filtros de uma faceta. */
   function build(excluirFacet?: string): { sql: string; params: any[] } {
     const parts: string[] = [];
@@ -341,6 +368,11 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     return { sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '', params };
   }
 
+  return { parsed, build };
+}
+
+export async function searchLots(p: SearchParams): Promise<SearchResponse> {
+  const { parsed, build } = montaFiltro(p);
   const main = build();
   const whereSql = main.sql;
   const params = main.params;
@@ -501,4 +533,88 @@ export async function finishRun(
     `UPDATE collection_runs SET finished_at=now(), ok=$2, fetched=$3, upserted=$4, skipped=$5, error=$6, http_status=$7 WHERE id=$1`,
     [id, data.ok, data.fetched ?? 0, data.upserted ?? 0, data.skipped ?? 0, data.error ?? null, data.httpStatus ?? null],
   );
+}
+
+export interface PontoMapa {
+  /** Chave que volta como filtro `place`. */
+  k: string;
+  lat: number;
+  lon: number;
+  cidade: string | null;
+  uf: string | null;
+  /** 'patio' = coordenada da fonte; 'cidade' = posição aproximada pelo município. */
+  camada: 'patio' | 'cidade';
+  n: number;
+}
+
+export interface RespostaMapa {
+  pontos: PontoMapa[];
+  total: number;
+  /** Lotes do filtro que não entram em ponto nenhum. A soma com os pontos fecha com `total`. */
+  semLocalizacao: number;
+  soCidade: number;
+  semNada: number;
+}
+
+/**
+ * Pontos agregados para o mapa, com o MESMO filtro da lista (montaFiltro).
+ *
+ * Devolve lugar, nunca lote cru: são ~1,5 mil pontos contra 25 mil lotes, e é o
+ * que permite mandar o universo inteiro numa resposta só, sem paginar por
+ * viewport. A âncora da cidade sai da média das coordenadas conhecidas NAQUELA
+ * cidade e é calculada sobre a base toda, não sobre o filtro: mudar de filtro
+ * não pode mover o ponto de lugar.
+ */
+export async function searchLotsMapa(p: SearchParams): Promise<RespostaMapa> {
+  const { build } = montaFiltro(p);
+  const b = build();
+  const w = b.sql;
+  const wAnd = w ? `${w} AND` : 'WHERE';
+
+  const CC = `cc AS (SELECT city_key AS ck, state AS cuf, avg(lat)::float AS la, avg(lon)::float AS lo
+                       FROM lots WHERE lat IS NOT NULL GROUP BY 1, 2)`;
+
+  const pontos = await query<PontoMapa>(
+    `WITH ${CC}
+     SELECT round(lat::numeric,4)||','||round(lon::numeric,4) AS k,
+            round(lat::numeric,4)::float AS lat, round(lon::numeric,4)::float AS lon,
+            mode() WITHIN GROUP (ORDER BY city) AS cidade,
+            mode() WITHIN GROUP (ORDER BY state) AS uf,
+            'patio'::text AS camada, COUNT(*)::int AS n
+       FROM lots ${wAnd} lat IS NOT NULL
+      GROUP BY 1, 2, 3
+     UNION ALL
+     SELECT 'c:'||lots.city_key||'/'||lots.state,
+            round(cc.la::numeric,4)::float, round(cc.lo::numeric,4)::float,
+            mode() WITHIN GROUP (ORDER BY lots.city), lots.state,
+            'cidade'::text, COUNT(*)::int
+       FROM lots JOIN cc ON cc.ck = lots.city_key AND cc.cuf = lots.state
+      ${wAnd} lots.lat IS NULL
+      GROUP BY 1, 2, 3, lots.state
+      ORDER BY 7 DESC`,
+    // Uma consulta só tem uma lista de parâmetros: $1 nas duas metades do UNION
+    // é o MESMO valor. Repetir a lista estoura com 'bind message supplies 2'.
+    b.params,
+  );
+
+  const [c] = await query<{ total: number; so_cidade: number; sem_nada: number }>(
+    `WITH ${CC}
+     SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE lat IS NULL AND city IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM cc WHERE cc.ck = lots.city_key AND cc.cuf = lots.state))::int AS so_cidade,
+            COUNT(*) FILTER (WHERE lat IS NULL AND city IS NULL)::int AS sem_nada
+       FROM lots ${w}`,
+    b.params,
+  );
+
+  // A conta fecha por construção: o que não virou ponto é o resto, não uma
+  // segunda contagem que pode divergir da primeira.
+  const emPontos = pontos.reduce((t, x) => t + x.n, 0);
+  return {
+    pontos,
+    total: c.total,
+    semLocalizacao: c.total - emPontos,
+    soCidade: c.so_cidade,
+    semNada: c.sem_nada,
+  };
 }

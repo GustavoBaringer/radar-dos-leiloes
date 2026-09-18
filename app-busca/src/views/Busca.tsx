@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BellPlus, SlidersHorizontal } from 'lucide-react';
-import type { Facets, Lot, SearchResponse } from '@/lib/types';
+import { BellPlus, LayoutGrid, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
+import type { Facets, Lot, RespostaMapa, SearchResponse } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { ORDENACOES } from '@/lib/labels';
 import { type EstadoBusca, contaFiltros, paramsDaBusca } from '@/lib/filtros';
 import { FilterSidebar } from '@/components/FilterSidebar';
 import { LotCard } from '@/components/LotCard';
+import { MapaLotes } from '@/components/MapaLotes';
 
 interface Props {
   estado: EstadoBusca;
@@ -27,7 +28,10 @@ export function Busca({
   const [erro, setErro] = useState<string | null>(null);
   const [gavetaFiltros, setGavetaFiltros] = useState(false);
   const [rotulosServidor, setRotulos] = useState<Record<string, Record<string, string>>>({});
+  const [mapa, setMapa] = useState<RespostaMapa | null>(null);
+  const [mapaCarregando, setMapaCarregando] = useState(false);
   const seq = useRef(0);
+  const seqMapa = useRef(0);
   const qs = paramsDaBusca(estado);
 
   useEffect(() => {
@@ -61,6 +65,26 @@ export function Busca({
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs]);
+
+  // O mapa usa os MESMOS filtros da lista, menos página, ordenação e o ponto
+  // escolhido: um ponto selecionado não pode apagar os outros do mapa.
+  const qsMapa = useMemo(() => {
+    const p = new URLSearchParams(qs);
+    p.delete('page'); p.delete('sort'); p.delete('place');
+    return p.toString();
+  }, [qs]);
+
+  useEffect(() => {
+    if (estado.vista !== 'mapa') return;
+    const meu = ++seqMapa.current;
+    setMapaCarregando(true);
+    const ac = new AbortController();
+    api
+      .mapa(qsMapa, ac.signal)
+      .then((r) => { if (meu === seqMapa.current) { setMapa(r); setMapaCarregando(false); } })
+      .catch(() => { if (meu === seqMapa.current) setMapaCarregando(false); });
+    return () => ac.abort();
+  }, [qsMapa, estado.vista]);
 
   const facetas: Facets | null = dados?.facets ?? null;
   const ehImovel = estado.assetType === 'imovel';
@@ -154,6 +178,24 @@ export function Busca({
             <BellPlus size={15} aria-hidden />
             <span className="btn-alerta-txt">Criar alerta</span>
           </button>
+          <div className="seg-vista" role="group" aria-label="Visualização">
+            <button
+              type="button"
+              aria-pressed={estado.vista === 'grade'}
+              onClick={() => aoMudar({ vista: 'grade', page: 1 })}
+            >
+              <LayoutGrid size={14} aria-hidden />
+              <span>Grade</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={estado.vista === 'mapa'}
+              onClick={() => aoMudar({ vista: 'mapa', page: 1 })}
+            >
+              <MapIcon size={14} aria-hidden />
+              <span>Mapa</span>
+            </button>
+          </div>
           <div className="f-group ordena">
             <label htmlFor="sort" className="sr-only">
               Ordenar resultados
@@ -171,6 +213,31 @@ export function Busca({
         <div className={`barra-carga${carregando ? ' on' : ''}`} aria-hidden>
           <i />
         </div>
+
+        {estado.vista === 'mapa' && (
+          <>
+            <MapaLotes
+              dados={mapa}
+              carregando={mapaCarregando}
+              local={estado.local}
+              ufAtiva={estado.multi.uf.length === 1 ? estado.multi.uf[0] : undefined}
+              aoEscolherLocal={(k) => aoMudar({ local: k, page: 1 })}
+            />
+            {estado.local && (
+              <div className="mapa-selecao">
+                <span>
+                  Mostrando só os lotes de{' '}
+                  <b>{mapa?.pontos.find((p) => p.k === estado.local)?.cidade ?? 'um ponto'}</b>
+                  {mapa?.pontos.find((p) => p.k === estado.local)?.camada === 'cidade' &&
+                    ' — a fonte publica a cidade, não o endereço'}
+                </span>
+                <button type="button" className="btn-clear" onClick={() => aoMudar({ local: '', page: 1 })}>
+                  limpar
+                </button>
+              </div>
+            )}
+          </>
+        )}
 
         {erro ? (
           <div className="empty">
