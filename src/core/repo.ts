@@ -269,6 +269,8 @@ function montaFiltro(p: SearchParams) {
   interface Pred {
     sql: string;
     value?: any;
+    /** Alternativa a `value` quando o predicado leva mais de um parâmetro. */
+    valores?: any[];
     facet?: string;
   }
   const preds: Pred[] = [];
@@ -338,18 +340,26 @@ function montaFiltro(p: SearchParams) {
   // predicado é decomposto (city_key/state, ou lat/lon arredondado) em vez de
   // comparar a chave montada, que não usaria índice nenhum.
   if (p.place) {
-    const m = /^c:(.*)\/([A-Z]{2})$/.exec(p.place);
-    if (m) {
-      P('lat IS NULL');
-      P('city_key = ?', m[1]);
-      P('state = ?', m[2]);
-    } else {
-      const [la, lo] = p.place.split(',').map(Number);
-      if (Number.isFinite(la) && Number.isFinite(lo)) {
-        P('round(lat::numeric, 4) = ?', la);
-        P('round(lon::numeric, 4) = ?', lo);
+    // Vários pontos separados por ';': cidade com um pátio só tem a âncora
+    // EXATAMENTE sobre ele, e nenhum zoom separa os dois. Quando isso acontece
+    // o clique escolhe o conjunto, e aqui ele vira um OR — não um lugar só,
+    // que esconderia os lotes do outro.
+    const partes: string[] = [];
+    const vals: any[] = [];
+    for (const chave of p.place.split(';').filter(Boolean)) {
+      const m = /^c:(.*)\/([A-Z]{2})$/.exec(chave);
+      if (m) {
+        partes.push(`(lat IS NULL AND city_key = ? AND state = ?)`);
+        vals.push(m[1], m[2]);
+      } else {
+        const [la, lo] = chave.split(',').map(Number);
+        if (Number.isFinite(la) && Number.isFinite(lo)) {
+          partes.push(`(round(lat::numeric, 4) = ? AND round(lon::numeric, 4) = ?)`);
+          vals.push(la, lo);
+        }
       }
     }
+    if (partes.length) preds.push({ sql: `(${partes.join(' OR ')})`, valores: vals });
   }
 
   /** Monta WHERE e parâmetros, opcionalmente pulando os filtros de uma faceta. */
@@ -358,7 +368,14 @@ function montaFiltro(p: SearchParams) {
     const params: any[] = [];
     for (const pred of preds) {
       if (excluirFacet && pred.facet === excluirFacet) continue;
-      if (pred.value === undefined) {
+      if (pred.valores) {
+        let sql = pred.sql;
+        for (const v of pred.valores) {
+          params.push(v);
+          sql = sql.replace('?', `$${params.length}`);
+        }
+        parts.push(sql);
+      } else if (pred.value === undefined) {
         parts.push(pred.sql);
       } else {
         params.push(pred.value);

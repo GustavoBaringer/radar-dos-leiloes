@@ -88,8 +88,34 @@ aindaTemPontos > 1
   ? ok('6. escolher um ponto não esvazia o mapa', `${aindaTemPontos}+ ainda desenhados`)
   : falha('6. escolher um ponto não esvazia o mapa', String(aindaTemPontos));
 
-/* 7 — console limpo */
-erros.length === 0 ? ok('7. console limpo') : falha('7. console limpo', erros.slice(0, 3).join(' | '));
+/* 7 — ponto empilhado: cidade cuja âncora cai EM CIMA do pátio.
+      28% das coordenadas têm mais de um ponto, e sem tratar isso o clique
+      dava zoom para sempre e os lotes "só cidade" nunca apareciam. */
+const empilhado = await page.evaluate(async () => {
+  const r = await fetch('/api/search/mapa', { credentials: 'same-origin' }).then((x) => x.json());
+  const por = new Map();
+  for (const p of r.pontos) {
+    const c = `${p.lat},${p.lon}`;
+    if (!por.has(c)) por.set(c, []);
+    por.get(c).push(p);
+  }
+  const g = [...por.values()].filter((v) => v.length > 1)
+    .sort((a, b) => b.reduce((t, x) => t + x.n, 0) - a.reduce((t, x) => t + x.n, 0))[0];
+  return g ? { chave: g.map((p) => p.k).join(';'), soma: g.reduce((t, p) => t + p.n, 0), cidade: g[0].cidade } : null;
+});
+if (!empilhado) {
+  ok('7. ponto empilhado seleciona o conjunto', 'nenhuma coordenada com dois pontos hoje');
+} else {
+  await page.goto(`${API}/busca?vista=mapa&local=${encodeURIComponent(empilhado.chave)}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2200);
+  const t = await total();
+  t === empilhado.soma
+    ? ok('7. ponto empilhado seleciona o conjunto', `${empilhado.cidade}: pátio + cidade = ${t}`)
+    : falha('7. ponto empilhado seleciona o conjunto', `esperado ${empilhado.soma}, lista ${t}`);
+}
+
+/* 8 — console limpo */
+erros.length === 0 ? ok('8. console limpo') : falha('8. console limpo', erros.slice(0, 3).join(' | '));
 
 await page.screenshot({ path: 'app-busca/shots/mapa-desktop.png', fullPage: false });
 await browser.close();

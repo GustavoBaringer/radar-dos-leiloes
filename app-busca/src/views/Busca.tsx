@@ -227,8 +227,8 @@ export function Busca({
               <div className="mapa-selecao">
                 <span>
                   Mostrando só os lotes de{' '}
-                  <b>{mapa?.pontos.find((p) => p.k === estado.local)?.cidade ?? 'um ponto'}</b>
-                  {mapa?.pontos.find((p) => p.k === estado.local)?.camada === 'cidade' &&
+                  <b>{mapa?.pontos.find((p) => estado.local.split(';').includes(p.k))?.cidade ?? 'um ponto'}</b>
+                  {mapa?.pontos.some((p) => estado.local.split(';').includes(p.k) && p.camada === 'cidade') &&
                     ' — a fonte publica a cidade, não o endereço'}
                 </span>
                 <button type="button" className="btn-clear" onClick={() => aoMudar({ local: '', page: 1 })}>

@@ -183,7 +183,8 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
         ctx.fillStyle = '#22d3ee';
         ctx.beginPath(); ctx.arc(g.x, g.y, rr, 0, 6.2832); ctx.fill();
       }
-      if (unico && unico.k === local) {
+      const chaveG = g.itens.map((i) => i.k).join(';');
+      if (local && chaveG === local) {
         ctx.strokeStyle = '#eef3ff';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(g.x, g.y, rr + 5, 0, 6.2832); ctx.stroke();
@@ -240,6 +241,17 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
     return melhor;
   };
 
+  /** Dois pontos a menos de 6px na tela não se separam com mais aproximação. */
+  const espalhados = (itens: PontoMapa[]) => {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of itens) {
+      const t = tela(p.lat, p.lon);
+      x0 = Math.min(x0, t.x); x1 = Math.max(x1, t.x);
+      y0 = Math.min(y0, t.y); y1 = Math.max(y1, t.y);
+    }
+    return Math.max(x1 - x0, y1 - y0) > 6;
+  };
+
   const arrast = useRef({ on: false, moveu: false, px: 0, py: 0 });
 
   return (
@@ -284,8 +296,12 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
           const r = e.currentTarget.getBoundingClientRect();
           const g = acha(e.clientX - r.left, e.clientY - r.top);
           if (!g) { aoEscolherLocal(''); return; }
-          if (g.itens.length > 1) { zoom(g.x, g.y, 1.9); return; }
-          aoEscolherLocal(g.itens[0].k === local ? '' : g.itens[0].k);
+          // Aproximar só resolve o que ESTÁ separado. Cidade com um pátio só tem
+          // a âncora em cima dele: os dois pontos nunca se afastam, e continuar
+          // dando zoom seria um clique que não faz nada.
+          const k = g.itens.map((i) => i.k).join(';');
+          if (g.itens.length > 1 && espalhados(g.itens)) { zoom(g.x, g.y, 1.9); return; }
+          aoEscolherLocal(k === local ? '' : k);
         }}
         onPointerLeave={() => setDica(null)}
         onWheel={(e) => {
