@@ -91,7 +91,7 @@ export function AppHeader({
             enterKeyHint="search"
             autoComplete="off"
             autoCapitalize="none"
-            placeholder="Busque por modelo: t-cross, nivus, mercedes b 200, hb20…"
+            placeholder="Buscar por palavra-chave"
             value={termo}
             onChange={(e) => aoDigitar(e.target.value)}
           />
