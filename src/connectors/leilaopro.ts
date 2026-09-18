@@ -4,6 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import * as campos from '../core/campos.js';
 
 /**
  * Plataforma white-label Leilão PRO: um conector para N leiloeiros.
@@ -101,6 +102,7 @@ export const leilaopro: Connector = {
           vistos.add(chave);
 
           const titulo = $c.find('h5.card-title').text().replace(/\s+/g, ' ').trim();
+          const nomeLeilao = $c.find('.info-title').text().replace(/\s+/g, ' ').trim() || null;
           if (!titulo || (cat.asset === 'veiculo' && looksLikePart(titulo))) {
             skipped++;
             continue;
@@ -117,6 +119,13 @@ export const leilaopro: Connector = {
           const status: LotStatus = inicio ? (inicio.getTime() > Date.now() ? 'agendado' : 'aberto') : 'sem_data';
 
           lots.push({
+            // O leilão nomeia a cidade ("IMÓVEIS EM URUGUAIANA/RS") mais vezes
+            // que o título; a URL vem por último porque é derivada e traz o
+            // tipo do bem colado no slug.
+            ...(campos.localDeTexto(nomeLeilao) ??
+                campos.localDeTexto(titulo) ??
+                campos.localDeTexto(href) ??
+                { city: null, state: null } as any),
             sourceId: 'leilaopro',
             externalId: chave,
             lotUrl: href.startsWith('http') ? href : `https://${host}${href}`,

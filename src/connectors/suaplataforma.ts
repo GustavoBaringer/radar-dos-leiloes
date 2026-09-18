@@ -15,6 +15,7 @@ import { fetchJson } from './http.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
+import * as campos from '../core/campos.js';
 
 const PAGINA = 200;
 
@@ -106,6 +107,9 @@ function mapLot(l: any, host: string): CanonicalLot | null {
   const titulo = String(l?.Lote ?? '').trim();
   if (!id || !titulo || tituloImprestavel(titulo)) return null;
   const local = localDoTitulo(titulo);
+  // Reserva para quando o formato "…, Cidade/UF" do título não aparece.
+  const urlLote = l.URLlote ? `https://${host}/${String(l.URLlote).replace(/^\/+/, '')}` : null;
+  const complemento = campos.localDeTexto(titulo) ?? campos.localDeTexto(urlLote);
 
   const rt = Array.isArray(l.GetLoteRealTime) ? l.GetLoteRealTime[0] : null;
   const status = statusDe(String(rt?.Lote_SubStatus_Label ?? ''));
@@ -144,8 +148,11 @@ function mapLot(l: any, host: string): CanonicalLot | null {
     feesPct: num(rt?.Comissao),
     // A fonte identifica o COMITENTE, não o leiloeiro.
     sellerName: l.Comitente ? String(l.Comitente) : null,
-    city: local.city,
-    state: local.state,
+    // O `localDoTitulo` cobre o formato "…, Cidade/UF" do título. Quando ele
+    // não acha (83% dos lotes), o garimpo genérico tenta o título inteiro e o
+    // slug da URL, que é onde esta fonte guarda o lugar.
+    city: local.city ?? complemento?.city ?? null,
+    state: local.state ?? complemento?.uf ?? null,
     photos: fotos,
     photoCount: fotos.length,
     // `raw` sem a descrição: é lá que a fonte publica CPF, nome de parte e

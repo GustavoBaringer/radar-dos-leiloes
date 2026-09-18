@@ -313,3 +313,117 @@ export function tituloImovel(p: {
   const onde = [p.neighborhood, estado ? `${cidade}/${estado}` : cidade].filter(Boolean).join(', ');
   return [tipo, area, 'em', onde].filter(Boolean).join(' ');
 }
+
+/** Nome do estado por extenso -> sigla. A fonte escreve dos dois jeitos. */
+const ESTADO_POR_EXTENSO: Record<string, string> = {
+  acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE',
+  'distrito federal': 'DF', 'espirito santo': 'ES', goias: 'GO', maranhao: 'MA',
+  'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG', para: 'PA',
+  paraiba: 'PB', parana: 'PR', pernambuco: 'PE', piaui: 'PI', 'rio de janeiro': 'RJ',
+  'rio grande do norte': 'RN', 'rio grande do sul': 'RS', rondonia: 'RO', roraima: 'RR',
+  'santa catarina': 'SC', 'sao paulo': 'SP', sergipe: 'SE', tocantins: 'TO',
+};
+
+const semAcento = (v: string) =>
+  v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/**
+ * Garimpa "Cidade/UF" em texto livre — título, nome do leilão, slug de URL.
+ *
+ * Existe porque três conectores tinham cada um a sua tentativa e nenhuma cobria
+ * o suficiente: leilaopro não extraía cidade nenhuma (472 lotes, 100%),
+ * suaplataforma lia só do título (83% falhavam) e suporteleiloes, só de um
+ * rótulo (51% falhavam). Uma regra só, aplicada aos três campos, em vez de
+ * quatro regras para divergir.
+ *
+ * O ÚLTIMO par vence, pelo mesmo motivo do conector do soleon: o endereço
+ * termina em cidade e UF, e o primeiro par costuma ser um prefixo qualquer
+ * ("AV" passando por sigla de estado).
+ *
+ * Aceita o estado por extenso ("Vacaria/Rio Grande do Sul") porque é assim que
+ * o suporte-leilões escreve em boa parte dos títulos.
+ */
+export function localDeTexto(texto?: string | null): { city: string; uf: string } | null {
+  const t = String(texto ?? '');
+  if (!t) return null;
+
+  const achados: Array<{ city: string; uf: string }> = [];
+
+  /**
+   * "Cidade/UF" e "Cidade - UF" — com a BARRA, ou com hífen CERCADO DE ESPAÇO.
+   *
+   * Hífen colado está fora de propósito: meia língua portuguesa termina em duas
+   * letras que são sigla de estado, e "o veículo encontra-se" virava a cidade
+   * "O veículo encontra" no estado de Sergipe. O dry-run pegou.
+   */
+  for (const m of t.matchAll(/([A-Za-zÀ-ú][A-Za-zÀ-ú'.\s]{2,40}?)\s*(?:\/\s*|\s-\s)([A-Za-z]{2})(?![A-Za-zÀ-ú])/g)) {
+    if (ehUf(m[2])) achados.push({ city: m[1].trim(), uf: m[2].toUpperCase() });
+  }
+  // "Cidade/Nome Do Estado" por extenso.
+  for (const m of t.matchAll(/([A-Za-zÀ-ú][A-Za-zÀ-ú'.\s]{2,40}?)\s*[/-]\s*([A-Za-zÀ-ú][A-Za-zÀ-ú\s]{3,25})(?![A-Za-zÀ-ú])/g)) {
+    const uf = ESTADO_POR_EXTENSO[semAcento(m[2])];
+    if (uf) achados.push({ city: m[1].trim(), uf });
+  }
+  /**
+   * Slug de URL: "apartamento-santo-andre-sp" -> Santo André/SP.
+   *
+   * A sigla tem de fechar o SEGMENTO (vem "/" ou fim depois), não um hífen
+   * qualquer: senão "leilao-fiat-doblo-2011" e "encontra-se" entram.
+   */
+  for (const m of t.matchAll(/([a-z][a-z-]{2,40}?)-([a-z]{2})(?=\/|$)/g)) {
+    if (!ehUf(m[2])) continue;
+    const cidade = m[1].split('-').slice(-4).join(' ');
+    achados.push({ city: cidade, uf: m[2].toUpperCase() });
+  }
+
+  const ultimo = achados.pop();
+  if (!ultimo) return null;
+  const podada = apararCidade(ultimo.city);
+  // "Novo Hamburgo e Campo Bom/RS": o leilão cobre DUAS cidades. Escolher uma
+  // seria chute com cara de dado. Fica sem cidade, que é a verdade.
+  if (/\s+e\s+/i.test(podada)) return null;
+  const city = caixaDeTitulo(podada);
+  return city ? { city, uf: ultimo.uf } : null;
+}
+
+/**
+ * Tira o que vem ANTES do nome da cidade.
+ *
+ * O texto livre traz o tipo do bem e a preposição colados: "EXTRAJUDICIAL I ÁREA
+ * EM Santa Luzia" e "apartamento-santo-andre". Sem aparar, a "cidade" sai como
+ * "Extrajudicial I Área em Santa Luzia" — e aí ela nunca casa com município
+ * nenhum, o que é pior do que não ter extraído.
+ *
+ * Duas podas, nesta ordem:
+ *  1. a preposição de lugar ("em", "no", "na"): o nome começa DEPOIS dela;
+ *  2. as palavras de tipo do bem no início ("apartamento", "terreno", "leilão").
+ * Preposição interna ("de", "dos") fica: "Patos de Minas" e "São José dos
+ * Pinhais" são nomes legítimos.
+ */
+/** Rótulo institucional colado no nome do lugar: "Município de X", "Fórum de X". */
+const RÓTULO_DE_LUGAR = /\b(munic[íi]pio|f[óo]rum|comarca|prefeitura|cart[óo]rio|vara|distrito)\s+(de|do|da|dos|das)\s+/i;
+
+const TIPOS_DE_BEM =
+  /^(leilao|leilão|judicial|extrajudicial|im[óo]vel|imoveis|apartamento|apto|casa|terreno|lote|area|área|sala|loja|galpao|galpão|chacara|chácara|sitio|sítio|fazenda|vaga|predio|prédio|cobertura|duplex|sobrado|kitnet|comercial|residencial|rural|unidade|ha|m2)\b[\s-]*/i;
+
+export function apararCidade(bruto: string): string {
+  let v = bruto.replace(/[\s,;:|]+$/, '').trim();
+  // "Município de Pinhal Grande" -> "Pinhal Grande".
+  const rotulo = [...v.matchAll(new RegExp(RÓTULO_DE_LUGAR.source, 'gi'))].pop();
+  if (rotulo) v = v.slice(rotulo.index! + rotulo[0].length);
+  // A última preposição de lugar marca onde o nome começa.
+  const prep = [...v.matchAll(/\b(?:em|no|na|nos|nas)\s+/gi)].pop();
+  if (prep) v = v.slice(prep.index! + prep[0].length);
+  // Vírgula e barra vertical separam o tipo do bem do lugar.
+  v = v.split(/[,|]/).pop()!.trim();
+  // Palavras de tipo do bem sobrando no começo.
+  let antes: string;
+  do {
+    antes = v;
+    v = v.replace(TIPOS_DE_BEM, '').trim();
+  } while (v !== antes && v);
+  // Nome de município tem no máximo ~5 palavras ("São João del Rei", "Santo
+  // Antônio de Pádua"); mais que isso é texto que escapou das podas.
+  const palavras = v.split(/\s+/).filter(Boolean);
+  return palavras.slice(-5).join(' ');
+}

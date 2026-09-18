@@ -15,6 +15,7 @@ import { fetchText } from './http.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
+import * as campos from '../core/campos.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 /** 1 = Veículos, 2 = Imóveis. Confirmado idêntico em 6 tenants. */
@@ -219,8 +220,10 @@ function mapCard(c: Card, asset: AssetType, host: string, ev: DadosDoLeilao | nu
     auctioneerName: ev?.leiloeiro ?? null,
     currentBid: c.currentBid,
     minBid: c.minBid,
-    city: c.city,
-    state: c.state,
+    // Metade dos lotes não traz o rótulo de local; o título e a URL trazem
+    // ("Vacaria/Rio Grande do Sul: Terreno…").
+    city: c.city ?? campos.localDeTexto(c.titulo)?.city ?? campos.localDeTexto(c.url)?.city ?? null,
+    state: c.state ?? campos.localDeTexto(c.titulo)?.uf ?? campos.localDeTexto(c.url)?.uf ?? null,
     photos: c.foto ? [c.foto] : [],
     photoCount: c.foto ? 1 : 0,
     raw: { tenant: host, statusCard: c.statusBruto, leilao: ev?.codigo ?? null },

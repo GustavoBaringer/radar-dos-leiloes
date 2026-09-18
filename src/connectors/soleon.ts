@@ -218,7 +218,10 @@ export const soleon: Connector = {
             auctioneerName: null,
             sellerName: null,
             sellerType: classifySeller(null) as any,
-            city: cidadeUf?.[1]?.trim() ?? null,
+            // Mesma poda do garimpo genérico: "Município de Vale do Sol" é
+            // rótulo institucional colado no nome, e uma cidade assim não casa
+            // com município nenhum — pior do que não ter extraído.
+            city: cidadeUf ? campos.apararCidade(cidadeUf[1].trim()) || null : null,
             state: cidadeUf?.[2] ?? null,
             yard: local,
             photos: c.foto ? [c.foto] : [],
