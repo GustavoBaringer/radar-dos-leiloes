@@ -34,7 +34,19 @@ export function Busca({
   const [mapaCarregando, setMapaCarregando] = useState(false);
   const seq = useRef(0);
   const seqMapa = useRef(0);
-  const qs = paramsDaBusca(estado);
+  // O texto espera 1s; filtro, ordenação e página continuam imediatos. Sem isto
+  // cada tecla virava uma requisição — "onix" disparava quatro buscas.
+  const [qAdiado, setQAdiado] = useState(estado.q);
+  useEffect(() => {
+    if (estado.q === qAdiado) return;
+    // Limpar o campo e apertar Buscar (que zera a página) não esperam.
+    if (!estado.q || estado.page === 1) {
+      const t = setTimeout(() => setQAdiado(estado.q), estado.q ? 1000 : 0);
+      return () => clearTimeout(t);
+    }
+    setQAdiado(estado.q);
+  }, [estado.q, estado.page, qAdiado]);
+  const qs = useMemo(() => paramsDaBusca({ ...estado, q: qAdiado }), [estado, qAdiado]);
 
   useEffect(() => {
     const meu = ++seq.current;
@@ -323,7 +335,11 @@ export function Busca({
             {/* No celular a lista vive SOBRE o mapa, na folha. No desktop o mapa é a
                 única vista: a grade some, e a faixa leva de volta a ela. */}
             {ehCelular ? (
-              <FolhaMapa gatilho={estado.local} cabecalho={cabecalhoDoPonto}>
+              <FolhaMapa
+                gatilho={estado.local}
+                cabecalho={cabecalhoDoPonto}
+                aoVerGrade={() => aoMudar({ vista: 'grade', page: 1 })}
+              >
                 {conteudo}
               </FolhaMapa>
             ) : (

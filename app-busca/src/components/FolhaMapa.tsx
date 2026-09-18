@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronDown, LayoutGrid } from 'lucide-react';
 
 interface Props {
   /** Cabeçalho fixo da folha: fica visível mesmo na altura mais baixa. */
@@ -6,6 +7,8 @@ interface Props {
   children: ReactNode;
   /** Muda quando o usuário escolhe um ponto — é o gatilho para a folha subir. */
   gatilho: string;
+  /** Troca de visualização, repetida aqui porque a folha cheia cobre a barra. */
+  aoVerGrade: () => void;
 }
 
 /** Espiada, metade e cheia — frações da JANELA, não do mapa. */
@@ -21,7 +24,7 @@ const janela = () => window.visualViewport?.height ?? window.innerHeight;
  * frente. Por isso a folha é presa à JANELA: no topo ela cobre o cabeçalho, que
  * volta assim que se puxa para baixo.
  */
-export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
+export function FolhaMapa({ cabecalho, children, gatilho, aoVerGrade }: Props) {
   const caixa = useRef<HTMLDivElement>(null);
   const rolo = useRef<HTMLDivElement>(null);
   const [nivel, setNivel] = useState(0);
@@ -134,6 +137,18 @@ export function FolhaMapa({ cabecalho, children, gatilho }: Props) {
       >
         <i />
       </div>
+      {/* Cheia, a folha cobre a barra de resultados: sem estes dois o usuário
+          fica sem volta para o mapa e sem troca para a grade. */}
+      {noMaximo && (
+        <div className="folha-saidas">
+          <button type="button" onClick={() => setNivel(0)}>
+            <ChevronDown size={14} aria-hidden /> ver o mapa
+          </button>
+          <button type="button" onClick={aoVerGrade}>
+            <LayoutGrid size={14} aria-hidden /> grade
+          </button>
+        </div>
+      )}
       <div className="folha-cabecalho">{cabecalho}</div>
       <div className="folha-rolo" ref={rolo}>{children}</div>
     </div>

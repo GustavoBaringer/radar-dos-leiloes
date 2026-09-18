@@ -106,6 +106,38 @@ if (card) {
          : falha('7. o toque curto ainda abre o anúncio', 'nada abriu');
 } else falha('7. o toque curto ainda abre o anúncio', 'nenhum card encontrado');
 
+/* 8 — com a folha CHEIA, a alça e as saídas ficam clicáveis (não cobertas) */
+await page.goto(`${API}/busca?vista=mapa`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2600);
+await page.focus('.folha-puxador');
+for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowUp'); await page.waitForTimeout(320); }
+const cobertura = await page.evaluate(() => {
+  const alvo = (sel) => {
+    const e = document.querySelector(sel);
+    if (!e) return { achou: false };
+    const b = e.getBoundingClientRect();
+    const em = document.elementFromPoint(Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2));
+    return { achou: true, proprio: !!em && (e === em || e.contains(em)) , quem: em ? em.tagName + '.' + String(em.className).slice(0, 26) : null };
+  };
+  return { puxador: alvo('.folha-puxador'), verMapa: alvo('.folha-saidas button'), saidas: document.querySelectorAll('.folha-saidas button').length };
+});
+cobertura.puxador.proprio && cobertura.verMapa.proprio && cobertura.saidas === 2
+  ? ok('8. cheia, a alça e as saídas ficam alcançáveis', `${cobertura.saidas} saídas, alça livre`)
+  : falha('8. cheia, a alça e as saídas ficam alcançáveis', JSON.stringify(cobertura));
+
+/* 9 — "ver o mapa" devolve o mapa; "grade" troca de visualização */
+await page.click('.folha-saidas button >> nth=0');
+await page.waitForTimeout(600);
+const baixou = await h();
+baixou < 300 ? ok('9. "ver o mapa" baixa a folha', `${baixou}px`) : falha('9. "ver o mapa" baixa a folha', `${baixou}px`);
+await page.focus('.folha-puxador');
+for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowUp'); await page.waitForTimeout(280); }
+await page.click('.folha-saidas button >> nth=1');
+await page.waitForTimeout(900);
+const virouGrade = await page.evaluate(() => !document.querySelector('.mapa-canvas') && !!document.querySelector('.grade'));
+virouGrade ? ok('9b. "grade" troca a visualização', 'canvas fora, grade dentro')
+           : falha('9b. "grade" troca a visualização', page.url());
+
 await page.screenshot({ path: 'app-busca/shots/folha-gesto.png' });
 await browser.close();
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntodas passaram');

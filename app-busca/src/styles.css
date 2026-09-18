@@ -886,7 +886,10 @@ a { color: inherit; text-decoration: none }
     position: fixed;
     inset: auto 0 0 0;
     top: var(--topo-mapa, 0px);
-    z-index: 30;
+    /* Acima do cabeçalho (50): a folha é FILHA daqui, então o z-index dela é
+       resolvido DENTRO deste contexto — 60 dentro de 30 continua valendo 30, e
+       o campo de busca ficava por cima da alça. */
+    z-index: 55;
   }
   .mapa-area.mapa-cheio .mapa-palco {
     height: 100%;
@@ -958,3 +961,24 @@ a { color: inherit; text-decoration: none }
 .folha-acoes { display: flex; align-items: center; gap: 8px; flex: none; }
 .btn-ver-lotes { padding: 5px 13px; border-radius: 9px; font-size: 12.5px; white-space: nowrap; }
 .folha-cabecalho .folha-acoes .btn-clear { padding: 5px 10px; }
+
+.folha-saidas {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 0 15px 9px;
+}
+.folha-saidas button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--brand-panel-2);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.folha-saidas button:hover { border-color: var(--brand-core); }

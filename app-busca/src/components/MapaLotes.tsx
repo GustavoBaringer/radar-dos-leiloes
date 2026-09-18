@@ -253,6 +253,18 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
   };
 
   const arrast = useRef({ on: false, moveu: false, px: 0, py: 0 });
+  /** Dedos ativos sobre o canvas: com dois, o gesto vira pinça e não arrasto. */
+  const dedos = useRef(new Map<number, { x: number; y: number }>());
+  const pinca = useRef(0);
+
+  const distancia = () => {
+    const [a, b] = [...dedos.current.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  };
+  const meio = (r: DOMRect) => {
+    const [a, b] = [...dedos.current.values()];
+    return { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+  };
 
   return (
     <div className="mapa-palco" ref={palco}>
@@ -262,12 +274,23 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
         tabIndex={0}
         aria-label="Mapa dos lotes por cidade e pátio"
         onPointerDown={(e) => {
-          arrast.current = { on: true, moveu: false, px: e.clientX, py: e.clientY };
+          dedos.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
           e.currentTarget.setPointerCapture(e.pointerId);
+          if (dedos.current.size === 2) { pinca.current = distancia(); arrast.current.on = false; return; }
+          arrast.current = { on: true, moveu: false, px: e.clientX, py: e.clientY };
         }}
         onPointerMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           const mx = e.clientX - r.left, my = e.clientY - r.top;
+          if (dedos.current.has(e.pointerId)) dedos.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (dedos.current.size === 2 && pinca.current) {
+            const d = distancia(), c = meio(r);
+            zoom(c.x, c.y, d / pinca.current);
+            pinca.current = d;
+            arrast.current.moveu = true;
+            setDica(null);
+            return;
+          }
           const a = arrast.current;
           if (a.on) {
             const dx = e.clientX - a.px, dy = e.clientY - a.py;
@@ -289,6 +312,11 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
           });
         }}
         onPointerUp={(e) => {
+          const eram = dedos.current.size;
+          dedos.current.delete(e.pointerId);
+          if (dedos.current.size < 2) pinca.current = 0;
+          // Soltar um dedo da pinça não pode virar clique nem retomar o arrasto.
+          if (eram > 1) { arrast.current.on = false; return; }
           const a = arrast.current;
           if (!a.on) return;
           a.on = false;
@@ -303,6 +331,7 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
           if (g.itens.length > 1 && espalhados(g.itens)) { zoom(g.x, g.y, 1.9); return; }
           aoEscolherLocal(k === local ? '' : k);
         }}
+        onPointerCancel={(e) => { dedos.current.delete(e.pointerId); pinca.current = 0; arrast.current.on = false; }}
         onPointerLeave={() => setDica(null)}
         onWheel={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
