@@ -52,6 +52,9 @@ const UFS = new Set([
   'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ]);
 
+/** A sigla é uma UF de verdade? Usado por conector que garimpa "Cidade - UF" em texto livre. */
+export const ehUf = (v: string) => UFS.has(v.toUpperCase());
+
 export function uf(v?: string | null): string | null {
   const t = texto(v)?.toUpperCase();
   if (!t) return null;

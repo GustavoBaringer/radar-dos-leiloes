@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import { fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
+import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 
@@ -160,9 +161,34 @@ export const soleon: Connector = {
           // então recorta um trecho e procura "Cidade - UF" ou "Cidade/UF" dentro dele.
           const posLocal = corpo.search(/Local de Exposi[çc][ãa]o/i);
           const janela = posLocal >= 0 ? corpo.slice(posLocal, posLocal + 200) : '';
-          const local = janela.replace(/^Local de Exposi[çc][ãa]o\s*:?\s*/i, '').split(/\s{2,}|Descri[çc]|Processo/)[0]?.trim() || null;
-          // Dois formatos no mesmo campo: "Caçapava - SP" e "… Bairro X - Cidade - MG".
-          const cidadeUf = janela.match(/([A-Za-zÀ-ú][A-Za-zÀ-ú\s.']{2,40}?)\s*[\/-]\s*([A-Z]{2})\b/);
+          /**
+           * O texto da janela vem colado com rótulo da interface do leiloeiro:
+           * "…Capão Bonito - SP Aguarde Abertura Lance Inicial R$270,00 Detalhes
+           * do Lote". Sem cortar isso, o pátio guarda a tela inteira — 2.210 dos
+           * 2.434 lotes estavam assim.
+           */
+          const CORTE_UI = /\s*(Aguarde|Aberto para|Encerrad|Lance Inicial|Maior Lance|Detalhes do Lote|Acompanhe ao Vivo)/i;
+          const local =
+            janela
+              .replace(/^Local de Exposi[çc][ãa]o\s*:?\s*/i, '')
+              .split(/\s{2,}|Descri[çc]|Processo/)[0]
+              ?.split(CORTE_UI)[0]
+              ?.trim() || null;
+
+          /**
+           * A cidade é a que está colada numa UF VÁLIDA, e vale o ÚLTIMO par —
+           * não o primeiro.
+           *
+           * MEDIDO: "PÁTIO CHARLES SAFADI - AV. CAPITÃO CALISXTO DE ALMEIDA -
+           * Capão Bonito - SP". O regex antigo pegava o primeiro "X - YY" e as
+           * duas maiúsculas de "AV" passavam por sigla, então 63 lotes ficaram
+           * com "Pátio Charles Safadi" de cidade e UF vazia (campos.uf recusou
+           * "AV", mas a cidade errada já tinha sido gravada). O endereço termina
+           * em cidade e UF, então o último par é o certo.
+           */
+          const cidadeUf = [...janela.matchAll(/([A-Za-zÀ-ú][A-Za-zÀ-ú\s.']{2,40}?)\s*[\/-]\s*([A-Z]{2})\b/g)]
+            .filter((m) => campos.ehUf(m[2]))
+            .pop();
           const km = Number(corpo.match(/\bKM\s*:?\s*([\d.]+)/i)?.[1]?.replace(/\./g, '')) || null;
           const maiorLance = /maior\s+lance/i.test(c.rotuloValor ?? '');
 

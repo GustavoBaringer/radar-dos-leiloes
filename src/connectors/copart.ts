@@ -53,7 +53,20 @@ function mapLot(c: any): CanonicalLot | null {
   const start = parseUtc(c.ad);
   const yard = c.yn ?? null;
   const uf = typeof yard === 'string' && / - ([A-Z]{2})$/.test(yard) ? yard.match(/ - ([A-Z]{2})$/)![1] : null;
-  const city = typeof yard === 'string' ? yard.replace(/ - [A-Z]{2}$/, '').trim() : null;
+  /**
+   * O pátio da Copart quase sempre É o nome da cidade ("CURITIBA - PR"), e é daí
+   * que a cidade sai. Mas um deles é nome de pátio, não de município:
+   * "LEILÃO PÁTIO PORTO SEGURO - SP" virava uma cidade chamada "Leilão Pátio
+   * Porto Seguro" em 95 lotes — e "Porto Seguro" ali é a seguradora, não o
+   * município da Bahia (a UF diz SP).
+   *
+   * O payload não traz outro campo de cidade (só `saleYard`), então a cidade é
+   * genuinamente desconhecida. Fica NULA, com a UF preservada: lote com só UF é
+   * honesto; lote numa cidade que não existe polui a faceta e o mapa.
+   */
+  const NOME_DE_PATIO = /^\s*(leil[ãa]o|p[áa]tio|dep[óo]sito|garagem|estacionamento)\b/i;
+  const semUf = typeof yard === 'string' ? yard.replace(/ - [A-Z]{2}$/, '').trim() : null;
+  const city = semUf && !NOME_DE_PATIO.test(semUf) ? semUf : null;
   const km = Number(c.orr) > 0 ? Number(c.orr) : null;
 
   return {
