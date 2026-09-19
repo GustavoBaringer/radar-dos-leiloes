@@ -85,6 +85,40 @@ await page.waitForTimeout(450);
 reqs.length >= 1 ? ok('5. filtro continua imediato', `${reqs.length} requisição em 450ms`)
                  : falha('5. filtro continua imediato', `${reqs.length}`);
 
+/* 6 — a roda sozinha NÃO aproxima: rola a página e explica o atalho */
+await page.goto(`${API}/busca?vista=mapa`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2600);
+const zoomEsc = () => page.evaluate(() => { const m = /([\d.,]+)×/.exec(document.querySelector('.mapa-escala')?.textContent ?? ''); return m ? Number(m[1].replace(',', '.')) : null; });
+const cv2 = await page.locator('.mapa-canvas').boundingBox();
+await page.mouse.move(cv2.x + cv2.width / 2, cv2.y + cv2.height / 2);
+const zA = await zoomEsc();
+await page.mouse.wheel(0, -400);
+await page.waitForTimeout(450);
+const zB = await zoomEsc();
+const temAviso = await page.evaluate(() => !!document.querySelector('.mapa-aviso-roda'));
+zB === zA && temAviso
+  ? ok('6. roda sozinha não aproxima', `zoom ${zA}× mantido, aviso do atalho na tela`)
+  : falha('6. roda sozinha não aproxima', `zoom ${zA} -> ${zB}, aviso=${temAviso}`);
+
+/* 7 — Ctrl + roda aproxima e a página fica parada */
+await page.evaluate(() => scrollTo(0, 0));
+await page.waitForTimeout(300);
+const sA = await page.evaluate(() => Math.round(scrollY));
+const zC = await zoomEsc();
+await page.keyboard.down('Control');
+await page.mouse.wheel(0, -400);
+await page.keyboard.up('Control');
+await page.waitForTimeout(450);
+const zD = await zoomEsc(), sB = await page.evaluate(() => Math.round(scrollY));
+zD > zC && sB === sA
+  ? ok('7. Ctrl + roda aproxima sem rolar a página', `zoom ${zC}× -> ${zD}×, scrollY ${sB}`)
+  : falha('7. Ctrl + roda aproxima sem rolar a página', `zoom ${zC}->${zD}, scrollY ${sA}->${sB}`);
+
+/* 8 — o aviso some sozinho, senão viraria um véu permanente */
+await page.waitForTimeout(2500);
+const sumiu = await page.evaluate(() => !document.querySelector('.mapa-aviso-roda'));
+sumiu ? ok('8. o aviso some sozinho', 'após ~2s') : falha('8. o aviso some sozinho', 'continua na tela');
+
 await browser.close();
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntodas passaram');
 process.exit(falhas ? 1 : 0);

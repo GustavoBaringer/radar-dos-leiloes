@@ -38,6 +38,8 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
   const [malhaPronta, setMalhaPronta] = useState(!!malhaUf);
   const [dica, setDica] = useState<{ x: number; y: number; html: string } | null>(null);
   const [status, setStatus] = useState('');
+  const [aviso, setAviso] = useState(false);
+  const avisoTimer = useRef(0);
 
   useEffect(() => {
     if (malhaUf) return;
@@ -231,6 +233,32 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
     desenha();
   }, [desenha]);
 
+  /**
+   * A roda só aproxima com Ctrl/⌘ — sem isso a página rolava E o mapa dava
+   * zoom no mesmo gesto. Precisa ser listener NATIVO: o `onWheel` do React é
+   * passivo, e ali o preventDefault é ignorado em silêncio.
+   */
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+    const naRoda = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) {
+        // Trackpad de Mac manda ctrlKey no gesto de pinça, então isto é só a
+        // roda mesmo: deixa a página rolar e explica o atalho uma vez.
+        setAviso(true);
+        clearTimeout(avisoTimer.current);
+        avisoTimer.current = window.setTimeout(() => setAviso(false), 2200);
+        return;
+      }
+      e.preventDefault();
+      setAviso(false);
+      const r = cv.getBoundingClientRect();
+      zoom(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.22 : 1 / 1.22);
+    };
+    cv.addEventListener('wheel', naRoda, { passive: false });
+    return () => cv.removeEventListener('wheel', naRoda);
+  }, [zoom]);
+
   const acha = (mx: number, my: number) => {
     let melhor = null as (typeof grupos.current)[number] | null;
     let dmin = 1e9;
@@ -334,10 +362,6 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
         }}
         onPointerCancel={(e) => { dedos.current.delete(e.pointerId); pinca.current = 0; arrast.current.on = false; }}
         onPointerLeave={() => setDica(null)}
-        onWheel={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          zoom(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.22 : 1 / 1.22);
-        }}
         onKeyDown={(e) => {
           const v = vista.current, p = 60;
           if (e.key === 'ArrowLeft') v.x += p;
@@ -370,6 +394,11 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
         <div className="mapa-fora">
           <b className="mono">{fmt.format(dados.semLocalizacao)}</b> sem localização
           <span>{fmt.format(dados.soCidade)} só com o nome da cidade · {fmt.format(dados.semNada)} sem nada</span>
+        </div>
+      )}
+      {aviso && (
+        <div className="mapa-aviso-roda" role="status">
+          Use <kbd>Ctrl</kbd> + roda para aproximar
         </div>
       )}
       {!malhaPronta && <div className="mapa-carregando">carregando o mapa…</div>}
