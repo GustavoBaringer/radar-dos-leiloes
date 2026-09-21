@@ -442,3 +442,15 @@ export function nomeDeLeiloeiro(v: unknown): string | null {
   if (/^(leiloeir[ao]|comiss|cadastrad|lance|lote|edital|aguarde)(\s+(oficial|p[úu]blic[oa]))*$/i.test(nome)) return null;
   return nome;
 }
+
+/**
+ * Porcentagem de comissão. A coluna é numeric(6,3): acima de 999,999 a linha
+ * estoura e derruba a GRAVAÇÃO INTEIRA do lote — um anúncio com 5000% parou
+ * 1.364 lotes do suaplataforma. Acima de 100 também não é comissão: é outra
+ * unidade no campo errado, e nulo é mais honesto que um número inventado.
+ */
+export function porcentagem(v?: number | null): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null;
+}

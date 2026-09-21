@@ -89,6 +89,7 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
         yard: campos.texto(l.yard),
         sellerName: campos.texto(l.sellerName),
         auctioneerName: campos.texto(l.auctioneerName),
+        feesPct: campos.porcentagem(l.feesPct),
         photos: campos.fotos(l.photos),
       };
       // O que não é documentação era categoria mandada no campo errado: em vez
@@ -164,7 +165,7 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
           n.fuel, plateMasked, n.docType, l.closingModel,
           l.auctionStartUtc ?? null, l.auctionEndUtc ?? null, l.sourceTz, l.status,
           n.currentBid, n.minBid, n.bidIncrement, n.appraisal,
-          l.feesPct ?? null, l.feesAmount ?? null, n.auctioneerName, l.auctioneerReg ?? null,
+          n.feesPct, l.feesAmount ?? null, n.auctioneerName, l.auctioneerReg ?? null,
           n.sellerName, l.sellerType ?? null, n.yard, n.city, n.state,
           l.lat ?? null, l.lon ?? null, JSON.stringify(n.photos), n.photos.length,
           l.financeable ?? null, l.hasReport ?? null, JSON.stringify(l.raw ?? {}), searchText, bidSuspect,
