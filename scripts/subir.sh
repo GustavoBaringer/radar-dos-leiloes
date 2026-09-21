@@ -149,8 +149,17 @@ if [ "$falhou" = 1 ]; then
   echo "  $URL"
   exit 1
 fi
-printf '\033[1m  %s\033[0m\n' "$URL"
 echo "$URL" > /tmp/radar-url.txt
+if [ "${DNS_OK:-}" = "publico" ]; then
+  # Quem roda o script é quem MAIS tropeça nisto: o túnel responde, mas o
+  # navegador desta máquina não resolve o nome. Dizer só "no ar" é enganoso.
+  printf '\033[1m  neste PC:\033[0m  %s\n' "$LOCAL"
+  printf '\033[1m  celular / outra pessoa:\033[0m  %s\n' "$URL"
+  echo "  (a URL do túnel NÃO abre neste PC: o DNS daqui não resolve *.trycloudflare.com)"
+else
+  printf '\033[1m  %s\033[0m\n' "$URL"
+  echo "  local: $LOCAL"
+fi
 echo
-echo "  local: $LOCAL   ·   logs: /tmp/leilao-server.log /tmp/leilao-worker.log $LOG"
+echo "  logs: /tmp/leilao-server.log /tmp/leilao-worker.log $LOG"
 echo "  derrubar o túnel: pgrep -x cloudflared | xargs -r kill"
