@@ -15,7 +15,7 @@ setsid cloudflared tunnel --no-autoupdate --url "http://localhost:$PORTA" > "$LO
 
 echo "aguardando a URL..."
 for _ in $(seq 1 40); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" | head -1 || true)
+  URL=$(grep -aoE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)
   [ -n "$URL" ] && break
   sleep 1
 done
