@@ -301,27 +301,23 @@ async function agendar(
   }
 }
 
-// Agenda: coleta completa a cada 6h por fonte, refresh de lote quente a cada 2 min.
-// UMA chamada só: `agendar` apaga do Redis qualquer id que não apareça na lista
-// desta vez — duas chamadas ao mesmo `collectQueue` se apagariam uma à outra
-// (foi o que aconteceu ao testar: sobrou só o superbid, os outros 11 sumiram).
-await agendar(collectQueue, [
-  ...connectors.filter((c) => !FORA_DO_REFRESH.has(c.def.id)).map((c) => ({
-    id: `collect-${c.def.id}`,
-    nome: `collect:${c.def.id}`,
-    pattern: '17 */6 * * *',
-    // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
-    // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
-    // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
-    // caras por lote e continuam com teto menor.
-    data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
-    manter: 20,
-  })),
-  // MEDIDO em 22/09: leilões abrem concentrados às 9h (4.030 lotes) e às 14h
-  // (2.734), por `auction_start_utc` — o processo roda em America/Sao_Paulo
-  // (`timedatectl` confere), então o padrão abaixo já é hora local.
-  { id: 'collect-superbid', nome: 'collect:superbid', pattern: '0 7,13 * * *', data: { sourceId: 'superbid', limit: 15000 }, manter: 20 },
-]);
+// Agenda: coleta completa 2x/dia por fonte, refresh de lote quente a cada 2 min.
+// MEDIDO em 22/09: leilões abrem concentrados às 9h (4.030 lotes) e às 14h
+// (2.734), por `auction_start_utc` — o processo roda em America/Sao_Paulo
+// (`timedatectl` confere), então o padrão abaixo já é hora local. Vale pra
+// todas as fontes, não só o superbid: era a assimetria original, e o pedido
+// foi uniformizar.
+await agendar(collectQueue, connectors.map((c) => ({
+  id: `collect-${c.def.id}`,
+  nome: `collect:${c.def.id}`,
+  pattern: '0 7,13 * * *',
+  // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
+  // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
+  // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
+  // caras por lote e continuam com teto menor.
+  data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
+  manter: 20,
+})));
 
 await agendar(refreshQueue, [
   { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },
