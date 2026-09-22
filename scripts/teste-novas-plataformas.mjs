@@ -23,6 +23,7 @@ import { leiloesbr } from '../src/connectors/leiloesbr.ts';
 import { leilotech } from '../src/connectors/leilotech.ts';
 import { bomvalormercado } from '../src/connectors/bomvalormercado.ts';
 import { sishp } from '../src/connectors/sishp.ts';
+import { leilovia } from '../src/connectors/leilovia.ts';
 
 let falhas = 0;
 const ok = (t, d = '') => console.log(`  OK    ${t}${d ? ` — ${d}` : ''}`);
@@ -51,11 +52,14 @@ const rLeiloesbr = await checa('leiloesbr', leiloesbr, 40);
 const rLeilotech = await checa('leilotech', leilotech, 20);
 const rBomvalorMercado = await checa('bomvalormercado', bomvalormercado, 40);
 const rSishp = await checa('sishp', sishp, 40);
+const rLeilovia = await checa('leilovia', leilovia, 100);
 
-// DISCRIMINA: mais de um status entre os cinco juntos — um conector que
+// DISCRIMINA: mais de um status entre os seis juntos — um conector que
 // grava tudo como 'aberto' passaria pelo checa() acima sem provar que ele LÊ status.
 const statusVistos = new Set(
-  [...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots, ...rBomvalorMercado.lots, ...rSishp.lots].map((l) => l.status),
+  [...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots, ...rBomvalorMercado.lots, ...rSishp.lots, ...rLeilovia.lots].map(
+    (l) => l.status,
+  ),
 );
 statusVistos.size >= 2
   ? ok('discrimina status (não é tudo aberto por padrão)', [...statusVistos].join(','))
