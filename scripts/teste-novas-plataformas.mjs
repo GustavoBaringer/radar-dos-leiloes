@@ -1,20 +1,25 @@
 /**
- * Três conectores novos (leiloar, leiloesbr, leilotech), achados na medição
- * de cobertura de leiloeiro de 22/09: 5 plataformas SaaS tinham lote real e
- * nenhum conector. Este portão prova EFEITO contra a rede real — não que o
- * arquivo existe, que os 3 trazem lote de verdade, com cidade/status/preço,
- * não uma página de erro disfarçada de sucesso (mesma discriminação do
+ * Conectores novos achados na medição de cobertura de leiloeiro de 22/09.
+ * Este portão prova EFEITO contra a rede real — não que o arquivo existe,
+ * que cada um traz lote de verdade, com cidade/status/preço, não uma página
+ * de erro disfarçada de sucesso (mesma discriminação do
  * teste-navegador-waf.mjs para superbid/caixa).
  *
- * sishp (8 domínios) e vip-leiloes (1) ficaram de fora: sishp exige sessão +
- * token por-requisição (action=0/1 com `mid` assinado) que curl puro não
- * resolve; vip-leiloes é ou revenda do bomvalor (kronbergleiloes, já coberto)
- * ou um portal com redirect infinito (vipleiloes.com.br) — sem catálogo
- * público nenhum dos dois.
+ * kronleiloes.com.br (indicado pelo usuário) ficou de fora de propósito: é o
+ * MESMO catálogo do superbid (offer-query.superbid.net, stores.id:16180,
+ * confirmado — 586 lotes com raw.store="KRON LEILÕES" já no banco). Um
+ * conector separado duplicaria, não somaria.
+ *
+ * sishp (8 domínios) e vip-leiloes (1, mesmo com a URL de busca que o usuário
+ * indicou — /pesquisa/index redireciona pro mesmo /canal em loop) seguem de
+ * fora: sishp exige sessão + token por-requisição (action=0/1 com `mid`
+ * assinado) que curl puro não resolve; vip-leiloes é portal logado, sem
+ * catálogo público.
  */
 import { leiloar } from '../src/connectors/leiloar.ts';
 import { leiloesbr } from '../src/connectors/leiloesbr.ts';
 import { leilotech } from '../src/connectors/leilotech.ts';
+import { bomvalormercado } from '../src/connectors/bomvalormercado.ts';
 
 let falhas = 0;
 const ok = (t, d = '') => console.log(`  OK    ${t}${d ? ` — ${d}` : ''}`);
@@ -41,10 +46,13 @@ async function checa(nome, conector, limite) {
 const rLeiloar = await checa('leiloar', leiloar, 40);
 const rLeiloesbr = await checa('leiloesbr', leiloesbr, 40);
 const rLeilotech = await checa('leilotech', leilotech, 20);
+const rBomvalorMercado = await checa('bomvalormercado', bomvalormercado, 40);
 
-// DISCRIMINA: mais de um status entre os três juntos — um conector que grava
-// tudo como 'aberto' passaria pelo checa() acima sem provar que ele LÊ status.
-const statusVistos = new Set([...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots].map((l) => l.status));
+// DISCRIMINA: mais de um status entre os quatro juntos — um conector que
+// grava tudo como 'aberto' passaria pelo checa() acima sem provar que ele LÊ status.
+const statusVistos = new Set(
+  [...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots, ...rBomvalorMercado.lots].map((l) => l.status),
+);
 statusVistos.size >= 2
   ? ok('discrimina status (não é tudo aberto por padrão)', [...statusVistos].join(','))
   : falha('discrimina status (não é tudo aberto por padrão)', [...statusVistos].join(','));
