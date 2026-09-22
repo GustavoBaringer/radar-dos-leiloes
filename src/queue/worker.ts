@@ -301,16 +301,15 @@ async function agendar(
   }
 }
 
-// Agenda: coleta completa 2x/dia por fonte, refresh de lote quente a cada 2 min.
-// MEDIDO em 22/09: leilões abrem concentrados às 9h (4.030 lotes) e às 14h
-// (2.734), por `auction_start_utc` — o processo roda em America/Sao_Paulo
-// (`timedatectl` confere), então o padrão abaixo já é hora local. Vale pra
-// todas as fontes, não só o superbid: era a assimetria original, e o pedido
-// foi uniformizar.
+// Agenda: coleta completa 3x/dia por fonte, refresh de lote quente a cada 2 min.
+// MEDIDO em 22/09 (auction_start_utc, BRT): picos às 9h-10h, 14h e 17h-18h. Sem
+// o 3º horário, a lacuna 13h→07h (18h) carregava 49% do catálogo, incluindo 701
+// lotes `pregao_em_horario` — fecham na própria abertura, e um publicado depois
+// das 13h só apareceria às 07h já encerrado.
 await agendar(collectQueue, connectors.map((c) => ({
   id: `collect-${c.def.id}`,
   nome: `collect:${c.def.id}`,
-  pattern: '0 7,13 * * *',
+  pattern: '0 7,13,18 * * *',
   // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
   // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
   // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
