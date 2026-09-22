@@ -17,8 +17,9 @@ import { leilotech } from './leilotech.js';
 import { bomvalormercado } from './bomvalormercado.js';
 import { sishp } from './sishp.js';
 import { leilovia } from './leilovia.js';
+import { megaleiloes, grupolance } from './megaleiloes.js';
 
-export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor, leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia];
+export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor, leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance];
 
 export function getConnector(id: string): Connector | undefined {
   return connectors.find((c) => c.def.id === id);
