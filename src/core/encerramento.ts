@@ -154,7 +154,11 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
              OR (l.status = 'sem_data' AND l.auction_start_utc < now() - interval '24 hours'))
         -- Recuo: quem a origem já disse vivo espera; quem não deu para decidir
         -- espera mais a cada tentativa frustrada, até parar de ser reconsultado.
+        -- "EM LOTEAMENTO" foge da regra padrão: achado em 22/09, leilão 8069 da
+        -- freitas — 37 lotes renumerados de uma vez ficaram 6h com link morto
+        -- porque esse veredito é sabidamente instável, não "vivo e estável".
         AND (l.verified_at IS NULL
+             OR (l.verify_result = 'EM LOTEAMENTO' AND l.verified_at < now() - interval '1 hour')
              OR l.verified_at < now() - (interval '6 hours' * GREATEST(1, l.verify_fails)))
       ORDER BY l.verified_at NULLS FIRST, random()
       LIMIT $3`,

@@ -11,6 +11,10 @@
  * "ausente" — e a elegibilidade em verificarCandidatos() dependia disso.
  * Corrigido em encerramento.ts: sem_data com auction_start_utc velho também entra.
  *
+ * Terceiro, mesmo dia (786098): "EM LOTEAMENTO" tinha o recuo de 6h de um
+ * veredito estável — leilão inteiro renumerado, 37 lotes de link morto ao
+ * mesmo tempo. Corrigido: esse veredito específico reconsulta em 1h.
+ *
  * A asserção que importa é a 3: um verificador que fecha tudo passaria nas
  * outras duas sem verificar nada.
  */
@@ -85,6 +89,29 @@ const [status2, razao2] = (
 status2 === 'encerrado' && razao2 === 'verificado_na_fonte'
   ? ok('5. lote sempre presente na varredura (VENDA CONJUNTA) está encerrado')
   : falha('5. lote sempre presente na varredura (VENDA CONJUNTA) está encerrado', `status=${status2} razao=${razao2}`);
+
+/* 6 — 786098: leilão 8069 renumerado (615 virou 318 no site). O veredito
+      "EM LOTEAMENTO" tinha o mesmo recuo de 6h de um lote 'aberto' estável —
+      37 lotes do mesmo leilão ficaram de link morto ao mesmo tempo por isso.
+      Achado pelo usuário em 22/09. */
+const [status3, razao3] = (
+  sql(`select status||'|'||coalesce(closed_reason,'-') from lots where id=786098`) || '|'
+).split('|');
+status3 === 'encerrado' && razao3 === 'verificado_na_fonte'
+  ? ok('6. lote de leilão renumerado (EM LOTEAMENTO) está encerrado')
+  : falha('6. lote de leilão renumerado (EM LOTEAMENTO) está encerrado', `status=${status3} razao=${razao3}`);
+
+/* 7 — nenhum lote com "EM LOTEAMENTO" fica preso além de 1h sem reconsulta —
+      é o recuo curto que a asserção 6 depende de existir de verdade. */
+const presosLoteamento = Number(
+  sql(`select count(*) from lots
+        where source_id='freitas' and verify_result='EM LOTEAMENTO'
+          and status not in ('encerrado','vendido')
+          and verified_at < now() - interval '2 hours'`),
+);
+presosLoteamento === 0
+  ? ok('7. nenhum "EM LOTEAMENTO" preso além do recuo curto')
+  : falha('7. nenhum "EM LOTEAMENTO" preso além do recuo curto', `${presosLoteamento} lotes`);
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntodas passaram');
 process.exit(falhas ? 1 : 0);
