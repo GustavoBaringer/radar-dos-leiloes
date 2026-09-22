@@ -10,16 +10,19 @@
  * confirmado — 586 lotes com raw.store="KRON LEILÕES" já no banco). Um
  * conector separado duplicaria, não somaria.
  *
- * sishp (8 domínios) e vip-leiloes (1, mesmo com a URL de busca que o usuário
- * indicou — /pesquisa/index redireciona pro mesmo /canal em loop) seguem de
- * fora: sishp exige sessão + token por-requisição (action=0/1 com `mid`
- * assinado) que curl puro não resolve; vip-leiloes é portal logado, sem
- * catálogo público.
+ * sishp entrou depois: o `mid` "assinado" era só um campo obrigatório não
+ * vazio (`mid=x` passa), mas essa rota só dá contagem por categoria — a
+ * lista real é HTML comum sem POST nenhum.
+ *
+ * vip-leiloes (1, mesmo com a URL de busca que o usuário indicou —
+ * /pesquisa/index redireciona pro mesmo /canal em loop) segue de fora: é
+ * portal logado, sem catálogo público.
  */
 import { leiloar } from '../src/connectors/leiloar.ts';
 import { leiloesbr } from '../src/connectors/leiloesbr.ts';
 import { leilotech } from '../src/connectors/leilotech.ts';
 import { bomvalormercado } from '../src/connectors/bomvalormercado.ts';
+import { sishp } from '../src/connectors/sishp.ts';
 
 let falhas = 0;
 const ok = (t, d = '') => console.log(`  OK    ${t}${d ? ` — ${d}` : ''}`);
@@ -47,15 +50,24 @@ const rLeiloar = await checa('leiloar', leiloar, 40);
 const rLeiloesbr = await checa('leiloesbr', leiloesbr, 40);
 const rLeilotech = await checa('leilotech', leilotech, 20);
 const rBomvalorMercado = await checa('bomvalormercado', bomvalormercado, 40);
+const rSishp = await checa('sishp', sishp, 40);
 
-// DISCRIMINA: mais de um status entre os quatro juntos — um conector que
+// DISCRIMINA: mais de um status entre os cinco juntos — um conector que
 // grava tudo como 'aberto' passaria pelo checa() acima sem provar que ele LÊ status.
 const statusVistos = new Set(
-  [...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots, ...rBomvalorMercado.lots].map((l) => l.status),
+  [...rLeiloar.lots, ...rLeiloesbr.lots, ...rLeilotech.lots, ...rBomvalorMercado.lots, ...rSishp.lots].map((l) => l.status),
 );
 statusVistos.size >= 2
   ? ok('discrimina status (não é tudo aberto por padrão)', [...statusVistos].join(','))
   : falha('discrimina status (não é tudo aberto por padrão)', [...statusVistos].join(','));
+
+// sishp compartilha id entre os 8 domínios (idLeilao=470 responde igual em
+// qualquer host) — sem dedupe global por idLote, o mesmo lote visto em dois
+// tenants viraria dois registros. Esta é a garantia que protege contra isso.
+const idsSishp = rSishp.lots.map((l) => l.externalId);
+new Set(idsSishp).size === idsSishp.length
+  ? ok('sishp não duplica lote visto em mais de um host da rede', `${idsSishp.length} lotes, todos únicos`)
+  : falha('sishp não duplica lote visto em mais de um host da rede', `${idsSishp.length} lotes, ${new Set(idsSishp).size} únicos`);
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntodas passaram');
 process.exit(falhas ? 1 : 0);
