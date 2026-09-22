@@ -6,6 +6,7 @@ import { processarAposColeta } from '../core/pos-coleta.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
+import { consultaFreio } from '../core/freio.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -13,7 +14,14 @@ import {
 
 const publisher = makeRedis();
 
+/** Freio ANTES da rede: sem isto, cada chamador teria que consultar por
+ * conta própria e um deles esqueceria (ver [[freio]]). */
 async function runCollect(sourceId: string, limit: number) {
+  const freio = await consultaFreio(sourceId);
+  if (!freio.permite) {
+    console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
+    return { fetched: 0, upserted: 0, skipped: 0, freado: true };
+  }
   // startRun ANTES de validar a fonte: com o throw primeiro, um sourceId
   // errado não gerava linha nenhuma em collection_runs e sumia da tela.
   const runId = await startRun(sourceId, 'collect', limit);
@@ -83,6 +91,14 @@ const DESCANSO_PREGAO_MIN = 5;
  * Para o pregão o que discrimina é a ABERTURA, não o fim, porque a fonte não
  * publica fim por lote.
  */
+/**
+ * Fontes com agenda fixa (ver `agendar(collectQueue, ...)` mais abaixo) ficam
+ * de fora do refresh quente. Sem isto o ramo `timer_por_lote` — sem nenhum
+ * descanso — bate a cada 2 min em QUALQUER fonte com lote fechando na
+ * próxima hora, e é o que produziu as 1.218 coletas/7d do superbid.
+ */
+const FORA_DO_REFRESH = new Set(['superbid']);
+
 async function runRefresh() {
   const quentes = new Map<string, number>();
 
@@ -93,7 +109,7 @@ async function runRefresh() {
      WHERE closing_model = 'timer_por_lote'
        AND auction_end_utc IS NOT NULL
        AND auction_end_utc BETWEEN now() AND now() + interval '1 hour'`)) {
-    quentes.set(row.source_id, 120);
+    if (!FORA_DO_REFRESH.has(row.source_id)) quentes.set(row.source_id, 120);
   }
 
   /**
@@ -286,9 +302,11 @@ async function agendar(
 }
 
 // Agenda: coleta completa a cada 6h por fonte, refresh de lote quente a cada 2 min.
-await agendar(
-  collectQueue,
-  connectors.map((c) => ({
+// UMA chamada só: `agendar` apaga do Redis qualquer id que não apareça na lista
+// desta vez — duas chamadas ao mesmo `collectQueue` se apagariam uma à outra
+// (foi o que aconteceu ao testar: sobrou só o superbid, os outros 11 sumiram).
+await agendar(collectQueue, [
+  ...connectors.filter((c) => !FORA_DO_REFRESH.has(c.def.id)).map((c) => ({
     id: `collect-${c.def.id}`,
     nome: `collect:${c.def.id}`,
     pattern: '17 */6 * * *',
@@ -299,7 +317,11 @@ await agendar(
     data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
     manter: 20,
   })),
-);
+  // MEDIDO em 22/09: leilões abrem concentrados às 9h (4.030 lotes) e às 14h
+  // (2.734), por `auction_start_utc` — o processo roda em America/Sao_Paulo
+  // (`timedatectl` confere), então o padrão abaixo já é hora local.
+  { id: 'collect-superbid', nome: 'collect:superbid', pattern: '0 7,13 * * *', data: { sourceId: 'superbid', limit: 15000 }, manter: 20 },
+]);
 
 await agendar(refreshQueue, [
   { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },

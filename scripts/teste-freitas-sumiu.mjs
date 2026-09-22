@@ -41,8 +41,14 @@ status === 'encerrado' && razao === 'verificado_na_fonte'
       Sem os três vereditos diferentes na mesma chamada, o teste não prova nada. */
 const casos = [
   ['8048-604', 'sumiu'],
-  ['8028-029', 'aberto'],
+  // 8028-029 (fixture antiga) vendeu entre uma rodada e outra deste teste —
+  // droga do teste com "casos reais": o lote muda de estado sob nossos pés.
+  // 8064-307 fecha bem depois de hoje (22/09), então segue aberto por um tempo.
+  ['8064-307', 'aberto'],
   ['8046-141', 'encerrado'],
+  // 73709: "SEM LICITANTES" (recebeLance:false) não batia em nenhuma palavra
+  // da lista e ficava indeterminado para sempre — 4 tentativas, mesmo veredito.
+  ['8047-331', 'encerrado'],
 ];
 const r = await VERIFICADORES.freitas.verificar(
   'www.freitasleiloeiro.com.br',

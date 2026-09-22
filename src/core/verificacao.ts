@@ -37,21 +37,21 @@ export interface Verificador {
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 
 /**
- * A página anuncia alguma praça com data no FUTURO?
+ * Todas as datas de praça anunciadas na página, mais recente primeiro.
  *
- * É o que separa "lote sem lance e acabou" de "lote sem lance na 1ª praça que
- * reabre na 2ª". Leilão judicial no Brasil tem duas praças por lei (CPC 891),
- * e a segunda usa a mesma URL e o mesmo id.
+ * Separa "lote sem lance e acabou" de "lote sem lance na 1ª praça que reabre
+ * na 2ª" — leilão judicial no Brasil tem duas praças por lei (CPC 891), e a
+ * segunda usa a mesma URL e o mesmo id.
  */
-function praçaFutura(html: string): boolean {
-  const agora = Date.now();
+function pracas(html: string): number[] {
+  const t: number[] = [];
   for (const m of html.matchAll(/Data\s+\d?[ºo]?\s*Leil[ãa]o:?\s*<\/strong>?\s*(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/gi)) {
     const [, d, mes, a, h = '23', min = '59'] = m;
     // Horário de Brasília (UTC-3) — a página publica local, sem fuso.
-    const t = Date.parse(`${a}-${mes}-${d}T${h}:${min}:00-03:00`);
-    if (Number.isFinite(t) && t > agora) return true;
+    const ts = Date.parse(`${a}-${mes}-${d}T${h}:${min}:00-03:00`);
+    if (Number.isFinite(ts)) t.push(ts);
   }
-  return false;
+  return t.sort((a, b) => b - a);
 }
 
 /**
@@ -112,13 +112,17 @@ const soleon: Verificador = {
           // judicial de duas praças (CPC art. 891) — a 1ª praça não teve lance,
           // e o MESMO lote, na MESMA URL, reabre na 2ª com lance mínimo de 50%.
           // Fechá-lo perderia justamente a praça mais barata.
-          //
-          // O que discrimina não é a classe, é haver praça futura na página.
-          saida.set(l.id, praçaFutura(r.body)
+          const ps = pracas(r.body);
+          saida.set(l.id, ps.some((t) => t > Date.now())
             ? { veredito: 'agendado', sinal: `${texto} (2ª praça marcada)` }
             : /<div[^>]*btn-block[^>]*>\s*<strong>\s*ENCERRADO\s*<\/strong>/i.test(r.body)
               ? { veredito: 'encerrado', sinal: `${texto} (sem praça futura)` }
-              : { veredito: 'indeterminado', sinal: `${texto}: sem praça futura nem marca de encerrado` });
+              // A página nunca marca "ENCERRADO" explícito para este rótulo (medido
+              // em infinityleiloes/1172), mas SE já sabemos a última praça e ela
+              // passou, não sobra mecanismo de lance nenhum — encerrado por exaustão.
+              : ps.length
+                ? { veredito: 'encerrado', sinal: `${texto} (praças esgotadas, última em ${new Date(ps[0]).toISOString().slice(0, 10)})` }
+                : { veredito: 'indeterminado', sinal: `${texto}: nenhuma data de praça encontrada` });
         } else {
           // Classe nova: indeterminado de propósito. Inventar significado para
           // rótulo desconhecido é como se fecha lote vivo.
@@ -304,6 +308,12 @@ const freitas: Verificador = {
         else if (/aberto/.test(n)) saida.set(l.id, { veredito: 'aberto', sinal: nome });
         else if (/agendad|loteament/.test(n)) saida.set(l.id, { veredito: 'agendado', sinal: nome });
         else if (/vendid|arrematad|encerrad|cancelad|retirad|suspens|deserto/.test(n)) {
+          saida.set(l.id, { veredito: 'encerrado', sinal: nome });
+        } else if (data.message?.recebeLance === false) {
+          // "SEM LICITANTES" ficava indeterminado para sempre (nome fora da
+          // lista acima). Ao contrário do soleon, o Freitas relista sob OUTRO
+          // leilaoId em vez de reabrir a mesma URL — `recebeLance` é o próprio
+          // sinal que a fonte usa, mais confiável que casar palavra por palavra.
           saida.set(l.id, { veredito: 'encerrado', sinal: nome });
         } else saida.set(l.id, { veredito: 'indeterminado', sinal: nome });
       } catch (e: any) {

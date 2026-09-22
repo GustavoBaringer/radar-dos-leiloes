@@ -14,8 +14,14 @@ const CASOS = [
     url: 'https://ricoleiloes.com.br/item/34098/detalhes?page=2', espera: 'encerrado' },
   { nome: 'sem_licitante COM 2ª praça futura (CPC 891)', fonte: 'soleon',
     url: 'https://quadradoleiloes.com.br/item/281/detalhes?page=1', espera: 'agendado' },
+  // 37766: as duas praças (14/09 e 17/09) já passaram, sem marca "ENCERRADO"
+  // explícita na página — ficava indeterminado com verify_fails=6 e nunca fechava.
+  { nome: 'sem_licitante com AMBAS as praças já passadas (sem marca de encerrado)', fonte: 'soleon',
+    url: 'https://infinityleiloes.com.br/item/1172/detalhes?page=1', espera: 'encerrado' },
+  // 9606 (fixture antiga) vendeu entre uma rodada e outra — mesma droga do
+  // "caso real" que muda de estado sob nossos pés; 9641 estava aberto agora.
   { nome: 'aberto_lance (controle: não pode fechar)', fonte: 'soleon',
-    url: 'https://patiorochaleiloes.com.br/item/9606/detalhes?page=1', espera: 'aberto' },
+    url: 'https://patiorochaleiloes.com.br/item/9641/detalhes?page=2', espera: 'aberto' },
   { nome: 'aguarde_abertura (controle: não pode fechar)', fonte: 'soleon',
     url: 'https://tribunaleiloes.com.br/item/3248/detalhes?page=1', espera: 'aberto|agendado' },
 ];
