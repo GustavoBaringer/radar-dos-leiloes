@@ -102,6 +102,8 @@ export interface Alerta {
 
 export type Hit = Lot & { seen: boolean; hit_em: string; labels: string[] };
 
+export type Favorito = Lot & { favorited_em: string };
+
 export interface Stats {
   totals: {
     lots: number; abertos: number; agendados: number; sem_data: number;

@@ -19,10 +19,13 @@ interface Props {
   lancesAoVivo: Record<number, number>;
   piscando: Set<number>;
   aoCarregar?: (r: SearchResponse) => void;
+  favoritos: Set<number>;
+  aoFavoritar: (id: number) => void;
 }
 
 export function Busca({
   estado, aoMudar, aoLimpar, aoAbrirLote, aoCriarAlerta, lancesAoVivo, piscando, aoCarregar,
+  favoritos, aoFavoritar,
 }: Props) {
   const [dados, setDados] = useState<SearchResponse | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -154,6 +157,8 @@ export function Busca({
           aoAbrir={aoAbrirLote}
           lanceAoVivo={lancesAoVivo[lot.id]}
           piscando={piscando.has(lot.id)}
+          favoritado={favoritos.has(lot.id)}
+          aoFavoritar={aoFavoritar}
         />
       ))}
     </div>

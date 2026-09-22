@@ -1,4 +1,4 @@
-import type { Alerta, Hit, Lot, RespostaMapa, SearchResponse, Stats } from './types';
+import type { Alerta, Favorito, Hit, Lot, RespostaMapa, SearchResponse, Stats } from './types';
 
 /**
  * Cliente da API. Um lugar só para `credentials` e para o tratamento de erro,
@@ -46,6 +46,10 @@ export const api = {
   // PATCH e não PUT: o servidor aceita só rótulo, canais e e-mail (server.ts:821).
   editarAlerta: (id: number, corpo: unknown) => envia<unknown>(`/api/alerts/${id}`, 'PATCH', corpo),
   apagarAlerta: (id: number) => envia<unknown>(`/api/alerts/${id}`, 'DELETE'),
+
+  favoritos: () => get<Favorito[]>('/api/favorites'),
+  favoritar: (lotId: number) => envia<unknown>('/api/favorites', 'POST', { lotId }),
+  desfavoritar: (lotId: number) => envia<unknown>(`/api/favorites/${lotId}`, 'DELETE'),
 
   chavePush: () => get<{ publicKey: string | null }>('/api/push/key'),
   inscreverPush: (sub: unknown) => envia<unknown>('/api/push/subscribe', 'POST', sub),

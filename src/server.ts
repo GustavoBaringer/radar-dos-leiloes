@@ -1087,6 +1087,45 @@ app.post('/api/alerts/hits/seen', async (req) => {
   return { ok: true };
 });
 
+/* ---------------- favoritos ---------------- */
+
+app.get('/api/favorites', async (req) => {
+  // Mesma lista de colunas do card de alertas: um SELECT reduzido aqui
+  // significaria um segundo card, com campos faltando, para manter.
+  return query(`
+    SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.brand, l.model, l.year_make, l.year_model,
+           l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
+           l.current_bid, l.min_bid, l.appraisal, l.bid_suspect, l.asset_type, l.vehicle_type,
+           l.source_category, l.property_type, l.city, l.state, l.photos, l.photo_count,
+           COALESCE((l.raw->>'areaPrivativa')::numeric, (l.raw->>'areaTotal')::numeric, (l.raw->>'areaTerreno')::numeric) AS area,
+           (l.raw->>'quartos')::int AS rooms,
+           CASE WHEN l.appraisal > 0 AND COALESCE(l.current_bid,l.min_bid) > 0
+                THEN ROUND((1 - COALESCE(l.current_bid,l.min_bid)/l.appraisal) * 100) ELSE NULL END AS discount_pct,
+           f.created_at AS favorited_em
+      FROM favorites f
+      JOIN lots l ON l.id = f.lot_id
+     WHERE f.owner_id = $1
+     ORDER BY f.created_at DESC`, [(await donoDe(req)).userId]);
+});
+
+app.post('/api/favorites', async (req, reply) => {
+  const { lotId } = (req.body ?? {}) as { lotId?: number };
+  if (!Number.isInteger(lotId)) return reply.code(400).send({ erro: 'lotId inválido' });
+  const eu = await donoDe(req);
+  await query(
+    'INSERT INTO favorites (owner_id, lot_id) VALUES ($1,$2) ON CONFLICT (owner_id, lot_id) DO NOTHING',
+    [eu.userId, lotId],
+  );
+  return { ok: true };
+});
+
+app.delete('/api/favorites/:lotId', async (req, reply) => {
+  const { lotId } = req.params as { lotId: string };
+  if (!/^\d+$/.test(lotId)) return reply.code(400).send({ erro: 'lotId inválido' });
+  await query('DELETE FROM favorites WHERE owner_id = $1 AND lot_id = $2', [(await donoDe(req)).userId, Number(lotId)]);
+  return { ok: true };
+});
+
 /* ---------------- push ---------------- */
 
 app.get('/api/push/key', async () => ({ publicKey: process.env.VAPID_PUBLIC ?? null }));

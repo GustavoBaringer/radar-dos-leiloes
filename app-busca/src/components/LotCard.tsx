@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback } from 'react';
+import { Star } from 'lucide-react';
 import type { Lot } from '@/lib/types';
 import { LABEL_DOC, LABEL_PROPERTY, LABEL_VEHICLE, SRC_LABEL } from '@/lib/labels';
 import { img, money, nopicDe, titulo, whenLabel } from '@/lib/format';
@@ -50,9 +51,14 @@ interface Props {
   piscando?: boolean;
   destaque?: boolean;
   rodape?: ReactNode;
+  favoritado?: boolean;
+  /** Ausente = card sem estrela: usado em contextos sem sessão. */
+  aoFavoritar?: (id: number) => void;
 }
 
-export function LotCard({ lot, aoAbrir, lanceAoVivo, piscando, destaque, rodape }: Props) {
+export function LotCard({
+  lot, aoAbrir, lanceAoVivo, piscando, destaque, rodape, favoritado, aoFavoritar,
+}: Props) {
   const foto = lot.photos?.[0] ?? null;
   const lance = lanceAoVivo ?? lot.current_bid ?? lot.min_bid;
   const when = whenLabel(lot);
@@ -101,7 +107,21 @@ export function LotCard({ lot, aoAbrir, lanceAoVivo, piscando, destaque, rodape 
         </div>
       </div>
       <div className="card-body">
-        <div className="title">{titulo(lot)}</div>
+        <div className="title-row">
+          <div className="title">{titulo(lot)}</div>
+          {aoFavoritar && (
+            <button
+              type="button"
+              className={`ico${favoritado ? ' on' : ''}`}
+              onClick={(e) => { e.stopPropagation(); aoFavoritar(lot.id); }}
+              aria-pressed={favoritado}
+              aria-label={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              title={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+            >
+              <Star size={15} aria-hidden fill={favoritado ? 'currentColor' : 'none'} />
+            </button>
+          )}
+        </div>
         <div className="meta">
           {linhaMeta(lot).map((m) => (
             <span key={m}>{m}</span>

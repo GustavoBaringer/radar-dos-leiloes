@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Menu, Search, X } from 'lucide-react';
 import { MarcaRadar } from './MarcaRadar';
 
-export type Aba = 'busca' | 'alertas' | 'cobertura';
+export type Aba = 'busca' | 'alertas' | 'favoritos' | 'cobertura';
 
 interface Props {
   aba: Aba;
@@ -33,6 +33,7 @@ export function AppHeader({
   const abas: Array<{ id: Aba; nome: string }> = [
     { id: 'busca', nome: 'Busca' },
     { id: 'alertas', nome: 'Alertas' },
+    { id: 'favoritos', nome: 'Favoritos' },
     ...(mostraCobertura ? [{ id: 'cobertura' as const, nome: 'Cobertura' }] : []),
   ];
 

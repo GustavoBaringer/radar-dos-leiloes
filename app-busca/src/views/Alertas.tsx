@@ -14,9 +14,13 @@ interface Props {
   /** Sobe quando um alerta é criado/editado fora daqui, para recarregar. */
   versao: number;
   aoContarNaoVistos: (n: number) => void;
+  favoritos: Set<number>;
+  aoFavoritar: (id: number) => void;
 }
 
-export function Alertas({ aoAbrirLote, toast, aoEditar, versao, aoContarNaoVistos }: Props) {
+export function Alertas({
+  aoAbrirLote, toast, aoEditar, versao, aoContarNaoVistos, favoritos, aoFavoritar,
+}: Props) {
   const [alertas, setAlertas] = useState<Alerta[] | null>(null);
   const [hits, setHits] = useState<Hit[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -140,6 +144,8 @@ export function Alertas({ aoAbrirLote, toast, aoEditar, versao, aoContarNaoVisto
               lot={h}
               aoAbrir={aoAbrirLote}
               destaque={!h.seen}
+              favoritado={favoritos.has(h.id)}
+              aoFavoritar={aoFavoritar}
               rodape={
                 <div className="hit-alerta">
                   <span className="hit-termo">{h.labels.join(', ')}</span>

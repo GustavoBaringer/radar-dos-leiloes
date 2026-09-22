@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, Star, X } from 'lucide-react';
 import type { Lot } from '@/lib/types';
 import {
   EXPLICA_FECHAMENTO, LABEL_ASSET, LABEL_COMB, LABEL_COR, LABEL_DOC, LABEL_PROPERTY,
@@ -48,7 +48,15 @@ function BlocoKv({ titulo: t, pares }: { titulo: string; pares: Par[] }) {
  * um modal sobre a busca, é a tela inteira. Reaproveitar em vez de duplicar
  * evita a divergência que já aconteceu com o cartão.
  */
-export function LotDrawer({ lot, aoFechar, comoPagina = false }: { lot: Lot | null; aoFechar: () => void; comoPagina?: boolean }) {
+export function LotDrawer({
+  lot, aoFechar, comoPagina = false, favoritado, aoFavoritar,
+}: {
+  lot: Lot | null;
+  aoFechar: () => void;
+  comoPagina?: boolean;
+  favoritado?: boolean;
+  aoFavoritar?: (id: number) => void;
+}) {
   const [fotoGrande, setFotoGrande] = useState(0);
   const painel = useRef<HTMLDivElement>(null);
   const botaoFechar = useRef<HTMLButtonElement>(null);
@@ -132,6 +140,18 @@ export function LotDrawer({ lot, aoFechar, comoPagina = false }: { lot: Lot | nu
             </div>
           </div>
           <div className="painel-acoes">
+            {aoFavoritar && (
+              <button
+                type="button"
+                className={`ico${favoritado ? ' on' : ''}`}
+                onClick={() => aoFavoritar(lot.id)}
+                aria-pressed={favoritado}
+                aria-label={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                title={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              >
+                <Star size={16} aria-hidden fill={favoritado ? 'currentColor' : 'none'} />
+              </button>
+            )}
             {/* A descrição acompanha o compartilhamento nativo: sem ela, o
                 WhatsApp mostra só a URL crua até buscar o preview. */}
             <BotaoCompartilhar

@@ -583,7 +583,8 @@
   .disc { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--brand-verify) 18%, transparent); color: var(--brand-verify); border: 1px solid color-mix(in srgb, var(--brand-verify) 45%, transparent) }
 
   .card-body { padding: 11px 12px 13px; display: flex; flex-direction: column; gap: 6px; flex: 1 }
-  .card .title { font-family: var(--font-display); font-weight: 500; font-size: 14px; line-height: 1.3; color: var(--foreground); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+  .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px }
+  .card .title { font-family: var(--font-display); font-weight: 500; font-size: 14px; line-height: 1.3; color: var(--foreground); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 0 }
   .card .meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11px; color: var(--brand-ink-soft) }
   .card .bid { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; margin-top: auto }
   .card .bid .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; color: var(--brand-gold) }
@@ -749,6 +750,7 @@
   .ico { background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 6px; color: var(--brand-ink-soft); cursor: pointer }
   .ico:hover:not(:disabled) { color: var(--foreground); border-color: var(--brand-core) }
   .ico:disabled { opacity: .45; cursor: default }
+  .ico.on { color: var(--brand-gold); border-color: color-mix(in srgb, var(--brand-gold) 55%, transparent) }
 
   .aviso { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--brand-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-size: 13px; color: var(--brand-ink-soft); margin-bottom: 10px }
   .aviso a { color: var(--brand-bright); text-decoration: underline }

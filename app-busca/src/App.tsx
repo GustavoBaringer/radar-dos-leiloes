@@ -11,12 +11,14 @@ import { Toasts } from '@/components/Toasts';
 import { DialogoAlerta, type AlvoDialogo } from '@/components/DialogoAlerta';
 import { Busca } from '@/views/Busca';
 import { Alertas } from '@/views/Alertas';
+import { Favoritos } from '@/views/Favoritos';
 import { Cobertura } from '@/views/Cobertura';
 import { useToasts } from '@/hooks/useToasts';
 import { useWebSocket } from '@/hooks/useWebSocket';
 
 function abaDoCaminho(p: string): Aba {
   if (p === '/alertas') return 'alertas';
+  if (p === '/favoritos') return 'favoritos';
   if (p === '/cobertura') return 'cobertura';
   return 'busca';
 }
@@ -41,6 +43,8 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   const [papel, setPapel] = useState<string>('comum');
   const [naoVistos, setNaoVistos] = useState(0);
   const [versaoAlertas, setVersaoAlertas] = useState(0);
+  const [favoritos, setFavoritos] = useState<Set<number>>(new Set());
+  const [versaoFavoritos, setVersaoFavoritos] = useState(0);
   const [alvoDialogo, setAlvoDialogo] = useState<AlvoDialogo | null>(null);
   const [lancesAoVivo, setLances] = useState<Record<number, number>>({});
   const [piscando, setPiscando] = useState<Set<number>>(new Set());
@@ -54,7 +58,31 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     if (publico) return; // sem sessão, /api/me devolve 401
     // Esconder a aba é cortesia visual; quem barra de fato é o 403 das rotas.
     api.eu().then((r) => setPapel(r.papel ?? 'comum')).catch(() => setPapel('comum'));
+    api.favoritos().then((f) => setFavoritos(new Set(f.map((x) => x.id)))).catch(() => {});
   }, [publico]);
+
+  /**
+   * Otimista: a estrela muda na hora, e desfaz sozinha se o servidor recusar.
+   * Sem isto, cada clique esperaria a viagem de rede para acender — no card
+   * dentro de uma lista rolando, essa espera lê como "não funcionou".
+   */
+  const alternarFavorito = useCallback((id: number) => {
+    const jaEra = favoritos.has(id);
+    setFavoritos((antes) => {
+      const novo = new Set(antes);
+      jaEra ? novo.delete(id) : novo.add(id);
+      return novo;
+    });
+    setVersaoFavoritos((v) => v + 1);
+    (jaEra ? api.desfavoritar(id) : api.favoritar(id)).catch(() => {
+      setFavoritos((antes) => {
+        const novo = new Set(antes);
+        jaEra ? novo.add(id) : novo.delete(id);
+        return novo;
+      });
+      toast('Não foi possível salvar o favorito. Tente de novo.');
+    });
+  }, [favoritos, toast]);
 
   /* ---------------- rotas ---------------- */
 
@@ -259,6 +287,8 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
           aoCriarAlerta={abrirDialogoCriar}
           lancesAoVivo={lancesAoVivo}
           piscando={piscando}
+          favoritos={favoritos}
+          aoFavoritar={alternarFavorito}
         />
       )}
       {aba === 'alertas' && (
@@ -268,12 +298,27 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
           aoEditar={abrirDialogoEditar}
           versao={versaoAlertas}
           aoContarNaoVistos={setNaoVistos}
+          favoritos={favoritos}
+          aoFavoritar={alternarFavorito}
+        />
+      )}
+      {aba === 'favoritos' && (
+        <Favoritos
+          aoAbrirLote={abrirLote}
+          toast={toast}
+          versao={versaoFavoritos}
+          aoDesfavoritar={alternarFavorito}
         />
       )}
       {aba === 'cobertura' && papel === 'admin' && <Cobertura />}
 
       <Rodape />
-      <LotDrawer lot={lote} aoFechar={() => fecharGaveta()} />
+      <LotDrawer
+        lot={lote}
+        aoFechar={() => fecharGaveta()}
+        favoritado={lote ? favoritos.has(lote.id) : false}
+        aoFavoritar={alternarFavorito}
+      />
       <DialogoAlerta
         alvo={alvoDialogo}
         aoFechar={() => setAlvoDialogo(null)}
