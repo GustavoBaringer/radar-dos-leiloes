@@ -23,8 +23,10 @@ const falha = (t, d) => {
   console.log(`  FALHA ${t} — ${d}`);
 };
 
-/** Fontes que bloqueiam o IP: não é defeito de código, é acesso negado na origem. */
-const BLOQUEADAS = new Set(['caixa', 'superbid']);
+// caixa e superbid saíram daqui em 22/09: passaram a coletar via Chromium
+// headless (navegador.ts) e o WAF de ambos (Radware, Cloudflare) para de
+// desafiar um browser de verdade — uma falha nova deles agora É defeito.
+const BLOQUEADAS = new Set();
 /** Fonte aposentada: o vlance cobre o mesmo catálogo. */
 const APOSENTADAS = new Set(['serrano']);
 

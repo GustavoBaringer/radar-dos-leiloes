@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { request } from 'undici';
+import { comNavegador, getLatin1ViaNavegador } from './navegador.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 
 const INDICE = 'https://venda-imoveis.caixa.gov.br/sistema/download-lista.asp';
 const CSV_NACIONAL = 'https://venda-imoveis.caixa.gov.br/listaweb/Lista_imoveis_geral.csv';
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 /**
  * Imóveis da Caixa. Uma requisição por dia entrega o país inteiro (7.199 imóveis),
@@ -26,12 +24,13 @@ const UA =
  *    que a avaliação, com "desconto 0" enganoso. Por isso vai para `minBid`, e a
  *    avaliação para `appraisal`.
  *
- * 4. **Desde 15/09/2026 o MESMO antibot (confirmado pelo `ssk=support@shieldsquare.com`
- *    no Location) passou a bloquear por 302 para validate.perfdrive.com em vez de HTML
- *    200 — em TODA rota do site, não só nas duas URLs abaixo. Não é mudança de URL nem
- *    header faltando (testado com headers completos de browser, sem efeito); o `ssr` do
- *    redirect é o nosso IP em base64, então é bloqueio por IP — mas já passou de 4 dias
- *    contínuos, muito além dos "dezenas de minutos" do item 2.
+ * 4. Desde 15/09/2026 o MESMO antibot passou a redirecionar (302 para
+ *    validate.perfdrive.com) em vez de servir o HTML de CAPTCHA — mas o motivo
+ *    NÃO é IP em cooldown como eu tinha concluído. É desafio comportamental
+ *    (Radware/ShieldSquare): `request()` do undici nunca passa, porque não
+ *    executa JS nem simula mouse. MEDIDO em 22/09 com Chromium headless via
+ *    `comNavegador` — 200 real, título "Caixa - Imóvel à venda", 1ª tentativa.
+ *    Cabeçalho puro nunca vai passar por mais headers que se copie.
  */
 
 function pareceCaptcha(body: string): boolean {
@@ -94,38 +93,17 @@ function parseDescricao(desc: string): Descricao {
   };
 }
 
-async function baixarCsv(): Promise<{ texto: string; status: number; location?: string }> {
+async function baixarCsv(): Promise<{ texto: string; status: number; url?: string }> {
   // Caminho local para desenvolvimento e para quando o IP estiver em cooldown.
   const local = process.env.CAIXA_CSV_PATH;
   if (local) return { texto: readFileSync(local, 'latin1'), status: 200 };
 
-  // Passo 1: o índice planta o cookie de sessão ASP.
-  const idx = await request(INDICE, {
-    headers: { 'user-agent': UA, accept: 'text/html,*/*' },
-    headersTimeout: 25000,
-    bodyTimeout: 25000,
+  // O navegador resolve o Radware ao visitar o índice; o Referer some porque
+  // deixa de existir requisição manual — é a própria navegação da page.
+  return comNavegador(INDICE, async (page) => {
+    const { status, raw, url } = await getLatin1ViaNavegador(page, CSV_NACIONAL, { accept: 'text/csv,application/octet-stream,*/*' });
+    return { texto: raw, status, url };
   });
-  const cookies = ([] as string[])
-    .concat((idx.headers['set-cookie'] as any) ?? [])
-    .map((c) => String(c).split(';')[0])
-    .join('; ');
-  idx.body.dump();
-  await new Promise((r) => setTimeout(r, 2000));
-
-  // Passo 2: o CSV, com Referer do índice.
-  const res = await request(CSV_NACIONAL, {
-    headers: {
-      'user-agent': UA,
-      accept: 'text/csv,application/octet-stream,*/*',
-      referer: INDICE,
-      ...(cookies ? { cookie: cookies } : {}),
-    },
-    headersTimeout: 60000,
-    bodyTimeout: 60000,
-  });
-  const buf = Buffer.from(await res.body.arrayBuffer());
-  const location = ([] as string[]).concat((res.headers['location'] as any) ?? [])[0];
-  return { texto: buf.toString('latin1'), status: res.statusCode, location };
 }
 
 export const caixa: Connector = {
@@ -137,22 +115,21 @@ export const caixa: Connector = {
     tier: 1,
     siteUrl: 'https://venda-imoveis.caixa.gov.br',
     notes:
-      'CSV nacional, 1 requisição por ciclo. Antibot Radware responde 200 com CAPTCHA OU 302 para validate.perfdrive.com: detectar por conteúdo e por status. Coluna "Preço" é o mínimo do 1º leilão, não preço de venda. Sem data de praça no arquivo. Desde 15/09/2026 bloqueado por IP (ver collection_runs).',
+      'CSV nacional, 1 requisição por ciclo, via Chromium headless (Radware exige navegador de verdade desde 15/09). Coluna "Preço" é o mínimo do 1º leilão, não preço de venda. Sem data de praça no arquivo.',
   },
   async collect({ limit }): Promise<CollectResult> {
-    const { texto, status, location } = await baixarCsv();
+    const { texto, status, url } = await baixarCsv();
     if (pareceCaptcha(texto)) {
       const err: any = new Error('Caixa respondeu CAPTCHA do Radware (IP em cooldown)');
       err.httpStatus = status;
       throw err;
     }
-    // Redirect que não é CAPTCHA seguia em frente, não achava linha de CSV e
-    // devolvia fetched=0 como sucesso: 5 execuções em 302 apareceram na tela
-    // de cobertura como "coleta ok".
-    if (status < 200 || status >= 300) {
+    // `fetch()` do navegador já segue redirect sozinho — se pousou fora do
+    // domínio do CSV, é o antibot desviando, mesmo com status 200 de chegada.
+    if (status < 200 || status >= 300 || (url && ehRedirectAntibot(url))) {
       let msg = `Caixa respondeu HTTP ${status} em vez do CSV`;
-      if (ehRedirectAntibot(location)) msg = `Caixa redirecionou para o CAPTCHA do Radware (IP bloqueado): ${location}`;
-      else if (location) msg += ` (redirect para ${location})`;
+      if (url && ehRedirectAntibot(url)) msg = `Caixa redirecionou para o CAPTCHA do Radware (IP bloqueado): ${url}`;
+      else if (url && !url.includes('Lista_imoveis_geral.csv')) msg += ` (pousou em ${url})`;
       const err: any = new Error(msg);
       err.httpStatus = status;
       throw err;

@@ -1,10 +1,14 @@
-import { fetchJson } from './http.js';
+import { comNavegador, getJsonViaNavegador } from './navegador.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 
 const BASE = 'https://offer-query.superbid.net/offers/';
 const HEADERS = { origin: 'https://www.superbid.net', referer: 'https://www.superbid.net/' };
+/** Passa pelo Cloudflare com navegação normal; a API em si já é cross-origin
+ * dentro da mesma sessão (cookie __cf_bm é `Domain=superbid.net`, vale pro
+ * subdomínio offer-query também — testado). */
+const ENTRADA = 'https://www.superbid.net/';
 
 /**
  * Três coisas que a API exige e que a versão anterior deste conector ignorava:
@@ -132,7 +136,7 @@ export const superbid: Connector = {
     method: 'api',
     tier: 1,
     siteUrl: 'https://www.superbid.net',
-    notes: 'API aberta offer-query; exige searchType=opened e Origin. Teto de 10 mil por consulta.',
+    notes: 'API offer-query; exige searchType=opened e Origin. Teto de 10 mil por consulta. Via Chromium headless desde 22/09 (Cloudflare bloqueia fetch cru).',
   },
   async collect({ limit, assetTypes }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
@@ -152,26 +156,28 @@ export const superbid: Connector = {
     // alcançados — as categorias que o filtro existe justamente para trazer.
     const cota = Math.max(pageSize, Math.ceil(limit / Math.max(1, tipos.length)));
 
-    for (const tipo of tipos) {
-      const antes = lots.length;
-      for (let page = 1; lots.length - antes < cota && lots.length < limit; page++) {
-        const url =
-          `${BASE}?portalId=[2,15]&searchType=opened&orderBy=id:asc&pageSize=${pageSize}&pageNumber=${page}` +
-          `&locale=pt_BR&filter=${encodeURIComponent(`product.productType.id:${tipo};`)}`;
-        const { status: st, data } = await fetchJson<any>(url, { headers: HEADERS, gapMs: 1200 });
-        status = st;
-        const offers: any[] = data?.offers ?? [];
-        if (!offers.length) break;
-        fetched += offers.length;
-        for (const o of offers) {
-          const mapped = mapOffer(o);
-          if (mapped) lots.push(mapped);
-          else skipped++;
+    await comNavegador(ENTRADA, async (page) => {
+      for (const tipo of tipos) {
+        const antes = lots.length;
+        for (let pagina = 1; lots.length - antes < cota && lots.length < limit; pagina++) {
+          const url =
+            `${BASE}?portalId=[2,15]&searchType=opened&orderBy=id:asc&pageSize=${pageSize}&pageNumber=${pagina}` +
+            `&locale=pt_BR&filter=${encodeURIComponent(`product.productType.id:${tipo};`)}`;
+          const { status: st, data } = await getJsonViaNavegador<any>(page, url, HEADERS);
+          status = st;
+          const offers: any[] = data?.offers ?? [];
+          if (!offers.length) break;
+          fetched += offers.length;
+          for (const o of offers) {
+            const mapped = mapOffer(o);
+            if (mapped) lots.push(mapped);
+            else skipped++;
+          }
+          if (offers.length < pageSize) break;
         }
-        if (offers.length < pageSize) break;
+        if (lots.length >= limit) break;
       }
-      if (lots.length >= limit) break;
-    }
+    });
     return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status };
   },
 };

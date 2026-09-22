@@ -18,10 +18,10 @@ const CASOS = [
   // explícita na página — ficava indeterminado com verify_fails=6 e nunca fechava.
   { nome: 'sem_licitante com AMBAS as praças já passadas (sem marca de encerrado)', fonte: 'soleon',
     url: 'https://infinityleiloes.com.br/item/1172/detalhes?page=1', espera: 'encerrado' },
-  // 9606 (fixture antiga) vendeu entre uma rodada e outra — mesma droga do
-  // "caso real" que muda de estado sob nossos pés; 9641 estava aberto agora.
+  // 9606 e 9641 (fixtures antigas) já venderam entre uma rodada e outra —
+  // mesma droga do "caso real" que muda de estado sob nossos pés.
   { nome: 'aberto_lance (controle: não pode fechar)', fonte: 'soleon',
-    url: 'https://patiorochaleiloes.com.br/item/9641/detalhes?page=2', espera: 'aberto' },
+    url: 'https://rjleiloes.com.br/item/84756/detalhes?page=2', espera: 'aberto' },
   { nome: 'aguarde_abertura (controle: não pode fechar)', fonte: 'soleon',
     url: 'https://tribunaleiloes.com.br/item/3248/detalhes?page=1', espera: 'aberto|agendado' },
 ];
