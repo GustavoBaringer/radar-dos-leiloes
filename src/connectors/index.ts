@@ -11,8 +11,11 @@ import { leilaopro } from './leilaopro.js';
 import { suaplataforma } from './suaplataforma.js';
 import { suporteleiloes } from './suporteleiloes.js';
 import { bomvalor } from './bomvalor.js';
+import { leiloar } from './leiloar.js';
+import { leiloesbr } from './leiloesbr.js';
+import { leilotech } from './leilotech.js';
 
-export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor];
+export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor, leiloar, leiloesbr, leilotech];
 
 export function getConnector(id: string): Connector | undefined {
   return connectors.find((c) => c.def.id === id);
