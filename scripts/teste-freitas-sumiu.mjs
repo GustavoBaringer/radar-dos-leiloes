@@ -6,6 +6,11 @@
  * encerramento — sem `auction_end_utc` o relógio não age, e o candidato à
  * verificação exigia status 'aberto'/'agendado', que `sem_data` não é.
  *
+ * Segundo bug do mesmo gênero, achado pelo usuário em 22/09 (8064-345): um
+ * lote 'sem_data' que a fonte CONTINUA listando toda varredura nunca fica
+ * "ausente" — e a elegibilidade em verificarCandidatos() dependia disso.
+ * Corrigido em encerramento.ts: sem_data com auction_start_utc velho também entra.
+ *
  * A asserção que importa é a 3: um verificador que fecha tudo passaria nas
  * outras duas sem verificar nada.
  */
@@ -70,6 +75,16 @@ const presos = Number(
 presos <= 60
   ? ok('4. não há fila de lote sem data e sem verificação', `${presos} aguardando`)
   : falha('4. não há fila de lote sem data e sem verificação', `${presos} lotes nunca verificados`);
+
+/* 5 — 786058 (8064-345, "VENDA CONJUNTA") nunca ficava ausente da varredura
+      porque a fonte continua listando: `collected_at < ult.u` nunca era
+      verdadeiro e o lote nunca virava candidato. Achado pelo usuário em 22/09. */
+const [status2, razao2] = (
+  sql(`select status||'|'||coalesce(closed_reason,'-') from lots where id=786058`) || '|'
+).split('|');
+status2 === 'encerrado' && razao2 === 'verificado_na_fonte'
+  ? ok('5. lote sempre presente na varredura (VENDA CONJUNTA) está encerrado')
+  : falha('5. lote sempre presente na varredura (VENDA CONJUNTA) está encerrado', `status=${status2} razao=${razao2}`);
 
 console.log(falhas ? `\n${falhas} falha(s)` : '\ntodas passaram');
 process.exit(falhas ? 1 : 0);

@@ -145,7 +145,13 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
         -- consultada. Era assim que o 8048/604 da freitas ficava no ar depois
         -- de a fonte removê-lo do leilão em remontagem.
         AND l.status IN ('aberto','agendado','sem_data')
-        AND l.collected_at < ult.u
+        -- collected_at < ult.u (ficou ausente da última varredura) é a regra
+        -- padrão, mas um lote 'sem_data' que a fonte CONTINUA listando (achado
+        -- em 22/09: 8064-345, "VENDA CONJUNTA") nunca fica ausente — e sem isto
+        -- nunca vira candidato. Sem prazo próprio e com a abertura já bem
+        -- passada, ele precisa do mesmo empurrão que a ausência dá aos outros.
+        AND (l.collected_at < ult.u
+             OR (l.status = 'sem_data' AND l.auction_start_utc < now() - interval '24 hours'))
         -- Recuo: quem a origem já disse vivo espera; quem não deu para decidir
         -- espera mais a cada tentativa frustrada, até parar de ser reconsultado.
         AND (l.verified_at IS NULL
