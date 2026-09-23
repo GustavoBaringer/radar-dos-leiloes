@@ -130,6 +130,10 @@ function conectorDaPlataforma(cfg: {
 
       for (const caminho of cfg.caminhos) {
         for (let pagina = 1; lots.length < limit; pagina++) {
+          // Passada a última página real, o site não devolve vazio: repete um
+          // bloco fixo de "recomendados" pra sempre (34 cards em /veiculos,
+          // sempre ≥20) — travou 7h em produção antes desta checagem.
+          const antesDaPagina = lots.length;
           let r;
           try {
             r = await fetchText(`${baseUrl}${caminho}?pagina=${pagina}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
@@ -184,6 +188,9 @@ function conectorDaPlataforma(cfg: {
           }
           // Última página: o total vem no rodapé ("Exibindo 1-48 de 841 itens").
           if (cards.length < 20) break;
+          // Página cheia mas nenhum id novo: é o bloco de recomendados se
+          // repetindo, não catálogo. O `dedupe` por si só nunca para o loop.
+          if (lots.length === antesDaPagina) break;
         }
         if (lots.length >= limit) break;
       }
