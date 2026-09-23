@@ -101,6 +101,8 @@ export const parquedosleiloes: Connector = {
           const parsed = parseTitle(titulo);
           const local = campos.localDeTexto(titulo);
 
+          const foto = corte.match(/<img src="([^"]+)"/)?.[1] ?? null;
+
           lots.push({
             sourceId: 'parquedosleiloes',
             externalId: id,
@@ -120,7 +122,7 @@ export const parquedosleiloes: Connector = {
             sellerType: classifySeller(null) as any,
             city: local?.city ?? null,
             state: local?.uf ?? null,
-            photos: [],
+            photos: foto ? [foto] : [],
             raw: { evento, statusTexto: statusTxt },
           });
         }

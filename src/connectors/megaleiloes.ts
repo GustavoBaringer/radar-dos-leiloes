@@ -48,6 +48,13 @@ function dataBr(v?: string | null): Date | null {
   return Number.isFinite(t) ? new Date(t) : null;
 }
 
+function fotoDe(corte: string): string | null {
+  const bg = corte.match(/data-bg="([^"]+)"/)?.[1]
+    ?? corte.match(/background:\s*url\((\/\/[^)]+|https?:\/\/[^)]+)\)/)?.[1];
+  if (!bg) return null;
+  return bg.startsWith('//') ? `https:${bg}` : bg;
+}
+
 function tipoDeBem(url: string, titulo: string): AssetType {
   if (/\/imoveis\//i.test(url) || /apartamento|casa|terreno|im[óo]vel|sobrado|gleba|chac|s[íi]tio|fazenda|sala|loja|galp/i.test(titulo)) {
     return 'imovel';
@@ -66,6 +73,7 @@ interface Card {
   status: string;
   modalidade: string | null;
   encerramento: Date | null;
+  foto: string | null;
 }
 
 function lerCards(html: string, baseUrl: string): Card[] {
@@ -97,6 +105,9 @@ function lerCards(html: string, baseUrl: string): Card[] {
         corte.match(/href="\/leiloes\/(judiciais|extrajudiciais)"[^>]*>([^<]+)</)?.[2]?.trim() ??
         null,
       encerramento: dataBr(datas[datas.length - 1]),
+      // Mega usa `data-bg`, grupolance usa `background: url(...)` inline — mesmo
+      // software, dois jeitos de lazy-load.
+      foto: fotoDe(corte),
     });
   }
   return out;
@@ -182,7 +193,7 @@ function conectorDaPlataforma(cfg: {
               sellerType: classifySeller(null) as any,
               city: local?.city ?? null,
               state: local?.uf ?? null,
-              photos: [],
+              photos: c.foto ? [c.foto] : [],
               raw: { statusTexto: c.status, modalidade: c.modalidade },
             });
           }

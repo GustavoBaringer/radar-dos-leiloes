@@ -56,6 +56,7 @@ interface Card {
   praca1: { valor: number | null; data: Date | null };
   praca2: { valor: number | null; data: Date | null };
   encerrado: boolean;
+  foto: string | null;
 }
 
 function lerCards(html: string): Card[] {
@@ -88,6 +89,7 @@ function lerCards(html: string): Card[] {
       praca1: praca(0),
       praca2: praca(1),
       encerrado: /card-property-encerrado/.test(corte.slice(0, 1500)),
+      foto: corte.match(/<img src="([^"]+)"/)?.[1] ?? null,
     });
   }
   return out;
@@ -174,7 +176,7 @@ export const portalzuk: Connector = {
           city: c.cidade ? campos.apararCidade(c.cidade) : null,
           state: c.uf,
           yard: c.endereco || null,
-          photos: [],
+          photos: c.foto ? [c.foto] : [],
           raw: { bairro: c.bairro, praca1: c.praca1.valor, praca2: c.praca2.valor },
         });
       }

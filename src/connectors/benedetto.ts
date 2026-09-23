@@ -85,6 +85,10 @@ export const benedetto: Connector = {
       }
       const parsed = parseTitle(titulo);
       const local = campos.localDeTexto(descricao);
+      // A própria fonte usa esse arquivo como placeholder de "sem foto" —
+      // gravar como se fosse retrato real quebraria a honestidade do card.
+      const fotoM = corte.match(/<img src="([^"]+)"/)?.[1];
+      const foto = fotoM && !/sem_imagem/i.test(fotoM) ? fotoM : null;
 
       lots.push({
         sourceId: 'benedetto',
@@ -110,7 +114,7 @@ export const benedetto: Connector = {
         sellerType: classifySeller(null) as any,
         city: local?.city ?? null,
         state: local?.uf ?? null,
-        photos: [],
+        photos: foto ? [foto] : [],
         raw: { processo, janela },
       });
     }

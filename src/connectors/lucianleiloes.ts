@@ -73,6 +73,8 @@ export const lucianleiloes: Connector = {
       const parsed = parseTitle(titulo);
       const local = campos.localDeTexto(titulo);
       const datas = [...corte.matchAll(/\d[°º]?\s*Leil[ãa]o:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2})/g)].map((m) => m[1]);
+      const fotoRel = corte.match(/<img src="([^"]+)"/)?.[1] ?? null;
+      const foto = fotoRel ? (fotoRel.startsWith('http') ? fotoRel : `${HOST}${fotoRel}`) : null;
 
       lots.push({
         sourceId: 'lucianleiloes',
@@ -97,7 +99,7 @@ export const lucianleiloes: Connector = {
         sellerType: classifySeller(null) as any,
         city: local?.city ?? null,
         state: local?.uf ?? null,
-        photos: [],
+        photos: foto ? [foto] : [],
         raw: { categoriaId: href[2] },
       });
     }

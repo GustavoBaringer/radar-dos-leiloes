@@ -95,6 +95,7 @@ export const paulobotelho: Connector = {
         const datas = [...corte.matchAll(/<strong>(\d{2}\/\d{2}\/\d{2,4}\s+\d{2}:\d{2})<\/strong>/g)].map((m) => m[1]);
         const local = campos.localDeTexto(titulo);
         const vara = corte.match(/color:#3d3d3d[^>]*>([^<]+)</)?.[1]?.trim() ?? null;
+        const foto = corte.match(/<img src="([^"]+)"/)?.[1] ?? null;
 
         lots.push({
           sourceId: 'paulobotelho',
@@ -119,7 +120,7 @@ export const paulobotelho: Connector = {
           sellerType: classifySeller(vara) as any,
           city: local?.city ?? null,
           state: local?.uf ?? null,
-          photos: [],
+          photos: foto ? [foto] : [],
           raw: { vara, processo: corte.match(/color:#2d2d2d[^>]*>([^<]+)</)?.[1]?.trim() ?? null },
         });
       }

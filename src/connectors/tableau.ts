@@ -66,6 +66,8 @@ export const tableau: Connector = {
         .replace(/^\s*\|\s*|\s*\|\s*$/g, '')
         .replace(/\s+/g, ' ')
         .trim() ?? null;
+      const fotoRel = corte.match(/<img src="([^"]+)"/)?.[1] ?? null;
+      const foto = fotoRel ? (fotoRel.startsWith('http') ? fotoRel : `${HOST}${fotoRel}`) : null;
 
       lots.push({
         sourceId: 'tableau',
@@ -82,7 +84,7 @@ export const tableau: Connector = {
         status: encerrado ? 'encerrado' : 'aberto',
         currentBid: dinheiro(corte.match(/class="lot-card__bid-value[^"]*"[^>]*>\s*(R\$[^<]+)</)?.[1]),
         sellerType: 'desconhecido',
-        photos: [],
+        photos: foto ? [foto] : [],
         raw: { autor, obra, tecnica },
       });
     }

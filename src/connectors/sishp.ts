@@ -183,6 +183,10 @@ export const sishp: Connector = {
           const encerramento = dataEncerramento(dr.body);
           const parsed = parseTitle(c.titulo);
           const local = campos.localDeTexto(c.titulo);
+          // `snapshot.jpg` é a capa do EVENTO, não do lote — só a classe
+          // `snapshot-shadow` é foto do lote em si.
+          const fotos = [...dr.body.matchAll(/<img src="([^"]+)" class="img-fluid snapshot-shadow"/g)]
+            .map((m) => (m[1].startsWith('http') ? m[1] : `https://${host}/${m[1].replace(/^\.?\//, '')}`));
 
           lots.push({
             sourceId: 'sishp',
@@ -209,7 +213,7 @@ export const sishp: Connector = {
             sellerType: classifySeller(null) as any,
             city: local?.city ?? null,
             state: local?.uf ?? null,
-            photos: [],
+            photos: fotos,
             raw: { tenant: host, evento: idEvento, statusTexto: statusTxt },
           });
         }
