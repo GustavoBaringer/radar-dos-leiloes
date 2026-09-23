@@ -700,6 +700,14 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
 
 export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | null): VehicleType | null {
   const cat = fold(sourceCategory ?? '');
+  const titulo = fold(titleRaw);
+  if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
+  // Só no INÍCIO do título: "caminhão" solto no meio ("peças PARA caminhão",
+  // "retirada DE caminhão", "APLI.: caminhão") descreve o que a peça serve,
+  // não o que o lote é — dry-run pegou 7 peças virando veículo inteiro antes
+  // desta amarra. No início é sempre o bem em si (achado em 23/09: Superbid
+  // "Motos" e bomvalor "Carreta com 3 eixos" categorizando caminhão errado).
+  if (/^caminhao\b/.test(titulo)) return 'caminhao';
   let tipoCat: VehicleType | null = null;
   for (const [re, tipo] of CATEGORIA_FONTE) {
     if (cat && re.test(cat)) {
@@ -722,8 +730,6 @@ export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | nu
   // `caminhao`). Trocar a primeira pela segunda fez um CR-V em "Hatches" perder
   // o `forte` e cair na regra do ano — o dry-run pegou.
   if (tipoCat !== null && tipoCat !== 'carro' && !categoriaGenerica(cat)) return null;
-  const titulo = fold(titleRaw);
-  if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
   for (const [re, tipo] of TITULO_FORTE) if (re.test(titulo)) return tipo;
   return null;
 }
