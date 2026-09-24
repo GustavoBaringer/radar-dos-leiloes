@@ -666,14 +666,25 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "Caminhão Mercedes Benz 1718 com baú da marca Facchini" virando reboque.
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
   // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
   // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
   // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
   [/\bmercedes\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
+  // "VW/8.140" e "VW/8.150E" (prefixo de 1 dígito, série 140/Delivery) saíam
+  // do "vw ?\d{2} ?\d{3}\b" de cima: exigia 2 dígitos, e o "\b" final falhava
+  // quando o sufixo vem colado a letra ("150E"). Achado em 24/09 no bomvalor,
+  // categoria da fonte "Hatchback". O espaço ENTRE prefixo e sufixo é
+  // obrigatório — sem isso o dry-run pegou "VW, 1990/1991" (Parati, Fusca,
+  // Kombi) casando o ANO como se fosse código de caminhão via backtracking.
+  [/\bvw\s?([1-9]\d?)\s(\d{3})(?!\d)/, 'caminhao'],
   [/\b(carreta|graneleiro)\b/, 'reboque'],
   [/\b(motocicleta|motoneta|scooter|ciclomotor|quadriciclo)\b/, 'moto'],
   [/\b(cg ?1[1-6]\d|cb ?\d{3}|cbr ?\d{3}|biz|pop ?1[01]0|fan ?125|bros|xre ?\d{3}|nxr|pcx|nmax|burgman|hornet|twister|fazer|ybr ?\d{2,3}|factor ?\d{3}|xj6|xtz ?\d{3}|crosser|lander|tenere|ninja ?\d{3}|shineray|haojue|dafra|kasinski)\b/, 'moto'],
+  // "HONDA/CG" sem número (vlance não classifica) ou "125FAN" colado (o "\b"
+  // acima falha sem espaço) ficavam carro. "CG" sozinho é ambíguo demais pra
+  // valer sem a marca do lado — por isso não entra solto na lista de cima.
+  [/\bhonda\b.{0,15}?\bcg\b/, 'moto'],
   [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro)\b/, 'picape'],
   [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[469]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
   [/\b(sprinter|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo)\b/, 'utilitario'],
