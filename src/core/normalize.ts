@@ -667,6 +667,10 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
   [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
+  // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
+  // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
+  // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
+  [/\bmercedes\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
   [/\b(carreta|graneleiro)\b/, 'reboque'],
   [/\b(motocicleta|motoneta|scooter|ciclomotor|quadriciclo)\b/, 'moto'],
   [/\b(cg ?1[1-6]\d|cb ?\d{3}|cbr ?\d{3}|biz|pop ?1[01]0|fan ?125|bros|xre ?\d{3}|nxr|pcx|nmax|burgman|hornet|twister|fazer|ybr ?\d{2,3}|factor ?\d{3}|xj6|xtz ?\d{3}|crosser|lander|tenere|ninja ?\d{3}|shineray|haojue|dafra|kasinski)\b/, 'moto'],
