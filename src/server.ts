@@ -433,7 +433,7 @@ async function carregarRender(): Promise<((lot: any, publico?: boolean) => strin
  * a mesma casca e o cliente decide o que mostrar pelo caminho. Sem isto, abrir
  * /alertas direto (ou recarregar com o drawer aberto) dava 404 do estático.
  */
-const APP_ROTAS = ['/busca', '/alertas', '/cobertura'];
+const APP_ROTAS = ['/busca', '/alertas', '/favoritos', '/cobertura'];
 
 /**
  * A URL do estático carrega a data de modificação. `cache-control: max-age=0`
@@ -1105,6 +1105,10 @@ app.get('/api/favorites', async (req) => {
       FROM favorites f
       JOIN lots l ON l.id = f.lot_id
      WHERE f.owner_id = $1
+       -- Mesmo filtro do /api/alerts/hits: lote encerrado some da lista sem
+       -- apagar a linha de favoritos, porque reabre com o mesmo id na 2ª praça.
+       AND l.status NOT IN ('encerrado','vendido')
+       AND NOT ${VENCIDO}
      ORDER BY f.created_at DESC`, [(await donoDe(req)).userId]);
 });
 

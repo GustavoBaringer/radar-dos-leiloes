@@ -37,18 +37,29 @@ await page.fill('#usuario', process.env.APP_USUARIO);
 await page.fill('#senha', process.env.APP_SENHA);
 await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
 
+// A conta de produção já tem favoritos de verdade (do usuário) — comparar
+// contra o tamanho ANTES, nunca contra 0/1 fixo, e nunca apagar o que já
+// estava lá.
+const antesDoTeste = await page.evaluate(() => fetch('/api/favorites', { credentials: 'same-origin' }).then((r) => r.json()));
+const totalAntes = antesDoTeste.length;
+
 await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
 await page.waitForSelector('.grade .card', { timeout: 15000 });
 
-const primeiroCard = page.locator('.grade .card').first();
+const candidato = page.locator('.grade .card').filter({ hasNot: page.locator('button.ico[aria-pressed="true"]') }).first();
 // O id, não o título: o worker recoleta ao vivo e pode reclassificar o
 // título entre uma leitura e outra — o id é a identidade estável do lote.
-const idLote = await primeiroCard.getAttribute('data-id');
-const estrela = primeiroCard.locator('button.ico');
+// E a partir daqui a busca é sempre por [data-id]: um locator baseado em
+// ".filter(hasNot pressed)" se re-resolve a cada chamada, e depois do clique
+// o próprio card deixa de bater no filtro — o "estrela" apontaria pra OUTRO
+// cartão.
+const idLote = await candidato.getAttribute('data-id');
+const cardFixo = page.locator(`.grade .card[data-id="${idLote}"]`);
+const estrela = cardFixo.locator('button.ico');
 await estrela.waitFor({ state: 'visible' });
 await page.screenshot({ path: 'shots/favoritos-1-antes.png' });
 
-afirma((await estrela.getAttribute('aria-pressed')) === 'false', 'estrela nasce apagada no card');
+afirma((await estrela.getAttribute('aria-pressed')) === 'false', 'estrela nasce apagada no card (lote ainda não favoritado)');
 
 await estrela.click();
 await page.waitForTimeout(400);
@@ -56,24 +67,43 @@ afirma((await estrela.getAttribute('aria-pressed')) === 'true', 'estrela acende 
 
 // Confere no servidor, não só na tela: o clique tem de ter persistido.
 const doServidor = await page.evaluate(() => fetch('/api/favorites', { credentials: 'same-origin' }).then((r) => r.json()));
-afirma(doServidor.length === 1, `POST persistiu no banco (${doServidor.length} favorito(s))`);
+afirma(doServidor.length === totalAntes + 1, `POST persistiu no banco (${totalAntes} → ${doServidor.length})`);
+afirma(doServidor.some((f) => String(f.id) === idLote), `o lote favoritado (${idLote}) está na lista`);
 
 await page.click('button[role=tab]:has-text("Favoritos")');
 await page.waitForSelector('.grade .card, .empty', { timeout: 10000 });
 await page.screenshot({ path: 'shots/favoritos-2-aba.png' });
 
-const cardsNaAba = await page.locator('.grade .card').count();
-afirma(cardsNaAba === 1, `aba Favoritos mostra exatamente 1 card (achou ${cardsNaAba})`);
-const idNaAba = await page.locator('.grade .card').first().getAttribute('data-id');
-afirma(idNaAba === idLote, `é o MESMO lote favoritado (busca=${idLote} aba=${idNaAba})`);
+const idsNaAba = await page.locator('.grade .card').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')));
+afirma(idsNaAba.length === totalAntes + 1, `aba Favoritos mostra ${totalAntes + 1} cards (achou ${idsNaAba.length})`);
+afirma(idsNaAba.includes(idLote), `o lote favoritado (${idLote}) aparece na aba`);
 
-await page.locator('.grade .card button.ico').first().click();
+const cardRecemFavoritado = page.locator(`.grade .card[data-id="${idLote}"]`);
+await cardRecemFavoritado.locator('button.ico').click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: 'shots/favoritos-3-depois-remover.png' });
-afirma(await page.locator('.empty').count() > 0, 'desfavoritar pela aba remove o card e mostra o estado vazio');
+afirma(await page.locator(`.grade .card[data-id="${idLote}"]`).count() === 0, 'desfavoritar pela aba remove só aquele card');
 
 const doServidorDepois = await page.evaluate(() => fetch('/api/favorites', { credentials: 'same-origin' }).then((r) => r.json()));
-afirma(doServidorDepois.length === 0, 'DELETE persistiu no banco (0 favoritos)');
+afirma(doServidorDepois.length === totalAntes, `DELETE persistiu no banco (voltou a ${totalAntes})`);
+
+// Lote ENCERRADO favoritado não pode voltar a aparecer na lista — achado em
+// produção (786068 do freitas, já vendido, continuava em /api/favorites).
+const encerrado = await page.evaluate(async () => {
+  const r = await fetch('/api/search?status=encerrado&pageSize=1', { credentials: 'same-origin' });
+  return (await r.json()).items[0];
+});
+if (encerrado) {
+  await page.evaluate((id) => fetch('/api/favorites', {
+    method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ lotId: id }),
+  }), encerrado.id);
+  const listaComEncerrado = await page.evaluate(() => fetch('/api/favorites', { credentials: 'same-origin' }).then((r) => r.json()));
+  afirma(!listaComEncerrado.some((f) => f.id === encerrado.id), `lote encerrado (${encerrado.id}) favoritado não aparece na lista`);
+  await page.evaluate((id) => fetch(`/api/favorites/${id}`, { method: 'DELETE', credentials: 'same-origin' }), encerrado.id);
+} else {
+  afirma(false, 'não achei nenhum lote encerrado na base pra testar o filtro');
+}
 
 await browser.close();
 
