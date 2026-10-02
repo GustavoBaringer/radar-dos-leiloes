@@ -89,7 +89,8 @@ export function contaFiltros(e: EstadoBusca): number {
     (e.onlyWithDate ? 1 : 0) +
     (e.onlyWithPhoto ? 1 : 0) +
     (e.prazo ? 1 : 0) +
-    (e.abaixo ? 1 : 0)
+    (e.abaixo ? 1 : 0) +
+    (e.local ? 1 : 0)
   );
 }
 

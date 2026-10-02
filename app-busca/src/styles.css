@@ -216,9 +216,9 @@
       transform: none;
     }
 
+    /* O giro do radar (.sweep) fica de fora de propósito: é a marca, pequeno e lento. */
     .live-pulse,
-    .halo-drift,
-    .sweep {
+    .halo-drift {
       animation: none !important;
     }
   }
@@ -346,8 +346,26 @@
   .btn-fantasma:hover { background: rgba(255, 255, 255, .09) }
   @media (prefers-reduced-motion: reduce) { .btn-cta:hover { transform: none } }
 
-  .abre-menu { display: none; margin-left: auto; width: 44px; height: 44px; place-items: center; background: var(--brand-panel); border: 1px solid var(--border); border-radius: 50%; color: var(--foreground); cursor: pointer }
-  .menu-movel { display: grid; gap: 2px; padding: 8px 16px 14px; border-top: 1px solid var(--border); background: var(--brand-panel) }
+  .abre-menu { position: relative; display: none; margin-left: auto; width: 44px; height: 44px; place-items: center; background: var(--brand-panel); border: 1px solid var(--border); border-radius: 50%; color: var(--foreground); cursor: pointer; transition: border-color .2s }
+  .abre-menu i { position: absolute; left: 13px; width: 16px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .28s cubic-bezier(.22,.68,.3,1), opacity .2s }
+  .abre-menu i:nth-child(1) { top: 15px } .abre-menu i:nth-child(2) { top: 20px } .abre-menu i:nth-child(3) { top: 25px }
+  .abre-menu[aria-expanded="true"] { border-color: color-mix(in srgb, var(--brand-core) 55%, transparent) }
+  .abre-menu[aria-expanded="true"] i:nth-child(1) { transform: translateY(5px) rotate(45deg) }
+  .abre-menu[aria-expanded="true"] i:nth-child(2) { opacity: 0; transform: scaleX(.3) }
+  .abre-menu[aria-expanded="true"] i:nth-child(3) { transform: translateY(-5px) rotate(-45deg) }
+  /* Mesmo painel da landing: sobreposto, desce com fade. Aberto, o cabeçalho sobe acima do mapa em tela cheia (55). */
+  .topo:has(.menu-movel[data-aberto="1"]) { z-index: 65 }
+  .menu-movel { position: absolute; left: 0; right: 0; top: 100%; display: grid; gap: 2px; padding: 8px 16px 14px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--brand-panel); box-shadow: 0 24px 48px -24px #000; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: opacity .24s ease, transform .28s cubic-bezier(.22,.68,.3,1), visibility 0s linear .28s }
+  .menu-movel[data-aberto="1"] { opacity: 1; visibility: visible; transform: none; transition: opacity .24s ease, transform .28s cubic-bezier(.22,.68,.3,1), visibility 0s }
+  .menu-movel > * { opacity: 0; transform: translateY(-6px); transition: opacity .2s ease, transform .24s ease, background .15s, color .15s }
+  .menu-movel[data-aberto="1"] > * { opacity: 1; transform: none }
+  .menu-movel[data-aberto="1"] > :nth-child(1) { transition-delay: 55ms, 55ms, 0s, 0s }
+  .menu-movel[data-aberto="1"] > :nth-child(2) { transition-delay: 80ms, 80ms, 0s, 0s }
+  .menu-movel[data-aberto="1"] > :nth-child(3) { transition-delay: 105ms, 105ms, 0s, 0s }
+  .menu-movel[data-aberto="1"] > :nth-child(4) { transition-delay: 130ms, 130ms, 0s, 0s }
+  .menu-movel[data-aberto="1"] > :nth-child(5) { transition-delay: 155ms, 155ms, 0s, 0s }
+  .menu-movel[data-aberto="1"] > :nth-child(6) { transition-delay: 180ms, 180ms, 0s, 0s }
+  @media (min-width: 861px) { .menu-movel { display: none } }
   .menu-movel button, .menu-movel a {
     display: flex; align-items: center; gap: 8px; text-align: left; background: transparent; border: 0; border-radius: 12px;
     padding: 12px; color: var(--brand-ink-soft); cursor: pointer; font: inherit;
@@ -410,7 +428,7 @@
   .layout { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 28px; align-items: start; padding-block: 28px 8px; scroll-margin-top: 72px }
   .resultados { min-width: 0 }
   /* A lateral rola por dentro: com mais de uma tela de altura, "Limpar" só aparecia rolando a página inteira. */
-  .lateral-desktop { position: sticky; top: 88px; max-height: calc(100vh - 108px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin }
+  .lateral-desktop { position: sticky; top: 88px; max-height: calc(100vh - 108px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin }
   .filtros-toggle { display: none }
   @media (max-width: 980px) {
     .layout { grid-template-columns: 1fr; padding-top: 28px }
@@ -448,7 +466,8 @@
   .f-secao > summary::-webkit-details-marker { display: none }
   .f-secao > summary svg { color: var(--brand-ink-soft); transition: rotate .2s }
   .f-secao[open] > summary svg { rotate: 180deg }
-  .f-secao-corpo { display: grid; gap: 10px }
+  /* minmax(0,1fr): sem isto a coluna crescia até o nome mais longo ("Recuperado de financiamento") e a lateral rolava de lado. */
+  .f-secao-corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px }
   .f-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--brand-ink-soft) 80%, transparent); font-weight: 700; margin-top: 4px }
 
   .f-faixa { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; color: var(--brand-ink-soft) }
@@ -462,7 +481,7 @@
   .f-atalho:hover { color: var(--foreground); border-color: var(--brand-bright) }
   .f-atalho[aria-pressed="true"] { background: color-mix(in srgb, var(--brand-core) 22%, transparent); border-color: var(--brand-bright); color: var(--foreground) }
 
-  .f-opcoes { display: grid; gap: 2px }
+  .f-opcoes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px }
   .f-op { display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin-inline: -8px; border-radius: 12px; cursor: pointer; color: var(--brand-ink-soft) }
   .f-op:hover { background: var(--brand-panel-2); color: var(--foreground) }
   .f-op input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; display: grid; place-items: center; border: 1.5px solid var(--brand-ink-soft); border-radius: 7px; cursor: pointer }
@@ -720,7 +739,11 @@
     background: var(--brand-panel); border-left: 1px solid var(--border); border-radius: 28px 0 0 28px;
     box-shadow: -40px 0 80px -40px rgba(2, 4, 10, .95);
   }
-  @media (prefers-reduced-motion: no-preference) { .drawer .painel { animation: entra-lateral .28s cubic-bezier(.22, .68, .3, 1) both } }
+  /* O @keyframes entra-lateral nunca existiu: a gaveta abria sem animação nenhuma. */
+  .drawer .painel { animation: entra-lateral .3s cubic-bezier(.22, .68, .3, 1) both }
+  .drawer .scrim { animation: aparece .26s ease both }
+  .drawer.saindo .painel { animation: sai-lateral .26s cubic-bezier(.5, 0, .75, 0) both }
+  .drawer.saindo .scrim { animation: some .26s ease both }
   .painel-topo {
     position: sticky; top: 0; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
     padding: 20px 24px; border-bottom: 1px solid var(--border);
@@ -872,7 +895,8 @@
   .aviso a { color: var(--brand-bright); text-decoration: underline }
 
   /* ---------- diálogo ---------- */
-  .dlg { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--brand-panel); color: var(--foreground); padding: 0; max-width: min(460px, calc(100vw - 32px)); width: 100% }
+  /* margin:auto é o que centraliza o showModal(); o preflight do Tailwind zera e o diálogo colava no canto. */
+  .dlg { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--brand-panel); color: var(--foreground); padding: 0; margin: auto; max-width: min(460px, calc(100vw - 32px)); width: 100% }
   .dlg::backdrop { background: rgba(2, 4, 10, .7); backdrop-filter: blur(3px) }
   .dlg form { padding: 18px }
   .dlg h3 { font-family: var(--font-display); font-size: 17px; margin: 0 0 4px }
@@ -884,6 +908,10 @@
   }
   .dlg fieldset { border: 1px solid var(--border); border-radius: 9px; padding: 12px; margin: 0 0 14px }
   .dlg legend { font-size: 11px; color: var(--brand-ink-soft); padding: 0 6px }
+  .dlg .chk { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--foreground); margin: 0; padding: 7px 0; cursor: pointer }
+  .dlg .chk input { width: 17px; height: 17px; margin: 0; flex: 0 0 auto; accent-color: var(--brand-core) }
+  .dlg .chk input:disabled { opacity: .7 }
+  .dlg fieldset input[type="email"] { margin: 8px 0 0 }
   .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px }
   .btn-pri { background: var(--brand-core); color: #fff; border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 600; cursor: pointer; font: inherit }
   .btn-pri:hover:not(:disabled) { background: var(--brand-bright) }
@@ -1000,7 +1028,8 @@ a { color: inherit; text-decoration: none }
 
 @media (max-width: 680px) {
   .mapa-palco { height: 56vh; }
-  .seg-vista button span { display: none; }
+  /* Grade/Lista ficam só ícone no mobile; o "Mapa" (com-rotulo) continua escrito para instigar. */
+  .seg-vista button:not(.com-rotulo) span { display: none; }
   .seg-vista button { padding: 6px 10px; }
 }
 
@@ -1032,6 +1061,10 @@ a { color: inherit; text-decoration: none }
     border: 0;
     border-radius: 0;
   }
+  /* Embaixo, a folha cobria zoom e escala: o toque caía nos cards da lista. */
+  .mapa-area.mapa-cheio .mapa-zoom { left: auto; right: 12px; top: 12px; bottom: auto }
+  .mapa-area.mapa-cheio .mapa-zoom button { width: 40px; height: 40px }
+  .mapa-area.mapa-cheio .mapa-escala { top: 14px; bottom: auto; left: 12px; right: auto }
 }
 
 .folha-mapa {
@@ -1145,3 +1178,28 @@ a { color: inherit; text-decoration: none }
   .mapa-aviso-roda { animation: aviso-entra 0.14s ease-out; }
   @keyframes aviso-entra { from { opacity: 0 } to { opacity: 1 } }
 }
+
+.dlg-erro { margin: -4px 0 12px; padding: 9px 11px; border: 1px solid rgba(239, 68, 68, .4); border-radius: 9px; background: rgba(239, 68, 68, .1); color: #fca5a5; font-size: 13px }
+.falha-tela { max-width: 460px; margin: 18vh auto; padding: 0 20px; text-align: center }
+.falha-tela h1 { font-family: var(--font-display); font-size: 22px; margin: 0 0 8px }
+.falha-tela p { color: var(--brand-ink-soft); margin: 0 0 18px }
+
+.f-aviso { margin: 2px 0 0; font-size: 12px; color: #fbbf24 }
+.mapa-erro { position: absolute; z-index: 6; left: 50%; top: 16px; translate: -50% 0; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1px solid rgba(239, 68, 68, .4); border-radius: 12px; background: color-mix(in srgb, var(--brand-panel) 94%, transparent); color: #fca5a5; font-size: 13px; white-space: nowrap }
+.mapa-area:not(.mapa-cheio) { position: relative }
+.chip-ativo { max-width: 100%; min-width: 0 }
+.chip-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.interpreted b, .interpreted span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.interpreted .pill { display: inline-block; vertical-align: middle }
+.rb-titulo { min-width: 0; max-width: 100%; }
+
+/* Gaveta de filtros: sobe de baixo e o fundo escurece em fade (abrir e fechar). */
+.gaveta-filtros .scrim { opacity: 0; transition: opacity .28s ease }
+.gaveta-filtros .gaveta-painel { transform: translateY(100%); transition: transform .34s cubic-bezier(.22, .68, .3, 1) }
+.gaveta-filtros[data-aberto="1"] .scrim { opacity: 1 }
+.gaveta-filtros[data-aberto="1"] .gaveta-painel { transform: none }
+
+@keyframes entra-lateral { from { transform: translateX(100%) } to { transform: none } }
+@keyframes sai-lateral { from { transform: none } to { transform: translateX(100%) } }
+@keyframes aparece { from { opacity: 0 } }
+@keyframes some { to { opacity: 0 } }

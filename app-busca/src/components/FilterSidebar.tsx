@@ -1,8 +1,38 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import type { FacetRow, Facets } from '@/lib/types';
 import { type DefMulti, type EstadoBusca, type MultiId, defDe, rotuloOpcao } from '@/lib/filtros';
 import { MultiSelect } from './MultiSelect';
+
+// Só vai para a busca 500 ms depois da última tecla (ou ao sair/Enter): direto
+// no onChange, digitar 50000 disparava cinco buscas.
+function CampoNumero({ valor, aoAplicar, ...resto }: { valor: string; aoAplicar: (v: string) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+  const [texto, setTexto] = useState(valor);
+  const timer = useRef(0);
+  useEffect(() => setTexto(valor), [valor]);
+  const aplicar = (v: string) => {
+    window.clearTimeout(timer.current);
+    const limpo = v.replace(/\D/g, '');
+    if (limpo !== valor) aoAplicar(limpo);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return (
+    <input
+      {...resto}
+      type="number" inputMode="numeric" min={0} value={texto}
+      onChange={(e) => {
+        setTexto(e.target.value);
+        window.clearTimeout(timer.current);
+        const v = e.target.value;
+        timer.current = window.setTimeout(() => aplicar(v), 500);
+      }}
+      onBlur={(e) => aplicar(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && aplicar((e.target as HTMLInputElement).value)}
+    />
+  );
+}
+
+const invertida = (min: string, max: string) => !!min && !!max && Number(min) > Number(max);
 
 interface Props {
   estado: EstadoBusca;
@@ -122,18 +152,17 @@ export function FilterSidebar({ estado, facetas, rotulosServidor, aoMudar, aoLim
 
       <Secao titulo="Faixa de preço">
         <div className="f-faixa">
-          <input
-            type="number" inputMode="numeric" placeholder="Mín. R$" aria-label="Preço mínimo em reais"
-            value={estado.priceMin}
-            onChange={(e) => aoMudar({ priceMin: e.target.value, page: 1 })}
+          <CampoNumero
+            placeholder="Mín. R$" aria-label="Preço mínimo em reais"
+            valor={estado.priceMin} aoAplicar={(v) => aoMudar({ priceMin: v, page: 1 })}
           />
           <span aria-hidden>–</span>
-          <input
-            type="number" inputMode="numeric" placeholder="Máx. R$" aria-label="Preço máximo em reais"
-            value={estado.priceMax}
-            onChange={(e) => aoMudar({ priceMax: e.target.value, page: 1 })}
+          <CampoNumero
+            placeholder="Máx. R$" aria-label="Preço máximo em reais"
+            valor={estado.priceMax} aoAplicar={(v) => aoMudar({ priceMax: v, page: 1 })}
           />
         </div>
+        {invertida(estado.priceMin, estado.priceMax) && <p className="f-aviso" role="status">O mínimo está acima do máximo.</p>}
         <div className="f-atalhos">
           {FAIXAS.map(([nome, min, max]) => {
             const on = estado.priceMin === min && estado.priceMax === max;
@@ -173,18 +202,17 @@ export function FilterSidebar({ estado, facetas, rotulosServidor, aoMudar, aoLim
           {lista('vehicleType')}
           <span className="f-sub">Ano do modelo</span>
           <div className="f-faixa">
-            <input
-              type="number" inputMode="numeric" placeholder="De" aria-label="Ano do modelo, de"
-              value={estado.yearMin}
-              onChange={(e) => aoMudar({ yearMin: e.target.value, page: 1 })}
+            <CampoNumero
+              placeholder="De" aria-label="Ano do modelo, de"
+              valor={estado.yearMin} aoAplicar={(v) => aoMudar({ yearMin: v, page: 1 })}
             />
             <span aria-hidden>–</span>
-            <input
-              type="number" inputMode="numeric" placeholder="Até" aria-label="Ano do modelo, até"
-              value={estado.yearMax}
-              onChange={(e) => aoMudar({ yearMax: e.target.value, page: 1 })}
+            <CampoNumero
+              placeholder="Até" aria-label="Ano do modelo, até"
+              valor={estado.yearMax} aoAplicar={(v) => aoMudar({ yearMax: v, page: 1 })}
             />
           </div>
+          {invertida(estado.yearMin, estado.yearMax) && <p className="f-aviso" role="status">O ano inicial está depois do final.</p>}
         </Secao>
       )}
 

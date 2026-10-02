@@ -49,7 +49,7 @@ function BlocoKv({ titulo: t, pares }: { titulo: string; pares: Par[] }) {
  * evita a divergência que já aconteceu com o cartão.
  */
 export function LotDrawer({
-  lot, aoFechar, comoPagina = false, favoritado, aoFavoritar,
+  lot: lotAtual, aoFechar, comoPagina = false, favoritado, aoFavoritar,
 }: {
   lot: Lot | null;
   aoFechar: () => void;
@@ -57,6 +57,23 @@ export function LotDrawer({
   favoritado?: boolean;
   aoFavoritar?: (id: number) => void;
 }) {
+  // Sai animando: o último lote fica na tela até a gaveta deslizar para fora.
+  // Com o lote zerado na hora, ela sumia de um quadro para o outro.
+  const [lot, setLot] = useState(lotAtual);
+  const [saindo, setSaindo] = useState(false);
+  useEffect(() => {
+    if (lotAtual || comoPagina) {
+      setLot(lotAtual);
+      setSaindo(false);
+      return;
+    }
+    setSaindo(true);
+    const t = window.setTimeout(() => {
+      setLot(null);
+      setSaindo(false);
+    }, 260);
+    return () => window.clearTimeout(t);
+  }, [lotAtual, comoPagina]);
   const [fotoGrande, setFotoGrande] = useState(0);
   const painel = useRef<HTMLDivElement>(null);
   const botaoFechar = useRef<HTMLButtonElement>(null);
@@ -64,7 +81,7 @@ export function LotDrawer({
   useEffect(() => setFotoGrande(0), [lot?.id]);
 
   useEffect(() => {
-    if (!lot || comoPagina) return;
+    if (!lotAtual || comoPagina) return;
     botaoFechar.current?.focus();
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') aoFechar();
@@ -94,7 +111,7 @@ export function LotDrawer({
       document.removeEventListener('keydown', tecla);
       document.body.style.overflow = antes;
     };
-  }, [lot, aoFechar, comoPagina]);
+  }, [lotAtual, aoFechar, comoPagina]);
 
   if (!lot) return null;
 
@@ -313,7 +330,7 @@ export function LotDrawer({
   if (comoPagina) return <main className="faixa lote-pagina">{corpo}</main>;
 
   return (
-    <div className="drawer open" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div className={`drawer open${saindo ? ' saindo' : ''}`} role="dialog" aria-modal="true" aria-labelledby="drawerTitle" inert={saindo}>
       <div className="scrim" onClick={aoFechar} />
       <div className="painel" ref={painel}>
         {corpo}

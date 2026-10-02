@@ -97,7 +97,10 @@ export function Alertas({
 
       <h2 className="sub-head">Meus alertas</h2>
       {erro ? (
-        <div className="empty">Não foi possível carregar os alertas ({erro}).</div>
+        <div className="empty">
+          Não foi possível carregar os alertas ({erro}).{' '}
+          <button type="button" className="btn-clear tentar" onClick={() => void carregar()}>Tentar de novo</button>
+        </div>
       ) : !alertas ? (
         <div className="empty">Carregando…</div>
       ) : alertas.length === 0 ? (
@@ -130,7 +133,12 @@ export function Alertas({
       )}
 
       <h2 className="sub-head">Lotes encontrados</h2>
-      {hits.length === 0 ? (
+      {/* Com a carga falhando, "Nada encontrado" afirmava um resultado que não existe. */}
+      {erro ? (
+        <div className="empty">Os lotes dos alertas também não carregaram.</div>
+      ) : !alertas ? (
+        <div className="empty">Carregando…</div>
+      ) : hits.length === 0 ? (
         <div className="empty">
           Nada encontrado ainda. O alerta dispara quando um lote novo casar com a sua busca.
         </div>

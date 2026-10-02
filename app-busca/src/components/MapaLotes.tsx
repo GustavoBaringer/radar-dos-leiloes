@@ -40,13 +40,18 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
   const [status, setStatus] = useState('');
   const [aviso, setAviso] = useState(false);
   const avisoTimer = useRef(0);
+  const [falhaMalha, setFalhaMalha] = useState(false);
+  const [tentativaMalha, setTentativaMalha] = useState(0);
 
   useEffect(() => {
     if (malhaUf) return;
     let vivo = true;
-    api.malha<AnelUf[]>('uf').then((m) => { malhaUf = m; if (vivo) setMalhaPronta(true); }).catch(() => {});
+    setFalhaMalha(false);
+    api.malha<AnelUf[]>('uf')
+      .then((m) => { malhaUf = m; if (vivo) setMalhaPronta(true); })
+      .catch(() => { if (vivo) setFalhaMalha(true); });
     return () => { vivo = false; };
-  }, []);
+  }, [tentativaMalha]);
 
   const enquadra = useCallback(() => {
     const cv = ref.current;
@@ -401,7 +406,16 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
           Use <kbd>Ctrl</kbd> + roda para aproximar
         </div>
       )}
-      {!malhaPronta && <div className="mapa-carregando">carregando o mapa…</div>}
+      {!malhaPronta && (
+        <div className="mapa-carregando">
+          {falhaMalha ? (
+            <span role="alert">
+              Não foi possível carregar o desenho do mapa.{' '}
+              <button type="button" className="btn-clear tentar" onClick={() => setTentativaMalha((n) => n + 1)}>Tentar de novo</button>
+            </span>
+          ) : 'carregando o mapa…'}
+        </div>
+      )}
     </div>
   );
 }

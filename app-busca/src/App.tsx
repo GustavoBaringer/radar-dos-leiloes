@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Alerta, Lot, WsMessage } from '@/lib/types';
-import { api } from '@/lib/api';
-import { type EstadoBusca, ESTADO_VAZIO, contaFiltros, estadoDaUrl, urlDoEstado, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
+import { api, ApiError } from '@/lib/api';
+import { type EstadoBusca, ESTADO_VAZIO, estadoDaUrl, urlDoEstado, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
 import { money } from '@/lib/format';
 import { registrarVisto } from '@/lib/vistos';
 import { idDoSlug, slugDoLote } from '@/lib/slug';
@@ -91,14 +91,18 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
 
   const abrirLote = useCallback(async (id: number, empilhar = true) => {
     focoAnterior.current = document.activeElement as HTMLElement;
+    // API lenta: sem retorno, o clique no card parecia ignorado.
+    const lento = window.setTimeout(() => toast('Abrindo lote…'), 600);
     try {
       const l = await api.lote(id);
       setLote(l);
       registrarVisto(l);
       // A URL do lote é compartilhável: quem recebe o link abre a gaveta direto.
       if (empilhar) history.pushState({ lote: l.id }, '', `/lote/${slugDoLote(l)}`);
-    } catch {
-      toast('Lote não encontrado.');
+    } catch (e) {
+      toast(e instanceof ApiError && e.status === 404 ? 'Lote não encontrado.' : 'Não foi possível abrir o lote agora. Tente de novo.');
+    } finally {
+      window.clearTimeout(lento);
     }
   }, [toast]);
 
@@ -120,6 +124,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     if (!loteInicial && location.pathname.startsWith('/lote/')) {
       const id = idDoSlug(location.pathname.slice(6));
       if (id) void abrirLote(id, false);
+      else toast('Lote não encontrado.');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -127,12 +132,16 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   /**
    * replaceState e não pushState: cada troca de filtro empilharia uma entrada e
    * o "voltar" viraria um desfazer clique a clique. Quem empilha é a troca de
-   * aba e a abertura do lote.
+   * aba, a abertura do lote e a troca de PÁGINA — esta é navegação, e o voltar
+   * saía da busca inteira em vez de voltar para a página anterior.
    */
   useEffect(() => {
     if (aba !== 'busca' || location.pathname.startsWith('/lote/')) return;
     const alvo = urlDoEstado(estado);
-    if (location.pathname + location.search !== alvo) history.replaceState(history.state, '', alvo);
+    if (location.pathname + location.search === alvo) return;
+    const trocouPagina = location.pathname === '/busca' && estadoDaUrl(location.search).page !== estado.page;
+    if (trocouPagina) history.pushState(history.state, '', alvo);
+    else history.replaceState(history.state, '', alvo);
   }, [estado, aba]);
 
   const trocarAba = useCallback((a: Aba) => {
@@ -197,7 +206,8 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     setEstado((e) => ({ ...e, ...patch, multi: patch.multi ?? e.multi }));
   }, []);
 
-  const limpar = useCallback(() => setEstado({ ...ESTADO_VAZIO, multi: { ...ESTADO_VAZIO.multi } }), []);
+  // Vista e ordenação são jeito de VER, não filtro: "Limpar tudo" no mapa voltava para a grade.
+  const limpar = useCallback(() => setEstado((e) => ({ ...ESTADO_VAZIO, multi: { ...ESTADO_VAZIO.multi }, vista: e.vista, sort: e.sort })), []);
 
   /** O alerta guarda a busca da tela: termo + filtros ativos. */
   const abrirDialogoCriar = useCallback(() => {
@@ -206,17 +216,33 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     for (const id of MULTI_IDS) if (estado.multi[id].length) filtros[id] = estado.multi[id].join(',');
     if (estado.onlyWithPhoto) filtros.onlyWithPhoto = true;
     if (estado.abaixo) filtros.belowAppraisal = true;
+    // O casamento do alerta (core/alerts.ts) não conhece prazo, "com data" nem ponto
+    // do mapa: contá-los no resumo prometia um filtro que o alerta não guarda.
+    const foraDoAlerta = [
+      estado.prazo && 'encerramento',
+      estado.onlyWithDate && 'com data',
+      estado.local && 'ponto do mapa',
+    ].filter(Boolean) as string[];
     const q = estado.q.trim();
     if (!q && !Object.keys(filtros).length) {
-      toast('Faça uma busca ou escolha um filtro antes de criar o alerta.');
+      toast(
+        foraDoAlerta.length
+          ? `O alerta não usa ${foraDoAlerta.join(', ')}. Escolha um termo, tipo, região ou preço.`
+          : 'Faça uma busca ou escolha um filtro antes de criar o alerta.',
+      );
       return;
     }
+    const salvos = Object.keys(filtros).length;
     setAlvoDialogo({
       alerta: null,
       label: q || 'Meus filtros',
       q,
       filtros,
-      resumo: [q ? `busca "${q}"` : null, contaFiltros(estado) ? `${contaFiltros(estado)} filtro(s)` : null]
+      resumo: [
+        q ? `busca "${q}"` : null,
+        salvos ? `${salvos} filtro(s)` : null,
+        foraDoAlerta.length ? `sem ${foraDoAlerta.join(', ')} (não vale para alerta)` : null,
+      ]
         .filter(Boolean)
         .join(' · '),
     });
@@ -250,9 +276,10 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         <LotDrawer lot={lote} aoFechar={() => {}} comoPagina />
         <section className="faixa convite">
           <div>
-            <h2>Este é um de 21 mil lotes no índice</h2>
+            {/* Sem número fixo: "21 mil" e "12 plataformas" envelheciam a cada coleta. */}
+            <h2>Este é só um dos lotes no índice</h2>
             <p>
-              Veículos e imóveis de 12 plataformas de leilão, com busca por modelo, filtro por
+              Veículos e imóveis de leilões oficiais de todo o Brasil, com busca por modelo, filtro por
               estado, cidade, comitente e leiloeiro, e alerta quando entrar um lote como este.
             </p>
           </div>

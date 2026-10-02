@@ -42,6 +42,10 @@ export function filtrosAtivos(e: EstadoBusca, rotulos: Record<string, Record<str
   if (e.abaixo) a.push({ chave: 'abaixo', texto: 'Abaixo da avaliação', remover: () => ({ abaixo: false, page: 1 }) });
   if (e.onlyWithPhoto) a.push({ chave: 'foto', texto: 'Com foto', remover: () => ({ onlyWithPhoto: false, page: 1 }) });
   if (e.onlyWithDate) a.push({ chave: 'data', texto: 'Com data de leilão', remover: () => ({ onlyWithDate: false, page: 1 }) });
+  if (e.local) {
+    const n = e.local.split(';').filter(Boolean).length;
+    a.push({ chave: 'local', texto: n > 1 ? `${n} pontos do mapa` : 'Ponto do mapa', remover: () => ({ local: '', page: 1 }) });
+  }
   return a;
 }
 
@@ -56,7 +60,7 @@ export function FiltrosAtivos({ ativos, estado, aoMudar, aoLimpar }: {
     <div className="ativos-linha" aria-label="Filtros ativos">
       {ativos.map((a) => (
         <button key={a.chave} type="button" className="chip-ativo" onClick={() => aoMudar(a.remover(estado))}>
-          {a.texto}
+          <span className="chip-txt">{a.texto}</span>
           <X size={13} aria-hidden />
           <span className="sr-only">remover filtro</span>
         </button>

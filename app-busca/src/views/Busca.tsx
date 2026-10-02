@@ -38,10 +38,32 @@ export function Busca({
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [gavetaFiltros, setGavetaFiltros] = useState(false);
+  // A gaveta continua montada durante a animação de saída e entra um quadro depois
+  // de montar: renderizada só quando aberta, não havia como animar nem abrir nem fechar.
+  const [gavetaVisivel, setGavetaVisivel] = useState(false);
+  const [gavetaMontada, setGavetaMontada] = useState(false);
+  useEffect(() => {
+    if (gavetaFiltros) {
+      setGavetaMontada(true);
+      const q = requestAnimationFrame(() => requestAnimationFrame(() => setGavetaVisivel(true)));
+      return () => cancelAnimationFrame(q);
+    }
+    setGavetaVisivel(false);
+    const t = window.setTimeout(() => setGavetaMontada(false), 320);
+    return () => window.clearTimeout(t);
+  }, [gavetaFiltros]);
+  useEffect(() => {
+    if (!gavetaFiltros) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setGavetaFiltros(false);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [gavetaFiltros]);
   const [rotulosServidor, setRotulos] = useState<Record<string, Record<string, string>>>({});
   const [mapa, setMapa] = useState<RespostaMapa | null>(null);
   const [ehCelular, setEhCelular] = useState(false);
   const [mapaCarregando, setMapaCarregando] = useState(false);
+  const [erroMapa, setErroMapa] = useState(false);
+  const [tentativaMapa, setTentativaMapa] = useState(0);
   const seq = useRef(0);
   const seqMapa = useRef(0);
   const resultadosRef = useRef<HTMLElement>(null);
@@ -59,6 +81,8 @@ export function Busca({
     return () => clearTimeout(t);
   }, [estado.q, estado.page, qAdiado, aoMudar]);
   const qs = useMemo(() => paramsDaBusca({ ...estado, q: qAdiado }), [estado, qAdiado]);
+  // "Tentar de novo" com a mesma URL não muda `qs`: sem este contador o efeito não refazia a busca.
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     const meu = ++seq.current;
@@ -76,7 +100,7 @@ export function Busca({
         // é o que permite o botão fechado mostrar "Curitiba" e não "CURITIBA".
         setRotulos((antes) => {
           const novo = { ...antes, city: { ...(antes.city ?? {}) } };
-          for (const c of r.facets.cities) if (c.label) novo.city[String(c.value)] = c.label;
+          for (const c of r.facets?.cities ?? []) if (c.label) novo.city[String(c.value)] = c.label;
           return novo;
         });
         aoCarregar?.(r);
@@ -90,7 +114,7 @@ export function Busca({
       });
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  }, [qs, tentativa]);
 
   // O mapa usa os MESMOS filtros da lista, menos página, ordenação e o ponto
   // escolhido: um ponto selecionado não pode apagar os outros do mapa.
@@ -104,13 +128,18 @@ export function Busca({
     if (estado.vista !== 'mapa') return;
     const meu = ++seqMapa.current;
     setMapaCarregando(true);
+    setErroMapa(false);
     const ac = new AbortController();
     api
       .mapa(qsMapa, ac.signal)
       .then((r) => { if (meu === seqMapa.current) { setMapa(r); setMapaCarregando(false); } })
-      .catch(() => { if (meu === seqMapa.current) setMapaCarregando(false); });
+      .catch(() => {
+        if (ac.signal.aborted || meu !== seqMapa.current) return;
+        setMapaCarregando(false);
+        setErroMapa(true);
+      });
     return () => ac.abort();
-  }, [qsMapa, estado.vista]);
+  }, [qsMapa, estado.vista, tentativaMapa]);
 
   const barraRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -119,6 +148,13 @@ export function Busca({
       const b = barraRef.current?.getBoundingClientRect().bottom ?? 0;
       document.documentElement.style.setProperty('--topo-mapa', `${Math.max(0, Math.round(b))}px`);
     };
+    // Entrando no mapa sem rolar, a barra ficava em y≈748 de 844: o mapa fixo
+    // abaixo dela tinha 96px e a página travada não deixava subir.
+    const barra = barraRef.current;
+    if (barra) {
+      const topo = document.querySelector('header.topo')?.getBoundingClientRect().height ?? 0;
+      window.scrollTo({ top: window.scrollY + barra.getBoundingClientRect().top - topo - 8, behavior: 'instant' });
+    }
     medir();
     // A barra CRESCE quando chegam os chips de "interpretado como": só resize e
     // scroll deixavam --topo-mapa velho, e o mapa subia por cima dela.
@@ -217,7 +253,7 @@ export function Busca({
   const conteudo = erro ? (
     <div className="empty">
       Não foi possível carregar os resultados ({erro}).
-      <button className="btn-clear tentar" onClick={() => aoMudar({})}>
+      <button className="btn-clear tentar" onClick={() => setTentativa((n) => n + 1)}>
         Tentar de novo
       </button>
     </div>
@@ -226,6 +262,12 @@ export function Busca({
       {Array.from({ length: 6 }, (_, i) => (
         <div className="skeleton" key={i} />
       ))}
+    </div>
+  ) : itens.length === 0 && (dados?.total ?? 0) > 0 ? (
+    // Página além do fim (link antigo, ?page=999999): há lotes, só não nesta página.
+    <div className="empty">
+      Esta página não existe mais nesta busca.
+      <button className="btn-clear tentar" onClick={() => aoMudar({ page: 1 })}>Ir para a primeira página</button>
     </div>
   ) : itens.length === 0 ? (
     <div className="empty vazio-rico">
@@ -304,8 +346,8 @@ export function Busca({
       <main ref={resultadosRef} id="resultados" className={`faixa layout${ehMapa ? ' vista-mapa' : ''}`}>
         {/* Desktop: coluna fixa. Celular: gaveta por baixo, com o mesmo componente. */}
         <div className="lateral-desktop">{lateral}</div>
-        {gavetaFiltros && (
-          <div className="gaveta-filtros" role="dialog" aria-modal="true" aria-label="Filtros">
+        {gavetaMontada && (
+          <div className="gaveta-filtros" role="dialog" aria-modal="true" aria-label="Filtros" data-aberto={gavetaVisivel ? '1' : '0'} inert={!gavetaFiltros}>
             <div className="scrim" onClick={() => setGavetaFiltros(false)} />
             <div className="gaveta-painel">
               {lateral}
@@ -317,6 +359,7 @@ export function Busca({
         )}
 
         <section className="resultados">
+          <h1 className="sr-only">Busca de lotes em leilão</h1>
           <div className="resultbar" ref={barraRef}>
             <div className="rb-titulo">
               <h2 className="count">
@@ -375,8 +418,10 @@ export function Busca({
                     aria-label={nome}
                     title={nome}
                     onClick={() => aoMudar({ vista: v, page: 1 })}
+                    className={v === 'mapa' ? 'com-rotulo' : undefined}
                   >
                     <Ico size={16} aria-hidden />
+                    {v === 'mapa' && <span>Mapa</span>}
                   </button>
                 ))}
               </div>
@@ -400,6 +445,12 @@ export function Busca({
                 ufAtiva={estado.multi.uf.length === 1 ? estado.multi.uf[0] : undefined}
                 aoEscolherLocal={(k) => aoMudar({ local: k, page: 1 })}
               />
+              {erroMapa && (
+                <div className="mapa-erro" role="alert">
+                  Não foi possível carregar os pontos do mapa.
+                  <button type="button" className="btn-clear tentar" onClick={() => setTentativaMapa((n) => n + 1)}>Tentar de novo</button>
+                </div>
+              )}
               {/* No celular a lista vive SOBRE o mapa, na folha. No desktop o mapa é a
                   única vista: a grade some, e a faixa leva de volta a ela. */}
               {ehCelular ? (

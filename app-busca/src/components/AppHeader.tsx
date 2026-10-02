@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BellPlus, Menu, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BellPlus } from 'lucide-react';
 import { MarcaRadar } from './MarcaRadar';
 
 export type Aba = 'busca' | 'alertas' | 'favoritos' | 'cobertura';
@@ -22,10 +22,31 @@ export function AppHeader({
   aba, aoTrocarAba, aoVivo, naoVistos, nFavoritos = 0, mostraCobertura, aoCriarAlerta, publico = false, voltarPara,
 }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
+  const botaoMenu = useRef<HTMLButtonElement>(null);
+  const painelMenu = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setMenuAberto(false);
   }, [aba]);
+
+  useEffect(() => {
+    if (!menuAberto) return;
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMenuAberto(false);
+      botaoMenu.current?.focus();
+    };
+    const fora = (e: PointerEvent) => {
+      const alvo = e.target as Node;
+      if (!painelMenu.current?.contains(alvo) && !botaoMenu.current?.contains(alvo)) setMenuAberto(false);
+    };
+    window.addEventListener('keydown', tecla);
+    document.addEventListener('pointerdown', fora);
+    return () => {
+      window.removeEventListener('keydown', tecla);
+      document.removeEventListener('pointerdown', fora);
+    };
+  }, [menuAberto]);
 
   const abas: Array<{ id: Aba; nome: string; n?: number; destaque?: boolean }> = [
     { id: 'busca', nome: 'Busca' },
@@ -114,18 +135,20 @@ export function AppHeader({
 
           <button
             type="button"
+            ref={botaoMenu}
             className="abre-menu"
             aria-expanded={menuAberto}
             aria-controls="menu-movel"
             aria-label={menuAberto ? 'Fechar menu' : 'Abrir menu'}
             onClick={() => setMenuAberto((v) => !v)}
           >
-            {menuAberto ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
+            <i aria-hidden /><i aria-hidden /><i aria-hidden />
           </button>
         </div>
 
-        {menuAberto && (
-          <nav className="menu-movel" id="menu-movel" aria-label="Seções">
+        {/* Sempre no DOM para animar abrir e fechar; inert tira do Tab quando fechado. */}
+        {(
+          <nav ref={painelMenu} className="menu-movel" id="menu-movel" aria-label="Seções" data-aberto={menuAberto ? '1' : '0'} inert={!menuAberto}>
             {abas.map((a) => (
               <button key={a.id} onClick={() => aoTrocarAba(a.id)} className={aba === a.id ? 'on' : ''}>
                 {a.nome}
