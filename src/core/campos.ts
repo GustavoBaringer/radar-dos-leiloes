@@ -113,8 +113,10 @@ const DOCS: [RegExp, string][] = [
   [/judicial/, 'judicial'],
   [/extrajudicial/, 'extrajudicial'],
   [/(recuperad|retomad).*(financ|banc)|financiament/, 'recuperado_financiamento'],
-  [/(seguradora|sinistr|colis|avariad|recuperavel|monta)/, 'sinistrado'],
+  // Sucata antes de sinistrado: "IRRECUPERÁVEL / Grande Monta" também casa com "recuperavel" e "monta",
+  // e veículo irrecuperável (só peças, não volta a circular) virava sinistrado.
   [/(sucata|inservivel|irrecuper|baixa obrigat)/, 'sucata'],
+  [/(seguradora|sinistr|colis|avariad|recuperavel|monta)/, 'sinistrado'],
   [/(frota|locadora|desmobiliz)/, 'frota'],
   [/(normal|conservad|nao aplicavel|integro)/, 'conservado'],
 ];
