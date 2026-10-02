@@ -806,12 +806,13 @@
   /* ---------- página pública do lote ---------- */
   /* O mesmo conteúdo da gaveta, sem o aparato de modal: sem posição fixa, sem
      scrim e com a largura de leitura da própria faixa. */
-  .lote-pagina { padding-block: 20px 8px; max-width: 860px }
+  .lote-pagina { padding-block: 32px 8px }
   .lote-pagina .painel-topo {
     position: static; background: none; backdrop-filter: none;
     padding: 0 0 14px; border-bottom: 1px solid var(--border);
   }
-  .lote-pagina .painel-corpo { padding: 18px 0 0; max-width: none }
+  .lote-pagina .painel-corpo { padding: 24px 0 0; max-width: none; gap: 32px }
+  .lote-pagina .col-midia { top: 96px }
   .topo-publico { justify-content: space-between; flex-wrap: nowrap }
   .topo-entrar { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; text-decoration: none }
   /* Em tela estreita a marca some no cabeçalho logado para dar lugar à busca;
@@ -820,13 +821,19 @@
   .topo-publico .logo-txt { display: inline }
 
   .convite {
-    display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
-    margin-top: 28px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-xl);
-    background: linear-gradient(155deg, #0d1730, #070b16);
+    display: flex; align-items: center; justify-content: space-between; gap: 20px 28px; flex-wrap: wrap;
+    margin-top: 36px; padding: 26px 30px; border-radius: 26px; border: 1px solid color-mix(in srgb, var(--brand-bright) 40%, var(--border));
+    background:
+      radial-gradient(30rem 14rem at 100% 0%, color-mix(in srgb, var(--brand-signal) 22%, transparent), transparent 70%),
+      radial-gradient(30rem 14rem at 0% 100%, color-mix(in srgb, var(--brand-core) 32%, transparent), transparent 70%),
+      var(--brand-panel);
   }
-  .convite h2 { font-family: var(--font-display); font-size: 19px; margin: 0 0 6px }
-  .convite p { margin: 0; color: var(--brand-ink-soft); font-size: 14px; line-height: 1.6; max-width: 62ch }
-  .convite .btn-pri { flex: 0 0 auto; padding: 12px 20px }
+  /* A borda abraça o recuo da faixa: sem isto o convite sai mais largo que o conteúdo acima. */
+  .faixa.convite { width: calc(100% - 32px) }
+  @media (min-width: 640px) { .faixa.convite { width: calc(100% - 48px) } }
+  @media (min-width: 1024px) { .faixa.convite { width: min(calc(100% - 64px), calc(80rem - 64px)) } }
+  .convite h2 { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin: 0 0 6px }
+  .convite p { margin: 0; color: var(--brand-ink-soft); font-size: 15px; line-height: 1.6; max-width: 62ch }
 
   /* ---------- páginas simples ---------- */
   .sec { padding-block: 24px 8px }

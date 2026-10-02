@@ -258,7 +258,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
           </div>
           {/* Este vai para a busca de propósito: o texto promete buscar. Quem
               quer voltar ao anúncio usa o "Entrar" do topo. */}
-          <a className="btn-pri" href="/login?de=%2Fbusca">Entrar e buscar</a>
+          <a className="btn-cta" href="/login?de=%2Fbusca">Entrar e buscar</a>
         </section>
         <Rodape />
       </>
