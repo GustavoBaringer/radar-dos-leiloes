@@ -1,8 +1,8 @@
 import type { FacetRow, Facets } from './types';
-import { LABEL_PROPERTY, LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE, SRC_LABEL } from './labels';
+import { LABEL_DOC, LABEL_PROPERTY, LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE, SRC_LABEL } from './labels';
 
 /**
- * As oito facetas de seleção múltipla.
+ * As facetas de seleção múltipla.
  *
  * Não são `<select multiple>` de propósito: o nativo exige segurar Ctrl no
  * desktop e vira lista rolante no toque. Cada uma vira um componente com busca
@@ -24,7 +24,7 @@ export interface DefMulti {
 
 export type MultiId =
   | 'status' | 'vehicleType' | 'propertyType' | 'uf'
-  | 'city' | 'sellerType' | 'sourceId' | 'auctioneer' | 'seller';
+  | 'city' | 'sellerType' | 'sourceId' | 'auctioneer' | 'seller' | 'docType';
 
 export const MULTIS: DefMulti[] = [
   { id: 'vehicleType', titulo: 'Tipo de veículo', vazio: 'Todos', plural: 'tipos selecionados', faceta: 'vehicleTypes', fixas: LABEL_VEHICLE },
@@ -40,6 +40,7 @@ export const MULTIS: DefMulti[] = [
   // Comitente é quem PÔS o bem em leilão (Caixa, Porto Seguro, um tribunal) —
   // pergunta diferente de "qual leiloeiro conduz". 87% dos lotes publicam.
   { id: 'seller', titulo: 'Comitente', vazio: 'Todos', plural: 'comitentes selecionados', faceta: 'sellers' },
+  { id: 'docType', titulo: 'Situação do bem', vazio: 'Todas', plural: 'situações selecionadas', faceta: 'docTypes', fixas: LABEL_DOC },
 ];
 
 export const MULTI_IDS = MULTIS.map((m) => m.id);
@@ -59,18 +60,22 @@ export interface EstadoBusca {
   sort: string;
   onlyWithDate: boolean;
   onlyWithPhoto: boolean;
+  /** Prazo pela data que vence o lote. Fica fora do alerta: alerta olha lote novo, não prazo. */
+  prazo: '' | 'hoje' | '7d';
+  /** Lance abaixo da avaliação publicada pela fonte. */
+  abaixo: boolean;
   multi: Record<MultiId, string[]>;
   page: number;
-  /** Grade (listagem) ou mapa. É uma forma de ver a MESMA busca, não outra tela. */
-  vista: 'grade' | 'mapa';
+  /** Grade, lista ou mapa: formas de ver a MESMA busca, não outras telas. */
+  vista: 'grade' | 'lista' | 'mapa';
   /** Ponto escolhido no mapa: 'lat,lon' ou 'c:CHAVECIDADE/UF'. */
   local: string;
 }
 
 export const ESTADO_VAZIO: EstadoBusca = {
   q: '', assetType: '', priceMin: '', priceMax: '', yearMin: '', yearMax: '',
-  sort: 'ending_soon', onlyWithDate: false, onlyWithPhoto: false,
-  multi: { status: [], vehicleType: [], propertyType: [], uf: [], city: [], sellerType: [], sourceId: [], auctioneer: [], seller: [] },
+  sort: 'ending_soon', onlyWithDate: false, onlyWithPhoto: false, prazo: '', abaixo: false,
+  multi: { status: [], vehicleType: [], propertyType: [], uf: [], city: [], sellerType: [], sourceId: [], auctioneer: [], seller: [], docType: [] },
   page: 1,
   vista: 'grade',
   local: '',
@@ -82,7 +87,9 @@ export function contaFiltros(e: EstadoBusca): number {
     CAMPOS_FILTRO.filter((id) => e[id]).length +
     MULTI_IDS.reduce((t, id) => t + e.multi[id].length, 0) +
     (e.onlyWithDate ? 1 : 0) +
-    (e.onlyWithPhoto ? 1 : 0)
+    (e.onlyWithPhoto ? 1 : 0) +
+    (e.prazo ? 1 : 0) +
+    (e.abaixo ? 1 : 0)
   );
 }
 
@@ -95,6 +102,8 @@ export function paramsDaBusca(e: EstadoBusca): string {
   for (const id of MULTI_IDS) if (e.multi[id].length) p.set(id, e.multi[id].join(','));
   if (e.onlyWithDate) p.set('onlyWithDate', 'true');
   if (e.onlyWithPhoto) p.set('onlyWithPhoto', 'true');
+  if (e.prazo) p.set('endsWithin', e.prazo);
+  if (e.abaixo) p.set('belowAppraisal', 'true');
   if (e.local) p.set('place', e.local);
   p.set('page', String(e.page));
   return p.toString();
@@ -112,8 +121,10 @@ export function urlDoEstado(e: EstadoBusca): string {
   for (const id of MULTI_IDS) if (e.multi[id].length) p.set(id, e.multi[id].join(','));
   if (e.onlyWithDate) p.set('onlyWithDate', '1');
   if (e.onlyWithPhoto) p.set('onlyWithPhoto', '1');
+  if (e.prazo) p.set('prazo', e.prazo);
+  if (e.abaixo) p.set('abaixo', '1');
   if (e.sort && e.sort !== 'ending_soon') p.set('sort', e.sort);
-  if (e.vista === 'mapa') p.set('vista', 'mapa');
+  if (e.vista !== 'grade') p.set('vista', e.vista);
   if (e.local) p.set('local', e.local);
   if (e.page > 1) p.set('page', String(e.page));
   const qs = p.toString();
@@ -132,12 +143,30 @@ export function estadoDaUrl(busca: string): EstadoBusca {
   for (const id of MULTI_IDS) e.multi[id] = (p.get(id) ?? '').split(',').filter(Boolean);
   e.onlyWithDate = p.get('onlyWithDate') === '1';
   e.onlyWithPhoto = p.get('onlyWithPhoto') === '1';
+  const prazo = p.get('prazo');
+  e.prazo = prazo === 'hoje' || prazo === '7d' ? prazo : '';
+  e.abaixo = p.get('abaixo') === '1';
   const sort = p.get('sort');
   e.sort = sort && ['ending_soon', 'discount', 'price_asc', 'price_desc', 'recent'].includes(sort) ? sort : 'ending_soon';
-  e.vista = p.get('vista') === 'mapa' ? 'mapa' : 'grade';
+  const vista = p.get('vista');
+  e.vista = vista === 'mapa' || vista === 'lista' ? vista : 'grade';
   e.local = p.get('local') ?? '';
   e.page = Math.max(1, Number(p.get('page')) || 1);
   return e;
+}
+
+/**
+ * Trocar o tipo de bem zera o filtro do outro lado: "Apartamento" escondido
+ * continuando a valer numa busca de veículos devolve lista vazia sem explicação.
+ */
+export function patchDoBem(e: EstadoBusca, bem: string): Partial<EstadoBusca> {
+  const oposto: MultiId = bem === 'imovel' ? 'vehicleType' : 'propertyType';
+  return {
+    assetType: bem,
+    multi: { ...e.multi, [oposto]: bem ? [] : e.multi[oposto] },
+    ...(bem === 'imovel' ? { yearMin: '', yearMax: '' } : {}),
+    page: 1,
+  };
 }
 
 /** O rótulo de uma opção de faceta: o do servidor vence, depois o fixo, depois o valor cru. */

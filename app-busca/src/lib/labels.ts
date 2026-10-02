@@ -12,7 +12,7 @@
 export const SRC_LABEL: Record<string, string> = {
   superbid: 'Superbid', copart: 'Copart', leilo: 'Leilo', kuss: 'Kuss', caixa: 'Caixa',
   vlance: 'vLance', soleon: 'SOLEON', freitas: 'Freitas', leilaopro: 'Leilão PRO',
-  suaplataforma: 'Sua Plataforma', suporteleiloes: 'Suporte Leilões', bomvalor: 'Bom Valor',
+  suaplataforma: 'Sua Plataforma', suporteleiloes: 'Suporte Leilões', bomvalor: 'Bom Valor', portalzuk: 'Portal Zuk',
 };
 
 export const LABEL_STATUS: Record<string, string> = {

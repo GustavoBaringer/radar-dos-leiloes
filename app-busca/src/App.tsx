@@ -3,6 +3,7 @@ import type { Alerta, Lot, WsMessage } from '@/lib/types';
 import { api } from '@/lib/api';
 import { type EstadoBusca, ESTADO_VAZIO, contaFiltros, estadoDaUrl, urlDoEstado, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
 import { money } from '@/lib/format';
+import { registrarVisto } from '@/lib/vistos';
 import { idDoSlug, slugDoLote } from '@/lib/slug';
 import { AppHeader, type Aba } from '@/components/AppHeader';
 import { Rodape } from '@/components/Rodape';
@@ -59,6 +60,8 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     // Esconder a aba é cortesia visual; quem barra de fato é o 403 das rotas.
     api.eu().then((r) => setPapel(r.papel ?? 'comum')).catch(() => setPapel('comum'));
     api.favoritos().then((f) => setFavoritos(new Set(f.map((x) => x.id)))).catch(() => {});
+    // Sem isto o selo de Alertas começava em zero a cada recarga, até chegar um disparo pelo WebSocket.
+    api.alertas().then((a) => setNaoVistos(a.reduce((t, x) => t + (Number(x.nao_vistos) || 0), 0))).catch(() => {});
   }, [publico]);
 
   /**
@@ -91,6 +94,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     try {
       const l = await api.lote(id);
       setLote(l);
+      registrarVisto(l);
       // A URL do lote é compartilhável: quem recebe o link abre a gaveta direto.
       if (empilhar) history.pushState({ lote: l.id }, '', `/lote/${slugDoLote(l)}`);
     } catch {
@@ -201,6 +205,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     for (const id of CAMPOS_FILTRO) if (estado[id]) filtros[id] = estado[id];
     for (const id of MULTI_IDS) if (estado.multi[id].length) filtros[id] = estado.multi[id].join(',');
     if (estado.onlyWithPhoto) filtros.onlyWithPhoto = true;
+    if (estado.abaixo) filtros.belowAppraisal = true;
     const q = estado.q.trim();
     if (!q && !Object.keys(filtros).length) {
       toast('Faça uma busca ou escolha um filtro antes de criar o alerta.');
@@ -239,7 +244,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         <AppHeader
           publico
           voltarPara={voltarPara}
-          aba="busca" aoTrocarAba={() => {}} termo="" aoDigitar={() => {}} aoBuscar={() => {}}
+          aba="busca" aoTrocarAba={() => {}}
           aoVivo={false} naoVistos={0} mostraCobertura={false}
         />
         <LotDrawer lot={lote} aoFechar={() => {}} comoPagina />
@@ -265,16 +270,10 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
       <AppHeader
         aba={aba}
         aoTrocarAba={trocarAba}
-        termo={estado.q}
-        aoDigitar={(v) => setEstado((e) => ({ ...e, q: v }))}
-        aoBuscar={() => {
-          // Buscar de dentro de Cobertura ou Alertas tem de trazer o usuário
-          // para o resultado; antes a busca rodava numa aba que ele não via.
-          setAba('busca');
-          setEstado((e) => ({ ...e, page: 1 }));
-        }}
         aoVivo={aoVivo}
         naoVistos={naoVistos}
+        nFavoritos={favoritos.size}
+        aoCriarAlerta={abrirDialogoCriar}
         mostraCobertura={papel === 'admin'}
       />
 

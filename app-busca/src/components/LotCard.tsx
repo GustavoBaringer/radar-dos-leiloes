@@ -1,8 +1,9 @@
 import { type ReactNode, useCallback } from 'react';
-import { Star } from 'lucide-react';
+import { ArrowUpRight, BedDouble, Calendar, Gauge, Heart, MapPin, Ruler } from 'lucide-react';
 import type { Lot } from '@/lib/types';
-import { LABEL_DOC, LABEL_PROPERTY, LABEL_VEHICLE, SRC_LABEL } from '@/lib/labels';
-import { img, money, nopicDe, titulo, whenLabel } from '@/lib/format';
+import { LABEL_ASSET, LABEL_DOC, LABEL_PROPERTY, LABEL_VEHICLE, SRC_LABEL } from '@/lib/labels';
+import { contagem, fracaoDaAvaliacao, img, money, nopicDe, rotuloLance, titulo, whenLabel } from '@/lib/format';
+import { useAgora } from '@/hooks/useAgora';
 
 /**
  * Um cartão de lote só, para a busca e para os lotes encontrados por alerta.
@@ -12,9 +13,8 @@ import { img, money, nopicDe, titulo, whenLabel } from '@/lib/format';
  * interno ("vlance") no lugar do nome da fonte. Quem mexer no cartão mexe aqui.
  */
 
-const TITULO_DESCONTO = (d: number) =>
-  `Lance ${d}% abaixo da avaliação publicada pela fonte. Avaliação não é preço de venda, ` +
-  `e lance de abertura não é preço de arremate.`;
+const TITULO_AVALIACAO =
+  'Avaliação publicada pela fonte. Avaliação não é preço de venda, e lance de abertura não é preço de arremate.';
 
 /** Rede, origem fora do ar ou formato recusado: o cartão precisa mostrar algo. */
 function aoFalharImagem(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -25,22 +25,26 @@ function aoFalharImagem(e: React.SyntheticEvent<HTMLImageElement>) {
   el.src = '/nopic.svg';
 }
 
-function linhaMeta(lot: Lot): string[] {
+function tipoDe(lot: Lot): string {
+  if (lot.asset_type === 'imovel') {
+    // O tipo classificado vence a categoria crua: a Caixa manda 'apartamento'
+    // minúsculo e o vlance manda 'imovel' para tudo.
+    return LABEL_PROPERTY[lot.property_type ?? ''] ?? lot.source_category ?? 'Imóvel';
+  }
+  return LABEL_VEHICLE[lot.vehicle_type ?? ''] ?? LABEL_ASSET[lot.asset_type] ?? 'Veículo';
+}
+
+function specsDe(lot: Lot): Array<{ ico: ReactNode; txt: string }> {
+  const s: Array<{ ico: ReactNode; txt: string }> = [];
+  if (lot.year_model) {
+    s.push({ ico: <Calendar aria-hidden />, txt: lot.year_make && lot.year_make !== lot.year_model ? `${lot.year_make}/${lot.year_model}` : String(lot.year_model) });
+  }
+  if (lot.km != null) s.push({ ico: <Gauge aria-hidden />, txt: `${lot.km.toLocaleString('pt-BR')} km` });
+  if (lot.area) s.push({ ico: <Ruler aria-hidden />, txt: `${Math.round(lot.area)} m²` });
+  if (lot.rooms) s.push({ ico: <BedDouble aria-hidden />, txt: `${lot.rooms} ${lot.rooms > 1 ? 'quartos' : 'quarto'}` });
   const local = [...new Set([lot.city, lot.state].filter(Boolean))].join('/');
-  return [
-    lot.asset_type === 'imovel'
-      // O tipo classificado vence a categoria crua: a Caixa manda 'apartamento'
-      // minúsculo e o vlance manda 'imovel' para tudo.
-      ? (LABEL_PROPERTY[lot.property_type ?? ''] ?? lot.source_category ?? 'Imóvel')
-      : lot.vehicle_type && lot.vehicle_type !== 'carro'
-        ? LABEL_VEHICLE[lot.vehicle_type]
-        : null,
-    lot.year_model ? `${lot.year_make ?? ''}${lot.year_make ? '/' : ''}${lot.year_model}` : null,
-    lot.km != null ? `${lot.km.toLocaleString('pt-BR')} km` : null,
-    lot.area ? `${lot.area} m²` : null,
-    lot.rooms ? `${lot.rooms} qto${lot.rooms > 1 ? 's' : ''}` : null,
-    local || null,
-  ].filter((v): v is string => Boolean(v));
+  if (local) s.push({ ico: <MapPin aria-hidden />, txt: local });
+  return s;
 }
 
 interface Props {
@@ -52,7 +56,7 @@ interface Props {
   destaque?: boolean;
   rodape?: ReactNode;
   favoritado?: boolean;
-  /** Ausente = card sem estrela: usado em contextos sem sessão. */
+  /** Ausente = card sem favorito: usado em contextos sem sessão. */
   aoFavoritar?: (id: number) => void;
 }
 
@@ -61,8 +65,13 @@ export function LotCard({
 }: Props) {
   const foto = lot.photos?.[0] ?? null;
   const lance = lanceAoVivo ?? lot.current_bid ?? lot.min_bid;
-  const when = whenLabel(lot);
-  const temDesconto = lot.discount_pct != null && lot.discount_pct > 0 && !lot.bid_suspect;
+  const rotulo = rotuloLance(lot, lanceAoVivo);
+  const fracao = fracaoDaAvaliacao(lot, lance);
+  const fimMs = lot.closing_model === 'timer_por_lote' && lot.auction_end_utc ? Date.parse(lot.auction_end_utc) - Date.now() : null;
+  const agora = useAgora(fimMs != null && fimMs > 0 && fimMs < 3_600_000);
+  const when = whenLabel(lot, agora);
+  const prazo = contagem(lot, agora) ?? when.text;
+  const fonte = SRC_LABEL[lot.source_id] ?? lot.source_id;
   const abrir = useCallback(() => aoAbrir(lot.id), [aoAbrir, lot.id]);
 
   return (
@@ -70,18 +79,8 @@ export function LotCard({
       className={`card${piscando ? ' flash' : ''}${destaque ? ' hit-novo' : ''}`}
       data-id={lot.id}
       data-fim={lot.auction_end_utc ?? undefined}
-      tabIndex={0}
-      role="button"
-      aria-label={`${titulo(lot)}. ${lance != null ? money(lance) : 'sem lance publicado'}. ${when.text}`}
-      onClick={abrir}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          abrir();
-        }
-      }}
     >
-      <div className="thumb">
+      <div className="lc-foto">
         <img
           loading="lazy"
           className={foto ? '' : 'is-nopic'}
@@ -90,63 +89,77 @@ export function LotCard({
           onError={aoFalharImagem}
           alt={foto ? `Foto do lote ${titulo(lot)}` : 'Lote sem foto disponível'}
         />
-        <span className="src">{SRC_LABEL[lot.source_id] ?? lot.source_id}</span>
-        {lot.is_novo && <span className="novo">novo</span>}
-        {lot.doc_type && <span className="badge-doc">{LABEL_DOC[lot.doc_type] ?? lot.doc_type}</span>}
-        <div className="rodape-foto">
-          {lot.auctioneer_name && (
-            <span className="cred-foto" title={`Foto publicada por ${lot.auctioneer_name}`}>
-              foto: {lot.auctioneer_name}
-            </span>
-          )}
-          {temDesconto && (
-            <span className="disc" title={TITULO_DESCONTO(lot.discount_pct!)}>
-              -{lot.discount_pct}%
-            </span>
+        <div className="lc-selos">
+          {lot.is_novo && <span className="lc-selo novo">Novo</span>}
+          {lot.doc_type && (
+            <span className={`lc-selo ${lot.doc_type}`}>{LABEL_DOC[lot.doc_type] ?? lot.doc_type}</span>
           )}
         </div>
+        {aoFavoritar && (
+          <button
+            type="button"
+            className="lc-fav"
+            onClick={(e) => { e.stopPropagation(); aoFavoritar(lot.id); }}
+            aria-pressed={favoritado}
+            aria-label={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+            title={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+          >
+            <span><Heart aria-hidden fill={favoritado ? 'currentColor' : 'none'} /></span>
+          </button>
+        )}
+        <span className="lc-fonte"><i aria-hidden>{fonte.charAt(0)}</i>{fonte}</span>
+        {lot.auctioneer_name && (
+          <span className="lc-cred" title={`Foto publicada por ${lot.auctioneer_name}`}>foto: {lot.auctioneer_name}</span>
+        )}
       </div>
-      <div className="card-body">
-        <div className="title-row">
-          <div className="title">{titulo(lot)}</div>
-          {aoFavoritar && (
-            <button
-              type="button"
-              className={`ico${favoritado ? ' on' : ''}`}
-              onClick={(e) => { e.stopPropagation(); aoFavoritar(lot.id); }}
-              aria-pressed={favoritado}
-              aria-label={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              title={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-            >
-              <Star size={15} aria-hidden fill={favoritado ? 'currentColor' : 'none'} />
-            </button>
-          )}
-        </div>
-        <div className="meta">
-          {linhaMeta(lot).map((m) => (
-            <span key={m}>{m}</span>
+
+      <div className="lc-corpo">
+        <span className="lc-tipo">{tipoDe(lot)}</span>
+        <h3 className="lc-titulo">
+          <button
+            type="button"
+            className="lc-abrir"
+            onClick={abrir}
+            aria-label={`${titulo(lot)}. ${lance != null ? `${rotulo} ${money(lance)}` : 'sem lance publicado'}. ${prazo}`}
+          >
+            {titulo(lot)}
+          </button>
+        </h3>
+        <ul className="lc-specs">
+          {specsDe(lot).map((s) => (
+            <li key={s.txt}>{s.ico}{s.txt}</li>
           ))}
-        </div>
-        <div className="bid">
-          {lance != null ? (
-            <>
-              <span className="v">{money(lance)}</span>
-              <span className="lbl">{lot.current_bid != null || lanceAoVivo != null ? 'lance atual' : 'lance mínimo'}</span>
-            </>
-          ) : (
-            <span className="lbl">sem lance publicado</span>
-          )}
-          {lot.appraisal != null && !lot.bid_suspect && lance != null && lot.appraisal > lance && (
-            <span className="appraisal">{money(lot.appraisal)}</span>
-          )}
+        </ul>
+        {fracao != null && (
+          <div className="lc-pos" title={TITULO_AVALIACAO}>
+            <div className="lc-trilho"><i style={{ width: `${fracao}%` }} /></div>
+            <div className="lc-leg"><span>{fracao}% da avaliação</span><s className="mono">{money(lot.appraisal)}</s></div>
+          </div>
+        )}
+        <div className="lc-preco">
+          <div>
+            {lance != null ? (
+              <>
+                <span className="lc-rot">{rotulo}</span>
+                <span className="lc-v">{money(lance)}</span>
+              </>
+            ) : (
+              <span className="lc-nada">Sem lance publicado</span>
+            )}
+          </div>
+          <span className="lc-seta" aria-hidden><ArrowUpRight /></span>
         </div>
         {lot.bid_suspect && (
-          <div className="suspect" title="Valor publicado pela fonte fora de faixa plausível">
+          <div className="lc-suspeito" title="Valor publicado pela fonte fora de faixa plausível">
             valor atípico na fonte
           </div>
         )}
-        <div className={`when ${when.cls}`}>{when.text}</div>
         {rodape}
+      </div>
+
+      <div className={`lc-prazo ${when.cls || 'depois'}`}>
+        <i aria-hidden />
+        <span>{prazo}</span>
       </div>
     </article>
   );

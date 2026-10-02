@@ -80,6 +80,7 @@ export interface Facets {
   auctioneers: FacetRow[];
   sellers: FacetRow[];
   statuses: FacetRow[];
+  docTypes: FacetRow[];
 }
 
 export interface SearchResponse {
@@ -98,6 +99,8 @@ export interface Alerta {
   channels: string[];
   email: string | null;
   total: number;
+  /** Disparos ainda não vistos deste alerta (subconsulta em alert_hits). */
+  nao_vistos?: number;
 }
 
 export type Hit = Lot & { seen: boolean; hit_em: string; labels: string[] };

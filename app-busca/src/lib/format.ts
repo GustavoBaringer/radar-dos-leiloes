@@ -66,3 +66,33 @@ export function whenLabel(lot: Pick<Lot, 'closing_model' | 'auction_end_utc' | '
 export const titulo = (lot: Pick<Lot, 'title_display' | 'title_raw'>) => lot.title_display || lot.title_raw;
 
 export const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+/**
+ * Lote de pregão que ainda não começou publica o lance de ABERTURA. Chamar isso
+ * de "lance atual" fazia um Honda de R$ 350 parecer arrematável por esse valor.
+ * O detalhe (/api/lot) não traz `effective_status`, daí o recuo para `status`.
+ */
+export function rotuloLance(
+  lot: Pick<Lot, 'current_bid' | 'status'> & { effective_status?: Lot['effective_status'] },
+  aoVivo?: number,
+): string {
+  if (aoVivo != null) return 'Lance atual';
+  if (lot.current_bid != null) return (lot.effective_status ?? lot.status) === 'agendado' ? 'Lance inicial' : 'Lance atual';
+  return 'Lance mínimo';
+}
+
+/** Quanto o lance representa da avaliação, só quando a comparação é honesta. */
+export function fracaoDaAvaliacao(lot: Pick<Lot, 'appraisal' | 'bid_suspect'>, lance: number | null | undefined): number | null {
+  if (lot.bid_suspect || !lot.appraisal || lance == null || !(lot.appraisal > lance)) return null;
+  return Math.max(1, Math.round((lance / lot.appraisal) * 100));
+}
+
+/** Na última hora de um timer, minuto e segundo: "Encerra em 38 min" para de mudar à vista. */
+export function contagem(lot: Pick<Lot, 'closing_model' | 'auction_end_utc'>, agora: number): string | null {
+  if (lot.closing_model !== 'timer_por_lote' || !lot.auction_end_utc) return null;
+  const d = Date.parse(lot.auction_end_utc) - agora;
+  if (d <= 0 || d >= 3_600_000) return null;
+  const m = Math.floor(d / 60_000);
+  const s = Math.floor((d % 60_000) / 1000);
+  return `Encerra em ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
