@@ -1,5 +1,5 @@
 import { query, pool } from './db.js';
-import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo } from './normalize.js';
+import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico } from './normalize.js';
 import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
@@ -521,6 +521,9 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     facet('doc_type', 'docTypes'),
   ]);
 
+  // Comitente pessoa física é mascarado no que aparece como texto (card).
+  for (const it of items as any[]) it.seller_name = vendedorPublico(it.seller_name);
+
   return {
     total: count,
     page,
@@ -532,8 +535,9 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
 }
 
 export async function getLot(id: number) {
-  const [lot] = await query('SELECT * FROM lots WHERE id = $1', [id]);
+  const [lot] = await query<any>('SELECT * FROM lots WHERE id = $1', [id]);
   if (!lot) return null;
+  lot.seller_name = vendedorPublico(lot.seller_name);
   const history = await query('SELECT bid, observed_at FROM bid_history WHERE lot_id=$1 ORDER BY observed_at DESC LIMIT 30', [id]);
   return { ...lot, bid_history: history };
 }

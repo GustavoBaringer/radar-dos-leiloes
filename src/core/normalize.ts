@@ -599,6 +599,30 @@ export function parseQuery(raw: string): ParsedQuery {
   return { raw, brand, model, freeTerms, compactTerm: compact(raw) };
 }
 
+// Comitente pessoa física vem por extenso da fonte. Marca de empresa/órgão passa
+// inteiro; o que sobra (nome de PF) vira "Primeiro I." para não expor sobrenome.
+// Prefixos sem \b final de propósito: "seguro" tem de casar "seguros", "transport"
+// casar "transportes", "financ" casar "financeira" — o \b final não casava.
+const EMPRESA_PREFIXO =
+  /\b(ltda|eireli|epp|mei|cia|holding|financ|transport|logistic|agropecu|agro|pecuar|securit|segur|servic|leilo|credito|prefeitur|municipi|governo|fazenda|receita|tribunal|justic|energi|usina|miner|telecom|sistema|soluco|tecnolog|technolog|metalurg|maquin|agricol|industri|comerci|veicul|automov|motors|distribuidor|construtor|administrador|incorporad|empreendiment|participac|cooperativ|associac|fundac|imobiliari|locador|sucata|companhia|banco|bradesco|itau|santander|caixa|rodobens|localiza|movida|unidas|fidc|sicredi|sicoob|cresol|consorcio|previdenc|frota|remarcad|sinistr)/;
+const EMPRESA_EXATA = /\b(me|sa|s\/a|spe|uniao|estado|inss|detran|vara|igreja|instituto|condominio)\b/;
+export function vendedorPublico(nome?: string | null): string | null {
+  const n = (nome ?? '').trim();
+  const f = fold(n);
+  if (!n || EMPRESA_PREFIXO.test(f) || EMPRESA_EXATA.test(f)) return nome ?? null;
+  const partes = n.split(/\s+/).filter(Boolean);
+  // Só mascara o que parece PF: 2 a 4 palavras, nenhuma com dígito, e sem sigla
+  // ("S A", "S/A", "ME"). Empresa ("Glencane Bioenergia S A") passa inteira.
+  const semPontos = (p: string) => p.replace(/[.\-/]/g, '');
+  const ehNomePF =
+    partes.length >= 2 &&
+    partes.length <= 4 &&
+    partes.every((p) => !/\d/.test(p) && semPontos(p).length >= 2 && !/^[A-ZÀ-Ý]{2,3}$/.test(semPontos(p))) &&
+    /[A-Za-zÀ-ÿ]/.test(partes[0]);
+  if (!ehNomePF) return n;
+  return `${partes[0]} ${partes[partes.length - 1][0].toUpperCase()}.`;
+}
+
 export function classifySeller(name?: string | null): string {
   const n = fold(name ?? '');
   if (!n) return 'desconhecido';
