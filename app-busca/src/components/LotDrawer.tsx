@@ -191,6 +191,27 @@ export function LotDrawer({
                 ))}
               </div>
             )}
+
+            <BlocoKv
+              titulo="O bem"
+              pares={[
+                ['Tipo', LABEL_ASSET[lot.asset_type] ?? lot.asset_type],
+                [
+                  'Categoria',
+                  lot.vehicle_type
+                    ? (LABEL_VEHICLE[lot.vehicle_type] ?? lot.vehicle_type)
+                    : lot.property_type
+                      ? (LABEL_PROPERTY[lot.property_type] ?? lot.property_type)
+                      : null,
+                ],
+                ['Ano', lot.year_model ? `${lot.year_make ?? ''}${lot.year_make ? '/' : ''}${lot.year_model}` : null],
+                ['Quilometragem', lot.km != null ? `${lot.km.toLocaleString('pt-BR')} km` : null],
+                ['Área', lot.area ? `${lot.area} m²` : null],
+                ['Cor', lot.color ? (LABEL_COR[lot.color] ?? lot.color) : null],
+                ['Combustível', lot.fuel ? (LABEL_COMB[lot.fuel] ?? lot.fuel) : null],
+                ['Placa', lot.plate_masked],
+              ]}
+            />
           </div>
 
           <div className="col-dados">
@@ -243,27 +264,6 @@ export function LotDrawer({
                 ['Início do leilão', dataBr(lot.auction_start_utc)],
                 ['Encerramento', dataBr(lot.auction_end_utc) ?? EXPLICA_FECHAMENTO[lot.closing_model] ?? 'não publicado por lote'],
                 ['Localização', local || null],
-              ]}
-            />
-
-            <BlocoKv
-              titulo="O bem"
-              pares={[
-                ['Tipo', LABEL_ASSET[lot.asset_type] ?? lot.asset_type],
-                [
-                  'Categoria',
-                  lot.vehicle_type
-                    ? (LABEL_VEHICLE[lot.vehicle_type] ?? lot.vehicle_type)
-                    : lot.property_type
-                      ? (LABEL_PROPERTY[lot.property_type] ?? lot.property_type)
-                      : null,
-                ],
-                ['Ano', lot.year_model ? `${lot.year_make ?? ''}${lot.year_make ? '/' : ''}${lot.year_model}` : null],
-                ['Quilometragem', lot.km != null ? `${lot.km.toLocaleString('pt-BR')} km` : null],
-                ['Área', lot.area ? `${lot.area} m²` : null],
-                ['Cor', lot.color ? (LABEL_COR[lot.color] ?? lot.color) : null],
-                ['Combustível', lot.fuel ? (LABEL_COMB[lot.fuel] ?? lot.fuel) : null],
-                ['Placa', lot.plate_masked],
               ]}
             />
 
