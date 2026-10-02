@@ -265,7 +265,10 @@ export function tituloVeiculo(p: {
   titleRaw: string;
 }): string {
   const marca = nomeProprio(p.brand);
-  const modelo = nomeProprio(p.model);
+  // "Randon" + "Randon SR Ca" repetia a marca: a fonte manda o modelo já com ela.
+  const bruto = nomeProprio(p.model);
+  const semMarca = marca && bruto && bruto.toLowerCase().startsWith(`${marca.toLowerCase()} `) ? bruto.slice(marca.length + 1) : bruto;
+  const modelo = marca && semMarca && semMarca.toLowerCase() === marca.toLowerCase() ? null : semMarca;
   if (!marca || !modelo) return caixaDeTitulo(p.titleRaw) ?? p.titleRaw;
 
   const partes = [marca, modelo];

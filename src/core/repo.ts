@@ -1,5 +1,5 @@
 import { query, pool } from './db.js';
-import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica } from './normalize.js';
+import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo } from './normalize.js';
 import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
@@ -56,7 +56,7 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
       const scrubbed = scrubPlates(l.titleRaw);
       const titleRaw = scrubbed.text;
       const plateMasked = l.plateMasked ?? scrubbed.plateMasked;
-      const version = l.version ? scrubPlates(l.version).text : null;
+      const versionFonte = l.version ? scrubPlates(l.version).text : null;
       const bidSuspect = isBidSuspect(campos.dinheiro(l.currentBid) ?? campos.dinheiro(l.minBid), campos.dinheiro(l.appraisal));
       const cls = classifyAsset(titleRaw, l.sourceCategory, l.sourceGroup);
       // O conector, quando sabe, manda o tipo de bem explícito e ele vence.
@@ -68,7 +68,11 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
       const propertyType =
         assetType === 'imovel' ? (l.propertyType ?? classifyProperty(titleRaw, l.sourceCategory)) : null;
       const brand = marcaCanonica(l.brand, titleRaw, vehicleType);
-      const searchText = buildSearchText([titleRaw, brand, l.model, version, l.city, l.state, l.sellerName]);
+      const modeloFonte = (l.model ?? '').trim() || null;
+      const extra = modeloFonte ? null : completaVeiculo(titleRaw, brand, vehicleType);
+      const model = modeloFonte ?? extra?.model ?? null;
+      const version = modeloFonte ? versionFonte : (versionFonte || extra?.version || null);
+      const searchText = buildSearchText([titleRaw, brand, model, version, l.city, l.state, l.sellerName]);
 
       // Toda saída de conector passa por aqui antes de virar linha. Consertar
       // caixa, código de combustível e categoria-no-lugar-de-documentação em
@@ -79,8 +83,8 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
         color: campos.cor(l.color),
         fuel: campos.combustivel(l.fuel),
         docType: campos.docType(l.docType),
-        yearMake: campos.ano(l.yearMake),
-        yearModel: campos.ano(l.yearModel),
+        yearMake: campos.ano(l.yearMake) ?? campos.ano(extra?.yearMake),
+        yearModel: campos.ano(l.yearModel) ?? campos.ano(extra?.yearModel),
         km: campos.km(l.km),
         currentBid: campos.dinheiro(l.currentBid),
         minBid: campos.dinheiro(l.minBid),
@@ -109,7 +113,7 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
               neighborhood: campos.bairroDoTitulo(titleRaw, n.city),
               titleRaw,
             })
-          : campos.tituloVeiculo({ brand, model: l.model, version, yearMake: n.yearMake, yearModel: n.yearModel, titleRaw });
+          : campos.tituloVeiculo({ brand, model, version, yearMake: n.yearMake, yearModel: n.yearModel, titleRaw: assetType === 'veiculo' ? tituloDeVeiculoLimpo(titleRaw) : titleRaw });
       const prev = await client.query<{ id: string; current_bid: number | null }>(
         'SELECT id, current_bid FROM lots WHERE source_id=$1 AND external_id=$2',
         [l.sourceId, l.externalId],
@@ -161,7 +165,7 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
            city_key=EXCLUDED.city_key, title_display=EXCLUDED.title_display, collected_at=now()
          RETURNING id`,
         [
-          l.sourceId, l.externalId, n.lotUrl, titleRaw, brand, l.model ?? null,
+          l.sourceId, l.externalId, n.lotUrl, titleRaw, brand, model,
           version, n.yearMake, n.yearModel, n.km, n.color,
           n.fuel, plateMasked, n.docType, l.closingModel,
           l.auctionStartUtc ?? null, l.auctionEndUtc ?? null, l.sourceTz, l.status,

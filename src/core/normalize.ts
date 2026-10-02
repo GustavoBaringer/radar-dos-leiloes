@@ -329,10 +329,31 @@ for (const b of BRANDS) {
  * do trator onde ele encaixa, não a do lote.
  */
 const DE_ESTRADA = new Set(['carro', 'moto', 'caminhao', 'onibus', 'picape', 'utilitario', 'suv']);
+const NAO_E_MARCA = new Set(['imp', 'i', 'naoinformado']);
 export function marcaCanonica(brand: string | null | undefined, titleRaw: string, vehicleType: string | null | undefined): string | null {
   const b = (brand ?? '').trim();
-  if (b) return brandIndex.get(compact(b))?.canonical ?? b;
-  return vehicleType && DE_ESTRADA.has(vehicleType) ? parseTitle(titleRaw).brand : null;
+  if (b && !NAO_E_MARCA.has(compact(b))) {
+    // "VOLKSWAGEN / JOHNSTON": chassi / encarroçadora. A marca do veículo é a primeira.
+    return brandIndex.get(compact(b))?.canonical ?? brandIndex.get(compact(b.split('/')[0]))?.canonical ?? b;
+  }
+  return vehicleType && DE_ESTRADA.has(vehicleType) ? parseTitle(tituloDeVeiculoLimpo(titleRaw)).brand : null;
+}
+
+/**
+ * Modelo, versão e anos tirados do título, para veículo de estrada que chegou
+ * com marca e sem modelo. Sem modelo, o título exibido era o texto cru da fonte.
+ */
+export function completaVeiculo(titleRaw: string, brand: string | null, vehicleType: string | null | undefined) {
+  if (!brand || !vehicleType || !DE_ESTRADA.has(vehicleType)) return null;
+  const limpo = tituloDeVeiculoLimpo(titleRaw);
+  const p = parseTitle(limpo, brand);
+  const livre = p.model ? null : modeloLivre(limpo, brand);
+  return {
+    model: p.model ?? livre?.model ?? null,
+    version: p.model ? p.version : (livre?.version ?? null),
+    yearMake: p.yearMake,
+    yearModel: p.yearModel,
+  };
 }
 
 export function looksLikePart(title: string): boolean {
@@ -346,6 +367,52 @@ export interface ParsedVehicle {
   version: string | null;
   yearMake: number | null;
   yearModel: number | null;
+}
+
+/**
+ * Título de veículo sem o ruído de descrição que algumas fontes mandam no lugar
+ * do título ("veículo placa J**-**85-DF, marca RENAULT/CLIO ...,") e sem o
+ * prefixo de importado. É o texto de onde sai modelo e versão.
+ */
+export function tituloDeVeiculoLimpo(t: string): string {
+  return String(t ?? '')
+    .replace(/^\s*ve[ií]culo\b[\s:,-]*/i, '')
+    .replace(/\bplaca\s*:?\s*[\w*]{2,4}-?[\w*]{2,5}(-[a-z]{2})?[,;\s]*/i, '')
+    .replace(/^\s*marca\s*:?\s*/i, '')
+    .replace(/^\s*(imp|i)\s*[/.]\s*|^\s*imp\s+/i, '')
+    .replace(/[,;\s]+$/, '')
+    .trim();
+}
+
+const TIPO_NO_TITULO =
+  /^(caminh[aã]o|ve[ií]culo|moto(cicleta)?|[oô]nibus|carro|autom[oó]vel|camioneta|caminhonete|semirreboque|reboque)\b[\s:,-]*/i;
+const escapaRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Modelo e versão quando a marca é conhecida mas o modelo não está no dicionário
+ * (Clio, Shadow, VW 8.140, MB L 1620): o que vem depois da marca, até o ano ou o
+ * traço. Sem isto o título exibido caía no texto cru da fonte.
+ */
+export function modeloLivre(texto: string, brand: string | null): { model: string | null; version: string | null } {
+  const def = brand ? brandIndex.get(compact(brand)) : undefined;
+  if (!def) return { model: null, version: null };
+  let t = tituloDeVeiculoLimpo(texto).replace(TIPO_NO_TITULO, '');
+  for (const a of [...def.aliases, def.canonical].sort((x, y) => y.length - x.length)) {
+    const re = new RegExp(`^\\s*${a.split(/[\s-]+/).map(escapaRe).join('[\\s.\\-/]*')}(?=[\\s/.\\-]|$)`, 'i');
+    if (re.test(t)) {
+      t = t.replace(re, '');
+      break;
+    }
+  }
+  t = (' ' + t.replace(/^[\s/.\-–]+/, '')).split(/\s[-–]\s|\s(?:19[5-9]\d|20[0-2]\d)\b|\s\d{2}\/\d{2}\b/)[0].trim();
+  const tokens = t.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return { model: null, version: null };
+  // Caminhão MB/Volvo: "L 1620", "FH 400" — a letra sozinha não é o modelo.
+  const nModelo = tokens.length > 1 && /^[a-z]{1,2}$/i.test(tokens[0]) && /^\d/.test(tokens[1]) ? 2 : 1;
+  return {
+    model: tokens.slice(0, nModelo).join(' ').toUpperCase(),
+    version: tokens.slice(nModelo).join(' ').toUpperCase() || null,
+  };
 }
 
 /** Extrai marca/modelo/ano do título livre que cada fonte escreve à sua maneira. */
