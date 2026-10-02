@@ -42,13 +42,14 @@ export function Busca({
   const [qAdiado, setQAdiado] = useState(estado.q);
   useEffect(() => {
     if (estado.q === qAdiado) return;
-    // Limpar o campo e apertar Buscar (que zera a página) não esperam.
-    if (!estado.q || estado.page === 1) {
-      const t = setTimeout(() => setQAdiado(estado.q), estado.q ? 1000 : 0);
-      return () => clearTimeout(t);
-    }
-    setQAdiado(estado.q);
-  }, [estado.q, estado.page, qAdiado]);
+    // A página só volta para 1 junto com o termo: zerar na tecla muda a chave da
+    // busca e dispara uma requisição com o termo antigo.
+    const t = setTimeout(() => {
+      setQAdiado(estado.q);
+      if (estado.page !== 1) aoMudar({ page: 1 });
+    }, estado.q ? 1000 : 0);
+    return () => clearTimeout(t);
+  }, [estado.q, estado.page, qAdiado, aoMudar]);
   const qs = useMemo(() => paramsDaBusca({ ...estado, q: qAdiado }), [estado, qAdiado]);
 
   useEffect(() => {
