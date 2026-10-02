@@ -1,5 +1,5 @@
 /**
- * Landing de venda. Tudo que é número nesta página vem de /api/landing — o
+ * Landing de venda. Tudo que é número nesta página vem de /api/vitrine — o
  * mockup do design trazia 21.943 lotes e 116 leiloeiros escritos no HTML, e
  * número chumbado numa landing de agregador envelhece em horas e vira mentira
  * na primeira busca de quem leu.
@@ -160,10 +160,10 @@ function pintaPilha(lotes) {
 
 function pintaNumeros(d) {
   const itens = [
-    { v: d.total, rot: 'lotes no índice agora', det: `${nInt(d.novos24h)} nas últimas 24h` },
-    { v: d.totalLeiloeiros, rot: 'leiloeiros oficiais mapeados', det: `${nInt(d.ufs?.length)} estados` },
-    { v: d.fontes, rot: 'plataformas de leilão integradas', det: 'uma busca só' },
-    { v: d.encerram24h, rot: 'lotes encerram nas próximas 24h', det: 'prazo da própria fonte' },
+    { v: d.total, rot: 'lotes em leilão agora', det: `${nInt(d.novos24h)} novos nas últimas 24h` },
+    { v: d.totalLeiloeiros, rot: 'leiloeiros oficiais', det: 'só leilão oficial' },
+    { v: d.ufs?.length, rot: 'estados com leilão aberto', det: 'de norte a sul' },
+    { v: d.encerram24h, rot: 'lotes encerram nas próximas 24h', det: 'quem sabe antes, chega antes' },
   ];
   $('numeros').innerHTML = itens
     .map(
@@ -197,25 +197,6 @@ function pintaNumeros(d) {
   }, 1500);
 }
 
-function pintaLeiloeiros(lista) {
-  $('leiloeirosGrade').innerHTML = (lista ?? [])
-    .slice(0, 12)
-    .map((l) => {
-      const iniciais = String(l.nome)
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((p) => p[0])
-        .join('')
-        .toUpperCase();
-      return `<a class="leiloeiro" href="/busca?auctioneer=${encodeURIComponent(l.nome)}">
-        <span class="av">${esc(iniciais)}</span>
-        <span class="txt"><b>${esc(l.nome)}</b><small>${nInt(l.total)} lotes abertos</small></span>
-      </a>`;
-    })
-    .join('');
-}
-
 function pintaLotes(lotes) {
   const grade = $('lotesGrade');
   grade.innerHTML = '';
@@ -229,16 +210,16 @@ function pintaLotes(lotes) {
   }
 }
 
-/** Os textos da seção "o que o Radar faz" — só o que o sistema faz hoje. */
-const RESOLVE = [
-  ['busca', 'Busca que entende o modelo', '“t-cross”, “T CROSS” e “tcross” são a mesma coisa aqui. Na fonte, não são: a mesma consulta devolve zero num site e cinco no outro. Marca, modelo e ano são normalizados antes de indexar.'],
-  ['sino', 'Alerta por busca salva', 'Salve “Hilux 4x4 no PR até R$ 120 mil” e receba aviso quando um lote novo casar. É o que separa achar o lote de achar o lote a tempo.'],
-  ['relogio', 'Prazo que não mente', 'Leilão tem três modelos de encerramento: timer por lote, pregão em horário marcado e encerramento sequencial. Contagem regressiva nos três seria mentira — mostramos o que cada fonte garante.'],
-  ['etiqueta', 'Desconto sobre a avaliação', 'Quando a fonte publica a avaliação, calculamos a diferença para o lance e sinalizamos o lote — sempre com a ressalva de que avaliação não é preço de venda.'],
-  ['escudo', 'Dado pessoal mascarado na entrada', 'Placa, chassi, RENAVAM e número de motor são mascarados antes de qualquer indexação. Algumas fontes publicam esses campos em claro; no índice eles não entram assim.'],
-  ['elo', 'Link direto para o leiloeiro', 'O Radar não intermedeia lance nem recebe pagamento. Cada lote leva à página original, no site de quem está leiloando, com o crédito da foto para quem a publicou.'],
+/** O que o assinante ganha. Fala do resultado para ele, nunca de como o dado é obtido. */
+const BENEFICIOS = [
+  ['sino', 'Seja avisado primeiro', 'Salve “Hilux 4x4 no PR até R$ 120 mil” e receba o aviso quando entrar um lote que combine. Achar o lote a tempo é o que separa a oportunidade do arrependimento.'],
+  ['busca', 'Tudo numa busca só', 'Imóveis e veículos de leilões de todo o Brasil no mesmo lugar, com filtros por modelo, cidade, preço e prazo.'],
+  ['relogio', 'Prazo sempre à vista', 'Quando o leilão começa ou encerra, destacado em cada lote, para você nunca chegar tarde ao lance.'],
+  ['etiqueta', 'Lance perto da avaliação', 'Veja quanto o lance representa da avaliação do bem e encontre as maiores diferenças primeiro.'],
+  ['escudo', 'Só leilão oficial', 'Lotes de leiloeiros oficiais, judiciais e extrajudiciais, com o link direto para a página do leilão.'],
+  ['elo', 'Sem comissão sobre o arremate', 'O Radar não intermedeia o lance. Você negocia direto com o leiloeiro e paga só a assinatura.'],
 ];
-const ICONES_RESOLVE = {
+const ICONES_BENEFICIO = {
   busca: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   sino: '<path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 004 0"/>',
   relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -246,63 +227,95 @@ const ICONES_RESOLVE = {
   escudo: '<path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/>',
   elo: '<path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>',
 };
-$('resolve').innerHTML = RESOLVE.map(
+$('resolve').innerHTML = BENEFICIOS.map(
   ([ico, titulo, corpo]) => `<article class="cartao sobe">
-    <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES_RESOLVE[ico]}</svg></span>
+    <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES_BENEFICIO[ico]}</svg></span>
     <h3>${esc(titulo)}</h3><p>${esc(corpo)}</p>
   </article>`,
 ).join('');
 
 /* ------------------------------------------------------------------ */
-/* Lista de espera                                                     */
+/* Cadastro                                                            */
 /* ------------------------------------------------------------------ */
 
-const formEspera = $('formEspera');
-const avisoEspera = $('avisoEspera');
+/** Versão do texto de aceite: muda junto com o texto, e o servidor guarda as duas. */
+const VERSAO_CONSENTIMENTO = '2026-10-02';
+const digitos = (v) => String(v ?? '').replace(/\D/g, '');
+
+function mascaraDocumento(v) {
+  const d = digitos(v).slice(0, 14);
+  if (d.length <= 11) {
+    return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+function mascaraCelular(v) {
+  const d = digitos(v).slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  const meio = d.length === 11 ? 7 : 6;
+  return `(${d.slice(0, 2)}) ${d.slice(2, meio)}-${d.slice(meio)}`;
+}
+$('cadDocumento').addEventListener('input', (e) => { e.target.value = mascaraDocumento(e.target.value); });
+$('cadCelular').addEventListener('input', (e) => { e.target.value = mascaraCelular(e.target.value); });
+
+const formCadastro = $('formCadastro');
+const avisoCadastro = $('avisoCadastro');
+const CAMPO_DO_SERVIDOR = { nome: 'cadNome', documento: 'cadDocumento', email: 'cadEmail', celular: 'cadCelular', consentimento: 'cadAceite' };
 const mostraAviso = (texto, ok) => {
-  avisoEspera.hidden = false;
-  avisoEspera.className = `aviso ${ok ? 'aviso-ok' : 'aviso-erro'}`;
-  avisoEspera.textContent = texto;
+  avisoCadastro.hidden = false;
+  avisoCadastro.className = `aviso ${ok ? 'aviso-ok' : 'aviso-erro'}`;
+  avisoCadastro.textContent = texto;
+};
+const erroNoCampo = (id, texto) => {
+  mostraAviso(texto, false);
+  $(id)?.focus();
 };
 
-formEspera.addEventListener('submit', async (ev) => {
+formCadastro.addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const email = $('espEmail').value.trim();
-  // A validação nativa não roda com novalidate; o e-mail é o único campo obrigatório.
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    mostraAviso('Confira o e-mail: faltou o @ ou o domínio.', false);
-    $('espEmail').focus();
-    return;
-  }
-  const btn = $('btnEspera');
+  const nome = $('cadNome').value.trim();
+  const documento = digitos($('cadDocumento').value);
+  const email = $('cadEmail').value.trim();
+  const celular = digitos($('cadCelular').value);
+  // Checagem rápida só para poupar ida ao servidor; quem decide é o servidor.
+  if (nome.split(/\s+/).filter(Boolean).length < 2) return erroNoCampo('cadNome', 'Informe nome e sobrenome.');
+  if (documento.length !== 11 && documento.length !== 14) return erroNoCampo('cadDocumento', 'Informe um CPF ou CNPJ completo.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return erroNoCampo('cadEmail', 'Confira o e-mail: faltou o @ ou o domínio.');
+  if (celular.length < 10) return erroNoCampo('cadCelular', 'Informe o celular com DDD.');
+  if (!$('cadAceite').checked) return erroNoCampo('cadAceite', 'Para criar a conta, aceite os termos e a política de privacidade.');
+
+  const btn = $('btnCadastro');
   btn.disabled = true;
-  btn.textContent = 'Enviando…';
+  btn.textContent = 'Criando sua conta…';
   try {
-    const r = await fetch('/api/espera', {
+    const r = await fetch('/api/cadastro', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        nome,
+        documento,
         email,
-        nome: $('espNome').value.trim(),
-        interesse: $('espInteresse').value,
+        celular,
         // O texto que a pessoa leu vai junto: é o que prova a base legal depois.
         consentimento: $('textoConsentimento').textContent.replace(/\s+/g, ' ').trim(),
+        consentimentoVersao: VERSAO_CONSENTIMENTO,
+        marketing: $('cadMarketing').checked,
+        origem: new URLSearchParams(location.search).get('utm_source') || 'landing',
       }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.erro ?? 'falhou');
-    mostraAviso(
-      d.jaEstava
-        ? 'Você já estava na lista — não vamos duplicar o aviso.'
-        : 'Pronto. Você entrou na lista e será avisado quando o cadastro abrir.',
-      true,
-    );
-    formEspera.reset();
-  } catch (e) {
-    mostraAviso(`Não foi possível enviar agora (${e.message}). Tente de novo em instantes.`, false);
+    if (!r.ok) {
+      const id = CAMPO_DO_SERVIDOR[d.campo];
+      return id ? erroNoCampo(id, d.erro ?? 'Confira os dados.') : mostraAviso(d.erro ?? 'Não foi possível criar a conta agora.', false);
+    }
+    mostraAviso(d.mensagem ?? 'Cadastro recebido! Em seguida você recebe o link para ativar a assinatura.', true);
+    formCadastro.reset();
+  } catch {
+    mostraAviso('Não foi possível enviar agora. Confira sua conexão e tente de novo.', false);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Entrar na lista de espera';
+    btn.textContent = 'Criar minha conta';
   }
 });
 
@@ -316,14 +329,12 @@ async function iniciar() {
   } catch {
     return;
   }
-  $('heroFontes').textContent = nInt(d.fontes);
   $('heroLotes').textContent = nInt(d.total);
-  $('esperaLotes').textContent = nInt(d.total);
+  $('cadastroLotes').textContent = nInt(d.total);
 
   pintaCategorias(d.categorias ?? []);
   pintaNumeros(d);
   pintaPilha(d.recentes);
-  pintaLeiloeiros(d.leiloeiros);
   pintaLotes(d.recentes);
 
   $('ufs').innerHTML = (d.ufs ?? [])

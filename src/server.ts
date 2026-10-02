@@ -16,6 +16,7 @@ import { authLigada, papelDasCredenciais, criarToken, lerToken, precisaRenovar, 
 import { oidcLigado, iniciarLogin, concluirLogin, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
 import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Identidade } from './core/identidade.js';
 import { query } from './core/db.js';
+import { documento, celularValido, emailValido } from './core/cadastro.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';
 import { connectors } from './connectors/index.js';
 import { collectQueue, makeRedis, CHANNEL_UPDATES } from './queue/queues.js';
@@ -58,6 +59,7 @@ const PUBLICAS = new Set([
   // A vitrine é o único endereço de dado aberto, e devolve no máximo 8 lotes.
   '/api/vitrine',
   '/api/espera',
+  '/api/cadastro',
   // O proxy de imagem é o que desenha as fotos da vitrine. Sem ele a landing
   // pública abre com oito placeholders.
   '/api/img',
@@ -137,7 +139,7 @@ if (authLigada()) {
     // também era tratado como anônimo na página do lote — ganhava a versão de
     // visitante em vez da gaveta sobre a busca.
     const semSessao = !/(?:^|;)\s*radar_sessao=/.test(String(req.headers.cookie ?? ''));
-    if (ehPublica(caminho) && semSessao && (req.method === 'GET' || caminho === '/api/espera')) {
+    if (ehPublica(caminho) && semSessao && (req.method === 'GET' || caminho === '/api/espera' || caminho === '/api/cadastro')) {
       (req as any).papel = 'comum';
       // userId 0: nenhuma linha de users tem esse id, então consulta filtrada
       // por dono devolve vazio em vez de devolver os alertas do administrador.
@@ -857,6 +859,91 @@ app.post('/api/espera', async (req, reply) => {
   return { ok: true, jaEstava: linhas.length === 0 };
 });
 
+/**
+ * Cadastro de assinante. Cartão não passa por aqui: o pagamento é na fatura
+ * hospedada do ASAAS. Rota pública e sem log de corpo (CPF e celular são PII).
+ */
+const CADASTRO_TETO = 10;
+const CADASTRO_JANELA_S = 3600;
+let redisCadastro: ReturnType<typeof makeRedis> | undefined;
+// Fail-open com prazo: o ioredis aqui não desiste de comando pendente, e Redis
+// fora do ar não pode travar o cadastro.
+async function cadastroLimitado(ip: string): Promise<boolean> {
+  try {
+    redisCadastro ??= makeRedis();
+    const r = redisCadastro;
+    const chave = `cadastro:tentativa:${ip}`;
+    const n = await Promise.race([
+      r.incr(chave).then(async (v) => (v === 1 ? (await r.expire(chave, CADASTRO_JANELA_S), v) : v)),
+      new Promise<number>((res) => setTimeout(() => res(0), 800)),
+    ]);
+    return n > CADASTRO_TETO;
+  } catch {
+    return false;
+  }
+}
+
+app.post('/api/cadastro', async (req, reply) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const falha = (campo: string, erro: string) => reply.code(400).send({ erro, campo });
+
+  const ip = String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.ip ?? '')
+    .split(',')[0]
+    .trim();
+  if (await cadastroLimitado(ip || 'desconhecido')) {
+    return reply.code(429).send({ erro: 'Muitas tentativas. Tente novamente em alguns minutos.' });
+  }
+
+  const nome = texto(b.nome, 120).replace(/\s+/g, ' ');
+  if (nome.length < 3 || nome.split(' ').length < 2) {
+    return falha('nome', 'Informe seu nome completo.');
+  }
+  const doc = documento(b.documento);
+  if (!doc) return falha('documento', 'CPF ou CNPJ inválido.');
+  const email = texto(b.email, 200).toLowerCase();
+  if (!emailValido(email)) return falha('email', 'E-mail inválido.');
+  const celular = celularValido(b.celular);
+  if (!celular) return falha('celular', 'Celular inválido. Informe o DDD e o número.');
+  const consentimento = texto(b.consentimento, 2000);
+  const versao = texto(b.consentimentoVersao, 40);
+  if (!consentimento || !versao) {
+    return falha('consentimento', 'É preciso aceitar os termos para continuar.');
+  }
+
+  const linhas = await query<{ id: string }>(
+    `INSERT INTO cadastros
+       (nome, cpf_cnpj, tipo_documento, email, celular,
+        consentimento_termos_em, consentimento_versao, consentimento_texto,
+        consentimento_ip, consentimento_marketing, origem)
+     VALUES ($1,$2,$3,$4,$5, now(), $6,$7,$8,$9, NULLIF($10,''))
+     ON CONFLICT DO NOTHING
+     RETURNING id`,
+    [nome, doc.digitos, doc.tipo, email, celular, versao, consentimento, ip || null, b.marketing === true, texto(b.origem, 40)],
+  );
+  if (linhas.length === 0) {
+    // ON CONFLICT sem alvo cobre e-mail e documento; a consulta só descobre
+    // qual campo destacar no formulário.
+    const [dup] = await query<{ email: boolean }>(
+      `SELECT (email = $1) AS email FROM cadastros WHERE email = $1 OR cpf_cnpj = $2 LIMIT 1`,
+      [email, doc.digitos],
+    );
+    return reply.code(409).send({
+      erro: 'Já existe um cadastro com este e-mail ou documento. Entre na sua conta ou fale com a gente.',
+      campo: dup?.email ? 'email' : 'documento',
+    });
+  }
+
+  // ASAAS: criar customer + subscription aqui (ou num worker) a partir de
+  // linhas[0].id e devolver o link da fatura em vez de só 'pagamento'.
+  return reply.code(201).send({
+    ok: true,
+    id: linhas[0].id,
+    proximoPasso: 'pagamento',
+    mensagem: 'Cadastro recebido. Em seguida você recebe o link para ativar a assinatura de R$ 69,90/mês.',
+  });
+});
+
 app.get('/api/home/leiloeiro', async (req, reply) => {
   const nome = String((req.query as any)?.nome ?? '').trim();
   if (!nome) return reply.code(400).send({ erro: 'informe o leiloeiro' });
@@ -1321,8 +1408,9 @@ app.get('/api/img', async (req, reply) => {
           .toBuffer();
         outType = 'image/webp';
       } catch {
-        out = original;
-        outType = type;
+        // Imagem que o sharp não decodifica chega truncada da origem (PNG sem IEND): repassada,
+        // o navegador desenha só a metade de cima e não dispara o fallback de erro do cartão.
+        return sendNopic(reply, 'imagem-corrompida');
       }
     }
     cachePut(key, outType, out);
