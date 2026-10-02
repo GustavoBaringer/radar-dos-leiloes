@@ -11,7 +11,8 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 const API = process.env.API_URL ?? 'http://localhost:4500';
-const SLUG = 'mercedes-benz-gla-2019-sinistrado-copart-5291';
+// O lote padrão é do banco de desenvolvimento; num banco recém-coletado os ids são outros.
+const SLUG = process.env.LOTE_SLUG ?? 'mercedes-benz-gla-2019-sinistrado-copart-5291';
 function ach(){const c=path.join(homedir(),'.cache','ms-playwright');const r=d=>Number(d.split('-').pop());
 for(const d of readdirSync(c).filter(x=>/^chromium-\d+$/.test(x)).sort((a,b)=>r(b)-r(a)))
 for(const rel of ['chrome-linux64/chrome','chrome-linux/chrome']){const e=path.join(c,d,rel);if(existsSync(e))return e}return null}

@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 
-const API = 'http://localhost:4500';
+const API = process.env.API_URL ?? 'http://localhost:4500';
 const SLUG = process.argv[2] ?? 'chevrolet-onix-2018-recuperado-financiamento-leilo-6031';
 
 function acharChromium() {
