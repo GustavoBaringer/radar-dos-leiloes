@@ -33,7 +33,7 @@ interface BrandDef {
 const BRANDS: BrandDef[] = [
   {
     canonical: 'VOLKSWAGEN',
-    aliases: ['volkswagen', 'vw', 'volks', 'wolksvagen', 'volkswagem'],
+    aliases: ['volkswagen', 'vw', 'volks', 'wolksvagen', 'volkswagem', 'vokswagen'],
     models: {
       'T-CROSS': ['t cross', 'tcross', 't-cross'],
       NIVUS: ['nivus'],
@@ -56,7 +56,7 @@ const BRANDS: BrandDef[] = [
   },
   {
     canonical: 'CHEVROLET',
-    aliases: ['chevrolet', 'gm', 'chevy', 'general motors'],
+    aliases: ['chevrolet', 'gm', 'gmc', 'chev', 'chevy', 'general motors'],
     models: {
       ONIX: ['onix', 'onix plus'],
       PRISMA: ['prisma'],
@@ -220,7 +220,7 @@ const BRANDS: BrandDef[] = [
   },
   {
     canonical: 'MERCEDES-BENZ',
-    aliases: ['mercedes', 'mercedes benz', 'mercedes-benz', 'mb', 'merc'],
+    aliases: ['mercedes', 'mercedes benz', 'mercedes-benz', 'mb', 'merc', 'm benz', 'mbenz'],
     models: {
       // Classe B: "b 200" é a armadilha que o Leilo confunde com GLA 200.
       'CLASSE B': ['classe b', 'b 200', 'b200', 'b 180', 'b180', 'classe b 200'],
@@ -283,12 +283,22 @@ const BRANDS: BrandDef[] = [
   { canonical: 'SCANIA', aliases: ['scania'], models: { R440: ['r440'], P310: ['p310'], G420: ['g420'] } },
   { canonical: 'IVECO', aliases: ['iveco'], models: { DAILY: ['daily'], TECTOR: ['tector'] } },
   { canonical: 'SUZUKI', aliases: ['suzuki'], models: { JIMNY: ['jimny'], VITARA: ['vitara'] } },
-  { canonical: 'LAND ROVER', aliases: ['land rover', 'landrover'], models: { DISCOVERY: ['discovery'], EVOQUE: ['evoque'], DEFENDER: ['defender'] } },
+  { canonical: 'LAND ROVER', aliases: ['land rover', 'landrover'], models: { DISCOVERY: ['discovery'], EVOQUE: ['evoque'], DEFENDER: ['defender'], FREELANDER: ['freelander'], VELAR: ['velar'], 'RANGE ROVER': ['range rover'] } },
   { canonical: 'JAC', aliases: ['jac'], models: { T40: ['t40'], IEV: ['iev'] } },
   { canonical: 'TROLLER', aliases: ['troller'], models: { T4: ['t4'] } },
   { canonical: 'DAFRA', aliases: ['dafra'], models: { CITYCOM: ['citycom'] } },
   { canonical: 'SHINERAY', aliases: ['shineray'], models: {} },
   { canonical: 'HAOJUE', aliases: ['haojue'], models: {} },
+  { canonical: 'DODGE', aliases: ['dodge'], models: {} },
+  { canonical: 'CHRYSLER', aliases: ['chrysler'], models: {} },
+  { canonical: 'SSANGYONG', aliases: ['ssangyong', 'ssang yong'], models: {} },
+  { canonical: 'LIFAN', aliases: ['lifan'], models: {} },
+  { canonical: 'AGRALE', aliases: ['agrale'], models: {} },
+  { canonical: 'SUNDOWN', aliases: ['sundown'], models: {} },
+  { canonical: 'KENTON', aliases: ['kenton'], models: {} },
+  { canonical: 'KASINSKI', aliases: ['kasinski'], models: {} },
+  { canonical: 'KAWASAKI', aliases: ['kawasaki'], models: {} },
+  { canonical: 'PORSCHE', aliases: ['porsche'], models: {} },
 ];
 
 /**
@@ -308,6 +318,21 @@ const PART_MARKERS = [
 const brandIndex = new Map<string, BrandDef>();
 for (const b of BRANDS) {
   for (const a of [...b.aliases, b.canonical]) brandIndex.set(compact(a), b);
+}
+
+/**
+ * A marca que vai para a coluna. Fonte que manda a marca crua ("MERCEDES",
+ * "CHEV", "MERCEDES BENZ") ficava fora do filtro, que compara por igualdade com
+ * a canônica; e marca vazia num veículo é tirada do título. Marca fora do
+ * dicionário passa como veio: é melhor que nenhuma. Do título só para veículo
+ * de estrada: em implemento ("enxada rotativa para Agrale") a marca citada é a
+ * do trator onde ele encaixa, não a do lote.
+ */
+const DE_ESTRADA = new Set(['carro', 'moto', 'caminhao', 'onibus', 'picape', 'utilitario', 'suv']);
+export function marcaCanonica(brand: string | null | undefined, titleRaw: string, vehicleType: string | null | undefined): string | null {
+  const b = (brand ?? '').trim();
+  if (b) return brandIndex.get(compact(b))?.canonical ?? b;
+  return vehicleType && DE_ESTRADA.has(vehicleType) ? parseTitle(titleRaw).brand : null;
 }
 
 export function looksLikePart(title: string): boolean {
