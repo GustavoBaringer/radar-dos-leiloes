@@ -947,6 +947,15 @@ export function classifyAsset(
     }
   }
 
+  // Categoria de bem que não é veículo decide antes do título: "CAIXA DE SOM PULSE"
+  // em Equipamentos virava Fiat Pulse, e monitor e Apple Watch viravam carro. Só
+  // máquina pesada nomeada no título escapa. `\b` evita casar "automoveis".
+  if (cat && /\b(equipament|eletron|eletrodomest|informatic|moveis|mobili|utensil|diversos|ferrament|joia|vestuari)/.test(cat)) {
+    return /\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/.test(titulo)
+      ? { assetType: 'veiculo', vehicleType: 'maquina' }
+      : { assetType: 'outro', vehicleType: null };
+  }
+
   // O título corrige a categoria genérica — a regra inteira vive em tipoForteDoTitulo.
   const forte = tipoForteDoTitulo(titleRaw, sourceCategory);
   if (forte) return { assetType: 'veiculo', vehicleType: forte };

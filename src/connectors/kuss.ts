@@ -130,7 +130,8 @@ export const kuss: Connector = {
             sellerName: null,
             city: 'Curitiba',
             state: 'PR',
-            photos: it.foto ? [String(it.foto)] : [],
+            // `fotos/indisp/_indisp.jpg` é o "imagem em breve" da fonte, não foto do lote.
+            photos: it.foto && !/\/indisp\//i.test(String(it.foto)) ? [String(it.foto)] : [],
             raw: { leId: it.seq, lote: it.lote || null, leilaoId: auction.id, video: it.linkVideo ?? null },
           });
         }

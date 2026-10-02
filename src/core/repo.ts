@@ -420,21 +420,30 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   // paginação repetia 17 itens e sumia com outros 17.
   const sortKey =
     p.sort === 'price_asc'
-      ? 'COALESCE(current_bid, min_bid) ASC NULLS LAST'
+      // Lance de R$ 0,01 é marcador da fonte, não pechincha: abria a lista.
+      ? 'bid_suspect ASC, (COALESCE(current_bid, min_bid) <= 10) ASC, COALESCE(current_bid, min_bid) ASC NULLS LAST'
       : p.sort === 'price_desc'
         ? 'bid_suspect ASC, COALESCE(current_bid, min_bid) DESC NULLS LAST'
         : p.sort === 'recent'
           ? 'first_seen_at DESC'
           : p.sort === 'discount'
             ? 'bid_suspect ASC, CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0 THEN COALESCE(current_bid,min_bid)/appraisal ELSE 9 END ASC'
-            : 'COALESCE(auction_end_utc, auction_start_utc) ASC NULLS LAST';
+            // Pregão sem fim cuja abertura já passou tinha a menor data e abria "Encerra
+            // primeiro": data futura vem antes; passada há < 6 h (em andamento) depois.
+            : `CASE WHEN COALESCE(auction_end_utc, auction_start_utc) >= now() THEN 0
+                    WHEN COALESCE(auction_end_utc, auction_start_utc) >= now() - interval '6 hours' THEN 1
+                    ELSE 2 END,
+               COALESCE(auction_end_utc, auction_start_utc) ASC NULLS LAST`;
   // O desempate acompanha o sentido da ordenação: em "mais recentes", lotes
   // gravados no mesmo segundo têm de sair do último para o primeiro, senão a
   // primeira página mostra o começo do lote em vez do fim.
   const sort = `${sortKey}, id ${p.sort === 'recent' || p.sort === 'price_desc' ? 'DESC' : 'ASC'}`;
 
-  const page = Math.max(1, p.page ?? 1);
-  const pageSize = Math.min(100, Math.max(1, p.pageSize ?? 24));
+  // page/pageSize são interpolados no LIMIT/OFFSET: `abc` virava NaN e ia cru para
+  // o SQL. inteiro válido, com piso/teto, antes de chegar perto da query.
+  const inteiro = (v: unknown, def: number) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : def);
+  const page = Math.max(1, inteiro(p.page, 1));
+  const pageSize = Math.min(100, Math.max(1, inteiro(p.pageSize, 24)));
   const offset = (page - 1) * pageSize;
 
   const [{ count }] = await query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params);
@@ -554,6 +563,36 @@ export async function getStats() {
     SELECT source_id, job, started_at, finished_at, ok, fetched, upserted, skipped, error, http_status
     FROM collection_runs ORDER BY started_at DESC LIMIT 20`);
   return { totals, bySource, runs };
+}
+
+/** Lance lido ao vivo (ver aoVivo.ts). Devolve a mudança no formato do `bidChanges` da coleta, ou `null` se nada mudou. */
+export async function registrarLeituraAoVivo(
+  lotId: number,
+  lance: number | null,
+  fim: Date | null | undefined,
+): Promise<UpsertOutcome['bidChanges'][number] | null> {
+  // Fim só anda para a frente: é prorrogação por lance no fim. Recuar seria
+  // encerrar o lote antes da hora por causa de uma leitura velha.
+  if (fim) await query('UPDATE lots SET auction_end_utc = $2 WHERE id = $1 AND auction_end_utc < $2', [lotId, fim]);
+  if (lance == null) return null;
+  const rows = await query<any>(
+    `UPDATE lots l SET current_bid = $2
+       FROM (SELECT id, current_bid AS antigo FROM lots WHERE id = $1 FOR UPDATE) o
+      WHERE l.id = o.id AND o.antigo IS DISTINCT FROM $2::numeric
+      RETURNING o.antigo, l.source_id, l.external_id, l.title_raw`,
+    [lotId, lance],
+  );
+  if (!rows.length) return null;
+  await query('INSERT INTO bid_history (lot_id, bid) VALUES ($1,$2)', [lotId, lance]);
+  const r = rows[0];
+  return {
+    lotId,
+    sourceId: r.source_id,
+    externalId: r.external_id,
+    title: r.title_raw,
+    oldBid: r.antigo == null ? null : Number(r.antigo),
+    newBid: lance,
+  };
 }
 
 export async function startRun(sourceId: string, job: string, limite?: number): Promise<number> {
