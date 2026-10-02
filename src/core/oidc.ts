@@ -18,12 +18,8 @@ const CLIENT_ID = process.env.OIDC_CLIENT_ID ?? 'radar-web';
 const CLIENT_SECRET = process.env.OIDC_CLIENT_SECRET ?? '';
 /** Role do provedor que concede papel de admin aqui. O resto entra como comum. */
 const ROLE_ADMIN = process.env.OIDC_ROLE_ADMIN ?? 'radar-admin';
-// Ver auth.ts: string vazia não pode virar o segredo do HMAC de sessão.
-const SEGREDO_ENV = process.env.APP_SESSAO_SEGREDO?.trim();
-if (ISSUER.length > 0 && !SEGREDO_ENV) {
-  throw new Error('OIDC_ISSUER está definido mas APP_SESSAO_SEGREDO está vazia: defina um segredo forte.');
-}
-const SEGREDO = SEGREDO_ENV || randomBytes(32).toString('hex');
+// Ver auth.ts: string vazia não pode virar o segredo do HMAC; vazio -> aleatório.
+const SEGREDO = process.env.APP_SESSAO_SEGREDO?.trim() || randomBytes(32).toString('hex');
 
 export const oidcLigado = () => ISSUER.length > 0;
 export const COOKIE_OIDC = 'radar_oidc';

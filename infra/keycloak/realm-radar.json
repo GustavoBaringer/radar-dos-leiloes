@@ -75,5 +75,25 @@
       ]
     }
   ],
-  "waitIncrementSeconds": 60
+  "waitIncrementSeconds": 60,
+  "users": [
+    {
+      "username": "admin@radar.local",
+      "email": "admin@radar.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Admin",
+      "lastName": "Radar",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "radar-local-2026",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "radar-admin"
+      ]
+    }
+  ]
 }

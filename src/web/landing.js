@@ -129,11 +129,8 @@ async function aplicarSessao() {
   } catch {
     return;
   }
-  // Mesmo critério da página do lote (server: publico = authLigada && anônimo):
-  // sem portão (dev) o visitante é o dono; com portão, logado é id > 0.
-  const idConta = Number(eu?.conta?.id) || 0;
-  const logado = !eu?.authLigada || idConta > 0;
-  if (!logado) return;
+  // `logado` vem pronto do servidor (trata portão, sessão e o "Sair" em dev).
+  if (!eu?.logado) return;
 
   const app = [
     ['/busca', 'Busca'],

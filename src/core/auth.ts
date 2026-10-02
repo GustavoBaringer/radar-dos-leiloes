@@ -16,14 +16,9 @@ const USUARIO_COMUM = process.env.APP_USUARIO_COMUM ?? '';
 const SENHA_COMUM = process.env.APP_SENHA_COMUM ?? '';
 
 export type Papel = 'admin' | 'comum';
-// `??` não cobre string vazia: com APP_SESSAO_SEGREDO= (como vem no .env), o
-// segredo virava "" e o HMAC da sessão ficava forjável. Vazio = ausente, e com
-// o portão ligado o boot falha em vez de assinar com chave conhecida.
-const SEGREDO_ENV = process.env.APP_SESSAO_SEGREDO?.trim();
-if (SENHA.length > 0 && !SEGREDO_ENV) {
-  throw new Error('APP_SENHA está definida mas APP_SESSAO_SEGREDO está vazia: defina um segredo forte antes de ligar o portão.');
-}
-const SEGREDO = SEGREDO_ENV || randomBytes(32).toString('hex');
+// `??` não cobre string vazia: com APP_SESSAO_SEGREDO= o segredo virava "" e o
+// HMAC da sessão ficava forjável. Vazio é tratado como ausente -> chave aleatória.
+const SEGREDO = process.env.APP_SESSAO_SEGREDO?.trim() || randomBytes(32).toString('hex');
 /**
  * Duas janelas, não uma.
  *

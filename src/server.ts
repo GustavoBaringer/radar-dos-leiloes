@@ -52,7 +52,7 @@ const ipDoCliente = (req: any): string => {
  * local continua sem atrito. O service worker do push precisa passar livre:
  * o navegador o busca sem cookie de sessão e um 302 ali quebraria o push.
  */
-const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt']);
+const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/login-hero.jpg']);
 
 /**
  * Superfície pública.
@@ -100,47 +100,84 @@ const ehPublica = (caminho: string) =>
 
 const PAGINA_LOGIN = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Radar de Leilões</title>
+<meta name="robots" content="noindex">
 <style>
-:root{color-scheme:dark}
+:root{color-scheme:dark;--brand:#2f6bff;--brand2:#5b8cff;--signal:#22d3ee;--ink:#eef3ff;--soft:#93a4c4;--line:#1e2941;--panel:#0b1120}
 *{box-sizing:border-box}
-body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;
-     background:radial-gradient(1200px 600px at 50% -10%,#18202b,#0d1117 60%);color:#e7edf5;
-     font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-form{width:100%;max-width:360px;background:#141a22;border:1px solid #27313d;border-radius:16px;
-     padding:30px 26px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
-.marca{display:flex;align-items:center;gap:9px;margin-bottom:22px}
-.dot{width:11px;height:11px;border-radius:3px;background:#6c7cff}
-.marca b{font-size:17px;letter-spacing:-.2px}
-label{display:block;font-size:12px;color:#8b98a8;margin:14px 0 6px;letter-spacing:.02em}
-input{width:100%;background:#0d1117;border:1px solid #27313d;border-radius:10px;
-      padding:12px 13px;color:#e7edf5;font-size:16px}
-input:focus{outline:2px solid #2f6feb;outline-offset:1px;border-color:#2f6feb}
-button{width:100%;margin-top:20px;background:#2f6feb;border:0;border-radius:10px;padding:13px;
-       color:#fff;font-size:15px;font-weight:600;cursor:pointer}
-button:hover{background:#3d7bf5}
+body{margin:0;min-height:100svh;background:#05070f;color:var(--ink);
+     font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.split{display:flex;min-height:100svh}
+.hero{position:relative;flex:1 1 75%;overflow:hidden;background:#05070f}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:46% 55%}
+.hero::after{content:"";position:absolute;inset:0;
+     background:linear-gradient(90deg,rgba(5,7,15,.55),rgba(5,7,15,.1) 40%,rgba(5,7,15,.55)),
+     radial-gradient(60rem 40rem at 20% 10%,rgba(47,107,255,.25),transparent 60%)}
+.hero-txt{position:absolute;left:clamp(28px,5vw,72px);bottom:clamp(28px,6vw,72px);right:48px;z-index:1}
+.hero-txt h2{font-size:clamp(24px,2.6vw,40px);line-height:1.1;letter-spacing:-.02em;margin:0;max-width:18ch;text-wrap:balance}
+.hero-txt p{margin:14px 0 0;color:var(--soft);font-size:clamp(14px,1.1vw,17px);max-width:40ch}
+.hero-txt em{font-style:normal;background:linear-gradient(110deg,var(--brand2),var(--signal));-webkit-background-clip:text;background-clip:text;color:transparent}
+.painel{flex:0 0 clamp(340px,26%,460px);display:flex;flex-direction:column;justify-content:center;
+     padding:clamp(28px,4vw,56px);border-left:1px solid var(--line);background:rgba(8,12,24,.65);backdrop-filter:blur(8px)}
+.marca{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.marca .mk{position:relative;display:grid;place-items:center;width:34px;height:34px;overflow:hidden;border-radius:11px;
+     border:1px solid rgba(47,107,255,.4);background:linear-gradient(150deg,#13224a,#070c18)}
+.marca .mk i{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 10px 2px rgba(34,211,238,.8)}
+.marca b{font-size:16px;letter-spacing:-.2px}
+form{width:100%}
+h1{font-size:22px;letter-spacing:-.02em;margin:0 0 4px}
+.sub{margin:0 0 22px;color:var(--soft);font-size:13.5px}
+label{display:block;font-size:12px;color:var(--soft);margin:14px 0 6px;letter-spacing:.02em}
+input{width:100%;background:#05070f;border:1px solid var(--line);border-radius:10px;
+      padding:12px 13px;color:var(--ink);font-size:16px}
+input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+button[type=submit]{width:100%;margin-top:22px;background:var(--brand);border:0;border-radius:10px;padding:13px;
+       color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+button[type=submit]:hover{background:var(--brand2)}
 .erro{background:#3a1b1b;border:1px solid #7a3030;color:#ffb4b4;border-radius:9px;
       padding:10px 12px;font-size:13px;margin-bottom:6px}
-.rodape{margin-top:18px;font-size:11.5px;color:#5f6b7a;text-align:center}
+.rodape{margin-top:20px;font-size:11.5px;color:#5f6b7a}
 .ou{display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:#5f6b7a;font-size:11px}
-.ou::before,.ou::after{content:"";flex:1;height:1px;background:#27313d}
-.oidc{display:block;text-align:center;text-decoration:none;background:transparent;border:1px solid #27313d;
-      border-radius:10px;padding:12px;color:#e7edf5;font-size:14px;font-weight:600}
-.oidc:hover{border-color:#2f6feb;background:#121a24}
+.ou::before,.ou::after{content:"";flex:1;height:1px;background:var(--line)}
+.oidc{display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;background:transparent;
+      border:1px solid var(--line);border-radius:10px;padding:13px;color:var(--ink);font-size:14px;font-weight:600;transition:border-color .15s,background .15s}
+.oidc:hover{border-color:var(--brand);background:#0b1424}
+@media (max-width:860px){
+  .split{flex-direction:column}
+  .hero{flex:0 0 34vh;min-height:200px}
+  .hero img{object-position:50% 42%}
+  .painel{flex:1 1 auto;border-left:0;border-top:1px solid var(--line)}
+}
 </style></head><body>
-<form method="POST" action="/api/login">
-  <div class="marca"><span class="dot"></span><b>Radar de Leilões</b></div>
-  <input type="hidden" name="de" value="__DE__">
-  __ERRO__
-  <label for="usuario">Usuário</label>
+<div class="split">
+  <aside class="hero" aria-hidden="true">
+    <img src="/login-hero.jpg" alt="">
+    <div class="hero-txt">
+      <h2>Imóveis e veículos em leilão. <em>Num só lugar</em></h2>
+      <p>Entre para buscar, salvar alertas e acompanhar seus lotes.</p>
+    </div>
+  </aside>
+  <main class="painel">
+    <div class="marca"><span class="mk"><i></i></span><b>Radar de Leilões</b></div>
+    <form method="POST" action="/api/login">
+      <h1>Entrar</h1>
+      <p class="sub">Acesse a sua conta do Radar.</p>
+      <input type="hidden" name="de" value="__DE__">
+      __ERRO__
+      __FORM_SENHA__
+      __OIDC__
+      <p class="rodape">Acesso restrito</p>
+    </form>
+  </main>
+</div></body></html>`;
+const CAMPOS_SENHA = `<label for="usuario">Usuário</label>
   <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" autofocus required>
   <label for="senha">Senha</label>
   <input id="senha" name="senha" type="password" autocomplete="current-password" required>
-  <button type="submit">Entrar</button>
-  __OIDC__
-  <p class="rodape">Acesso restrito</p>
-</form></body></html>`;
+  <button type="submit">Entrar</button>`;
 
-if (authLigada()) {
+// O gate liga com portão de senha OU com Keycloak: antes dependia só de
+// APP_SENHA, então configurar só o OIDC deixava o site inteiro aberto.
+if (authLigada() || oidcLigado()) {
   app.addHook('onRequest', async (req, reply) => {
     const caminho = req.url.split('?')[0];
     if (LIVRES.has(caminho)) return;
@@ -218,13 +255,14 @@ if (authLigada()) {
     v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
   const telaLogin = (de: unknown, erro = '') => {
     const destino = destinoSeguro(de);
-    // O bloco do provedor só existe quando o OIDC está configurado: um botão
-    // que leva a 404 é pior do que botão nenhum.
-    const bloco = oidcLigado()
-      ? `<div class="ou">ou</div><a class="oidc" href="/auth/login?de=${encodeURIComponent(destino)}">Entrar com conta Radar</a>`
-      : '';
+    // Campos de senha só quando o portão existe; o botão do provedor só com OIDC.
+    // Sem senha, o botão do Keycloak é a ação principal, sem o "ou".
+    const campos = authLigada() ? CAMPOS_SENHA : '';
+    const link = `<a class="oidc" href="/auth/login?de=${encodeURIComponent(destino)}">Entrar com conta Radar</a>`;
+    const bloco = oidcLigado() ? (authLigada() ? `<div class="ou">ou</div>${link}` : link) : '';
     return PAGINA_LOGIN.replace('__DE__', escapaAtributo(destino))
       .replace('__ERRO__', erro)
+      .replace('__FORM_SENHA__', campos)
       .replace('__OIDC__', bloco);
   };
 
@@ -391,11 +429,18 @@ if (authLigada()) {
   });
 } else {
   // Sem portão (APP_SENHA vazio) o "Entrar" da landing dava 404: a rota só
-  // existia com a senha ligada. Sem sessão para abrir, entrar é ir para a busca.
-  app.get('/login', async (_req, reply) => reply.code(302).header('location', '/busca').send());
-  // Logout sem portão: não há sessão, mas o link não pode dar 404. Limpa e volta à landing.
+  // existia com a senha ligada. Entrar limpa o radar_saiu (volta a ser o dono).
+  app.get('/login', async (_req, reply) =>
+    reply.header('set-cookie', 'radar_saiu=; Path=/; Max-Age=0').code(302).header('location', '/busca').send(),
+  );
+  // Logout sem portão não tem sessão para encerrar: marca radar_saiu para o /api/me
+  // responder deslogado e a landing mostrar o estado de visitante.
   app.get('/auth/logout', async (_req, reply) =>
-    reply.header('set-cookie', `${COOKIE}=; Path=/; Max-Age=0`).code(302).header('location', '/').send(),
+    reply
+      .header('set-cookie', [`${COOKIE}=; Path=/; Max-Age=0`, 'radar_saiu=1; Path=/; SameSite=Lax'])
+      .code(302)
+      .header('location', '/')
+      .send(),
   );
 }
 const here = dirname(fileURLToPath(import.meta.url));
@@ -881,9 +926,10 @@ app.post('/api/espera', async (req, reply) => {
      RETURNING id`,
     [email, String(b.nome ?? '').trim().slice(0, 120), String(b.interesse ?? '').trim().slice(0, 40), consentimento],
   );
-  // Reenvio do mesmo e-mail não é erro para quem preencheu: a resposta diz que
-  // já estava, em vez de devolver 409 e parecer falha.
-  return { ok: true, jaEstava: linhas.length === 0 };
+  // Resposta única: `jaEstava` revelava a um estranho se um e-mail já estava na
+  // lista. ON CONFLICT DO NOTHING cuida do reenvio sem duplicar.
+  void linhas;
+  return { ok: true };
 });
 
 /**
@@ -946,24 +992,12 @@ app.post('/api/cadastro', async (req, reply) => {
      RETURNING id`,
     [nome, doc.digitos, doc.tipo, email, celular, versao, consentimento, ip || null, b.marketing === true, texto(b.origem, 40)],
   );
-  if (linhas.length === 0) {
-    // ON CONFLICT sem alvo cobre e-mail e documento; a consulta só descobre
-    // qual campo destacar no formulário.
-    const [dup] = await query<{ email: boolean }>(
-      `SELECT (email = $1) AS email FROM cadastros WHERE email = $1 OR cpf_cnpj = $2 LIMIT 1`,
-      [email, doc.digitos],
-    );
-    return reply.code(409).send({
-      erro: 'Já existe um cadastro com este e-mail ou documento. Entre na sua conta ou fale com a gente.',
-      campo: dup?.email ? 'email' : 'documento',
-    });
-  }
-
-  // ASAAS: criar customer + subscription aqui (ou num worker) a partir de
-  // linhas[0].id e devolver o link da fatura em vez de só 'pagamento'.
+  // Anti-enumeração: dado já cadastrado devolve a MESMA resposta do sucesso, sem
+  // id nem o campo em conflito. Antes, o 409 com `campo` dizia a um estranho se
+  // um CPF/e-mail existia na base. ON CONFLICT DO NOTHING já evita duplicar.
+  // ASAAS: criar customer + subscription a partir de linhas[0]?.id quando novo.
   return reply.code(201).send({
     ok: true,
-    id: linhas[0].id,
     proximoPasso: 'pagamento',
     mensagem: 'Cadastro recebido. Em seguida você recebe o link para ativar a assinatura de R$ 69,90/mês.',
   });
@@ -1067,12 +1101,19 @@ const papelDe = (req: any): Papel => (authLigada() ? ((req.papel as Papel) ?? 'c
 /** O cliente não decide o próprio papel: ele pergunta, e a resposta vem do cookie assinado. */
 app.get('/api/me', async (req) => {
   const eu = await donoDe(req);
+  // `logado` é a verdade única para o cliente decidir menu/sessão. Com portão,
+  // logado = tem conta (id>0). Sem portão (dev) todo visitante é admin, então o
+  // "Sair" marca radar_saiu e o dev consegue ver o estado deslogado.
+  const gate = authLigada() || oidcLigado();
+  const saiuEmDev = !gate && /(?:^|;)\s*radar_saiu=1/.test(String(req.headers.cookie ?? ''));
+  const logado = gate ? eu.userId > 0 : !saiuEmDev;
   return {
     papel: papelDe(req),
     authLigada: authLigada(),
     oidc: oidcLigado(),
+    logado,
     // `sub` presente = entrou por provedor; ausente = portão de senha.
-    conta: { id: eu.userId, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null },
+    conta: { id: logado ? eu.userId : 0, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null },
   };
 });
 
@@ -1383,8 +1424,11 @@ app.get('/api/img', async (req, reply) => {
   // Math.max(120, ...) nunca devolve 0, então `|| null` jamais disparava e a
   // requisição SEM largura acabava redimensionada para 120px. Só há largura
   // quando o cliente pede uma largura.
+  // Arredonda para poucos degraus: 40 larguras distintas viravam 40 cache-miss,
+  // 40 fetches no leiloeiro e 40 re-encodes. Com degraus, repete o mesmo cache.
+  const DEGRAUS = [120, 240, 360, 480, 640, 800, 1000, 1200, 1600];
   const pedido = Number(w);
-  const width = w && Number.isFinite(pedido) && pedido > 0 ? Math.min(1600, Math.max(120, pedido)) : null;
+  const width = w && Number.isFinite(pedido) && pedido > 0 ? (DEGRAUS.find((d) => d >= pedido) ?? 1600) : null;
   if (!u) return sendNopic(reply, 'sem-url');
   let target: URL;
   try {
@@ -1418,11 +1462,19 @@ app.get('/api/img', async (req, reply) => {
       ...(HOSTS_TLS_INCOMPLETO.has(target.host) ? { dispatcher: insecureDispatcher() } : {}),
     });
     const type = String(res.headers['content-type'] ?? '');
-    if (res.statusCode !== 200 || !type.startsWith('image/')) {
+    // SVG é imagem mas carrega script: servido do nosso domínio viraria XSS.
+    if (res.statusCode !== 200 || !type.startsWith('image/') || type.includes('svg')) {
       res.body.dump();
       return sendNopic(reply, `origem-${res.statusCode}`);
     }
+    // Teto de tamanho: foto de leilão não passa de poucos MB; acima disso é abuso.
+    const MAX_IMG_BYTES = 20 * 1024 * 1024;
+    if (Number(res.headers['content-length']) > MAX_IMG_BYTES) {
+      res.body.dump();
+      return sendNopic(reply, 'imagem-grande-demais');
+    }
     const original = Buffer.from(await res.body.arrayBuffer());
+    if (original.byteLength > MAX_IMG_BYTES) return sendNopic(reply, 'imagem-grande-demais');
 
     let out = original;
     let outType = type;
@@ -1574,10 +1626,25 @@ app.setErrorHandler((err: any, req, reply) => {
 
 // Cabeçalhos de segurança em tudo. Sem CSP aqui: exige inventário de origens e
 // um erro quebraria a página inteira — fica como passo à parte.
+// script/style com 'unsafe-inline' porque há script inline (window.__LOTE__,
+// JSON-LD) e estilos inline; o ganho real fica em object-src/frame-ancestors/
+// connect-src, que barram clickjacking, plugin e exfiltração para fora do site.
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data: blob:",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self' ws: wss:",
+].join('; ');
 app.addHook('onSend', async (req, reply, payload) => {
   reply.header('x-content-type-options', 'nosniff');
   reply.header('x-frame-options', 'SAMEORIGIN');
   reply.header('referrer-policy', 'strict-origin-when-cross-origin');
+  reply.header('content-security-policy', CSP);
   // Resposta com dado de conta não pode ficar em cache compartilhado.
   if (req.url.startsWith('/api/me')) reply.header('cache-control', 'no-store');
   return payload;
