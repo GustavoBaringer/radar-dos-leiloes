@@ -12,8 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { searchLots, searchLotsMapa, getLot, getStats, ensureSources } from './core/repo.js';
 import { VENCIDO } from './core/encerramento.js';
 import { contarCasaveis, avaliarAlertas } from './core/alerts.js';
-import { authLigada, papelDasCredenciais, criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
-import { oidcLigado, iniciarLogin, concluirLogin, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
+import { criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
+import { oidcLigado, iniciarLogin, concluirLogin, loginPorSenha, urlDeLogout, COOKIE_OIDC, COOKIE_PKCE } from './core/oidc.js';
 import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Identidade } from './core/identidade.js';
 import { query } from './core/db.js';
 import { documento, celularValido, emailValido } from './core/cadastro.js';
@@ -116,7 +116,7 @@ body{margin:0;min-height:100svh;background:#05070f;color:var(--ink);
 .hero-txt h2{font-size:clamp(24px,2.6vw,40px);line-height:1.1;letter-spacing:-.02em;margin:0;max-width:18ch;text-wrap:balance}
 .hero-txt p{margin:14px 0 0;color:var(--soft);font-size:clamp(14px,1.1vw,17px);max-width:40ch}
 .hero-txt em{font-style:normal;background:linear-gradient(110deg,var(--brand2),var(--signal));-webkit-background-clip:text;background-clip:text;color:transparent}
-.painel{flex:0 0 clamp(340px,26%,460px);display:flex;flex-direction:column;justify-content:center;
+.painel{flex:0 0 clamp(360px,35%,560px);display:flex;flex-direction:column;justify-content:center;
      padding:clamp(28px,4vw,56px);border-left:1px solid var(--line);background:rgba(8,12,24,.65);backdrop-filter:blur(8px)}
 .marca{display:flex;align-items:center;gap:10px;margin-bottom:28px}
 .marca .mk{position:relative;display:grid;place-items:center;width:34px;height:34px;overflow:hidden;border-radius:11px;
@@ -138,9 +138,19 @@ button[type=submit]:hover{background:var(--brand2)}
 .rodape{margin-top:20px;font-size:11.5px;color:#5f6b7a}
 .ou{display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:#5f6b7a;font-size:11px}
 .ou::before,.ou::after{content:"";flex:1;height:1px;background:var(--line)}
-.oidc{display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;background:transparent;
-      border:1px solid var(--line);border-radius:10px;padding:13px;color:var(--ink);font-size:14px;font-weight:600;transition:border-color .15s,background .15s}
-.oidc:hover{border-color:var(--brand);background:#0b1424}
+.oidc{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;background:var(--brand);border:0;cursor:pointer;
+      border-radius:10px;padding:14px;color:#fff;font-size:15px;font-weight:700;transition:background .15s}
+.oidc:hover{background:var(--brand2)}
+/* Transição intro -> formulário: crossfade/slide. O item oculto sai do fluxo
+   (absolute) para o visível definir a altura — senão o rodapé ficava longe. */
+.auth{position:relative}
+.auth>.intro,.auth>.formlogin{transition:opacity .3s ease,transform .32s cubic-bezier(.22,.68,.3,1),visibility 0s linear .32s}
+.auth[data-aberto="0"]>.intro,.auth[data-aberto="1"]>.formlogin{opacity:1;visibility:visible;transform:none;transition:opacity .3s ease,transform .32s cubic-bezier(.22,.68,.3,1)}
+.auth[data-aberto="1"]>.intro,.auth[data-aberto="0"]>.formlogin{position:absolute;top:0;left:0;right:0;opacity:0;visibility:hidden}
+.auth[data-aberto="1"]>.intro{transform:translateX(-14px)}
+.auth[data-aberto="0"]>.formlogin{transform:translateX(14px)}
+.voltar{margin-top:14px;width:100%;background:transparent;border:0;color:var(--soft);font:inherit;font-size:13px;cursor:pointer;padding:6px}
+.voltar:hover{color:var(--ink)}
 @media (max-width:860px){
   .split{flex-direction:column}
   .hero{flex:0 0 34vh;min-height:200px}
@@ -158,26 +168,42 @@ button[type=submit]:hover{background:var(--brand2)}
   </aside>
   <main class="painel">
     <div class="marca"><span class="mk"><i></i></span><b>Radar de Leilões</b></div>
-    <form method="POST" action="/api/login">
-      <h1>Entrar</h1>
-      <p class="sub">Acesse a sua conta do Radar.</p>
-      <input type="hidden" name="de" value="__DE__">
-      __ERRO__
-      __FORM_SENHA__
-      __OIDC__
-      <p class="rodape">Acesso restrito</p>
-    </form>
+    <div class="auth" data-aberto="__ABERTO__" id="auth">
+      <div class="intro">
+        <h1>Entrar</h1>
+        <p class="sub">Acesse a sua conta do Radar.</p>
+        <button type="button" class="oidc" id="abrir">Entrar com conta Radar</button>
+      </div>
+      <form class="formlogin" method="POST" action="/api/login">
+        <h1>Entrar</h1>
+        <p class="sub">Use seu usuário e senha da conta Radar.</p>
+        <input type="hidden" name="de" value="__DE__">
+        __ERRO__
+        <label for="usuario">Usuário</label>
+        <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" required>
+        <label for="senha">Senha</label>
+        <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        <button type="submit">Entrar</button>
+        <button type="button" class="voltar" id="voltar">← Voltar</button>
+      </form>
+    </div>
+    <p class="rodape">Acesso restrito</p>
   </main>
-</div></body></html>`;
-const CAMPOS_SENHA = `<label for="usuario">Usuário</label>
-  <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" autofocus required>
-  <label for="senha">Senha</label>
-  <input id="senha" name="senha" type="password" autocomplete="current-password" required>
-  <button type="submit">Entrar</button>`;
+</div>
+<script>
+(function(){
+  var auth=document.getElementById('auth');
+  var abre=function(v){auth.dataset.aberto=v?'1':'0';if(v){var u=document.getElementById('usuario');if(u)setTimeout(function(){u.focus()},320)}};
+  document.getElementById('abrir').addEventListener('click',function(){abre(true)});
+  document.getElementById('voltar').addEventListener('click',function(){abre(false)});
+  // Já aberto por erro do POST: foca o campo sem reanimar.
+  if(auth.dataset.aberto==='1'){var u=document.getElementById('usuario');if(u)u.focus()}
+})();
+</script></body></html>`;
 
-// O gate liga com portão de senha OU com Keycloak: antes dependia só de
-// APP_SENHA, então configurar só o OIDC deixava o site inteiro aberto.
-if (authLigada() || oidcLigado()) {
+// Login e gate de acesso são exclusivamente pelo Keycloak (OIDC). Sem OIDC
+// configurado, o site roda aberto — modo de desenvolvimento local.
+if (oidcLigado()) {
   app.addHook('onRequest', async (req, reply) => {
     const caminho = req.url.split('?')[0];
     if (LIVRES.has(caminho)) return;
@@ -253,18 +279,9 @@ if (authLigada() || oidcLigado()) {
   }
   const escapaAtributo = (v: string) =>
     v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-  const telaLogin = (de: unknown, erro = '') => {
-    const destino = destinoSeguro(de);
-    // Campos de senha só quando o portão existe; o botão do provedor só com OIDC.
-    // Sem senha, o botão do Keycloak é a ação principal, sem o "ou".
-    const campos = authLigada() ? CAMPOS_SENHA : '';
-    const link = `<a class="oidc" href="/auth/login?de=${encodeURIComponent(destino)}">Entrar com conta Radar</a>`;
-    const bloco = oidcLigado() ? (authLigada() ? `<div class="ou">ou</div>${link}` : link) : '';
-    return PAGINA_LOGIN.replace('__DE__', escapaAtributo(destino))
-      .replace('__ERRO__', erro)
-      .replace('__FORM_SENHA__', campos)
-      .replace('__OIDC__', bloco);
-  };
+  // Com erro, a tela abre já no formulário (o POST falhou ali); sem erro, na intro.
+  const telaLogin = (de: unknown, erro = '') =>
+    PAGINA_LOGIN.replace('__DE__', escapaAtributo(destinoSeguro(de))).replace('__ABERTO__', erro ? '1' : '0').replace('__ERRO__', erro);
 
   app.get('/login', async (req, reply) =>
     reply.type('text/html; charset=utf-8').send(telaLogin((req.query as any)?.de)),
@@ -402,16 +419,27 @@ if (authLigada() || oidcLigado()) {
         .type('text/html; charset=utf-8')
         .send(telaLogin(corpo.de, '<div class="erro">Muitas tentativas. Aguarde 15 minutos.</div>'));
     }
-    const papel = papelDasCredenciais(corpo.usuario ?? '', corpo.senha ?? '');
-    if (!papel) {
+    // Login é só pelo Keycloak (Direct Access Grant): o form é nosso, a
+    // identidade é do provedor, sem redirecionar o navegador.
+    let u: Awaited<ReturnType<typeof loginPorSenha>>;
+    try {
+      u = await loginPorSenha(corpo.usuario ?? '', corpo.senha ?? '');
+    } catch (e: any) {
+      app.log?.error?.(e);
+      return reply.code(502).type('text/html; charset=utf-8').send(
+        telaLogin(corpo.de, '<div class="erro">Provedor de identidade indisponível. Tente em instantes.</div>'),
+      );
+    }
+    if (!u) {
       await registraFalha(ip);
-      // Mensagem única de propósito: dizer qual campo errou entrega ao atacante
-      // a confirmação de que o usuário existe.
+      // Mensagem única: dizer qual campo errou confirma a um estranho que o usuário existe.
       return reply
         .code(401)
         .type('text/html; charset=utf-8')
         .send(telaLogin(corpo.de, '<div class="erro">Usuário ou senha incorretos.</div>'));
     }
+    const eu = await garantirUsuario({ sub: u.sub, email: u.email, nome: u.nome, papel: u.papel });
+    const cookie = criarToken(eu.papel, eu.sub);
     // Acerto zera o contador: senão quem errou 7 vezes e acertou continuaria
     // a um erro do bloqueio pelos 15 minutos seguintes.
     try {
@@ -420,7 +448,7 @@ if (authLigada() || oidcLigado()) {
       /* sem Redis, sem contador para zerar */
     }
     return reply
-      .header('set-cookie', cookieDeSessao(req, criarToken(papel, null)))
+      .header('set-cookie', cookieDeSessao(req, cookie))
       .code(302)
       // `/` é a landing de venda e é idêntica antes e depois de entrar: mandar
       // para lá dava a impressão de que o login não tinha funcionado.
@@ -652,7 +680,7 @@ app.get('/lote/:slug', async (req, reply) => {
   // Página pública é só para anônimo real. Sem portão (dev) o hook de auth não
   // roda e papel fica null: tratar isso como público jogava o lote recarregado
   // na página pública com "Entrar", mesmo sendo o dono logado.
-  const publico = authLigada() && (req as any).eu === ANONIMO;
+  const publico = oidcLigado() && (req as any).eu === ANONIMO;
   // O HTML vai para qualquer um (a página do lote é pública). O cliente não usa
   // `raw` nem os campos de verificação, então eles não vão no __LOTE__: `raw`
   // carrega nº de processo judicial de algumas fontes, e o resto é interno.
@@ -1093,26 +1121,23 @@ app.get('/api/lot/:id', async (req, reply) => {
  * pertence à conta administradora — é o comportamento de sempre no localhost.
  */
 const donoDe = async (req: any): Promise<Identidade> =>
-  (req.eu as Identidade) ?? (await usuarioDoPortao(authLigada() ? 'comum' : 'admin'));
+  (req.eu as Identidade) ?? (await usuarioDoPortao(oidcLigado() ? 'comum' : 'admin'));
 
 /** Sem portão de senha, não há papel: o modo local continua aberto como sempre. */
-const papelDe = (req: any): Papel => (authLigada() ? ((req.papel as Papel) ?? 'comum') : 'admin');
+const papelDe = (req: any): Papel => (oidcLigado() ? ((req.papel as Papel) ?? 'comum') : 'admin');
 
 /** O cliente não decide o próprio papel: ele pergunta, e a resposta vem do cookie assinado. */
 app.get('/api/me', async (req) => {
   const eu = await donoDe(req);
-  // `logado` é a verdade única para o cliente decidir menu/sessão. Com portão,
-  // logado = tem conta (id>0). Sem portão (dev) todo visitante é admin, então o
+  // `logado` é a verdade única para o cliente decidir menu/sessão. Com OIDC,
+  // logado = tem conta (id>0). Sem OIDC (dev) todo visitante é admin, então o
   // "Sair" marca radar_saiu e o dev consegue ver o estado deslogado.
-  const gate = authLigada() || oidcLigado();
-  const saiuEmDev = !gate && /(?:^|;)\s*radar_saiu=1/.test(String(req.headers.cookie ?? ''));
-  const logado = gate ? eu.userId > 0 : !saiuEmDev;
+  const saiuEmDev = !oidcLigado() && /(?:^|;)\s*radar_saiu=1/.test(String(req.headers.cookie ?? ''));
+  const logado = oidcLigado() ? eu.userId > 0 : !saiuEmDev;
   return {
     papel: papelDe(req),
-    authLigada: authLigada(),
     oidc: oidcLigado(),
     logado,
-    // `sub` presente = entrou por provedor; ausente = portão de senha.
     conta: { id: logado ? eu.userId : 0, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null },
   };
 });
@@ -1563,7 +1588,7 @@ subscriber.on('message', (_channel, message) => {
   if (dados?.type === 'alertas') {
     const limpos = (dados.disparos ?? []).map((d: any) => ({ ...d, email: undefined, ownerId: undefined }));
     for (const [socket, info] of clients) {
-      const meus = authLigada() ? limpos.filter((_: any, i: number) => dados.disparos[i].ownerId === info.userId) : limpos;
+      const meus = oidcLigado() ? limpos.filter((_: any, i: number) => dados.disparos[i].ownerId === info.userId) : limpos;
       if (!meus.length) continue;
       try {
         socket.send(JSON.stringify({ type: 'alertas', disparos: meus }));

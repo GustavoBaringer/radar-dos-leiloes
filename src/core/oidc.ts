@@ -178,6 +178,52 @@ export async function concluirLogin(params: {
   };
 }
 
+/**
+ * Login por usuário e senha contra o Keycloak (Direct Access Grant), sem
+ * redirecionar o navegador: o form é nosso, a identidade é do provedor. `null`
+ * em credencial inválida; erro só para falha de infraestrutura.
+ */
+export async function loginPorSenha(
+  usuario: string,
+  senha: string,
+): Promise<{ sub: string; email: string | null; nome: string | null; papel: Papel } | null> {
+  const d = await descobrir();
+  const corpo = new URLSearchParams({
+    grant_type: 'password',
+    client_id: CLIENT_ID,
+    username: String(usuario ?? ''),
+    password: String(senha ?? ''),
+    scope: 'openid email profile',
+  });
+  if (CLIENT_SECRET) corpo.set('client_secret', CLIENT_SECRET);
+  const r = await fetch(d.token_endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: corpo,
+  });
+  if (r.status === 400 || r.status === 401) return null;
+  if (!r.ok) throw new Error(`login por senha falhou: HTTP ${r.status}`);
+  const tokens = (await r.json()) as { id_token?: string; access_token?: string };
+  if (!tokens.id_token) throw new Error('provedor não devolveu id_token');
+  const { payload } = await jwtVerify(tokens.id_token, await chaves(), { issuer: ISSUER, audience: CLIENT_ID });
+  if (!payload.sub) throw new Error('id_token sem sub');
+  let papel: Papel = papelDoToken(payload);
+  if (papel !== 'admin' && tokens.access_token) {
+    try {
+      const { payload: acesso } = await jwtVerify(tokens.access_token, await chaves(), { issuer: ISSUER });
+      papel = papelDoToken(acesso);
+    } catch {
+      /* access_token de outro audience: mantém o papel do id_token */
+    }
+  }
+  return {
+    sub: String(payload.sub),
+    email: (payload.email as string) ?? null,
+    nome: ((payload.name as string) || (payload.preferred_username as string)) ?? null,
+    papel,
+  };
+}
+
 /** URL de logout no provedor, para a sessão não sobreviver no Keycloak. */
 export async function urlDeLogout(redirectUri: string): Promise<string | null> {
   const d = await descobrir();
