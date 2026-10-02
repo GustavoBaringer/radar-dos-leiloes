@@ -115,49 +115,47 @@ const ICONES = {
   moto: '<circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h5l3-7h-3M13 6h3l1 4"/>',
   maquina: '<path d="M4 18h10l3-5h4v5"/><path d="M4 18V9h6v4"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/>',
   martelo: '<path d="M14 4l6 6M3 21l3-1 11-11-2-2L4 18z"/><path d="M12 3l3 3"/>',
+  caminhao: '<path d="M14 18V6a2 2 0 00-2-2H4a2 2 0 00-2 2v11a1 1 0 001 1h2M15 18H9M19 18h2a1 1 0 001-1v-3.65a1 1 0 00-.22-.62l-3.48-4.35A1 1 0 0017.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
 };
 const svg = (nome) =>
   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[nome] ?? ICONES.martelo}</svg>`;
 
-/** O chip filtra a busca do hero; o link da categoria leva à busca já filtrada. */
+const imagem = (url, w) => `/api/img?u=${encodeURIComponent(url)}&w=${w}`;
+
+/** A foto é de um lote real da categoria; sem nenhum com foto, o cartão fica no degradê. */
 function pintaCategorias(cats) {
   $('cats').innerHTML = cats
     .map(
-      (c) => `<a class="cat" href="/busca?${esc(c.query)}">
-        <span class="ico">${svg(c.icone)}</span>
-        <b>${esc(c.label)}</b>
-        <small>${esc(c.dica)}</small>
-        <span class="qtd">${nInt(c.total)} lotes abertos</span>
+      (c) => `<a class="tipo${c.foto ? '' : ' sem-foto'}" href="/busca?${esc(c.query)}"${c.foto ? ` style="background-image:url('${esc(imagem(c.foto, 480))}')"` : ''}>
+        <span class="tipo-ico">${svg(c.icone)}</span>
+        <span class="tipo-txt"><b>${esc(c.label)}</b><span class="mono">${nInt(c.total)} lotes</span></span>
       </a>`,
     )
     .join('');
+}
 
-  const chips = $('chips');
-  chips.innerHTML = [{ id: 'todos', label: 'Todas as categorias', query: '' }, ...cats]
-    .map(
-      (c, i) =>
-        `<button class="chip" type="button" data-query="${esc(c.query ?? '')}" aria-pressed="${i === 0}">
-           ${c.icone ? svg(c.icone).replace('width="20" height="20"', 'width="14" height="14"') : ''}${esc(c.label)}
-         </button>`,
-    )
+/**
+ * Três lotes reais com foto e preço flutuando ao lado do título. Pregão que não
+ * começou publica lance de abertura, e o rótulo diz isso em vez de "lance atual".
+ */
+function pintaPilha(lotes) {
+  const comPreco = (lotes ?? []).filter((l) => l.photos?.length && (l.current_bid ?? l.min_bid) != null && !l.bid_suspect);
+  $('heroPilha').innerHTML = comPreco
+    .slice(0, 3)
+    .map((l, i) => {
+      const lance = l.current_bid ?? l.min_bid;
+      const rotulo = l.current_bid != null ? (l.status === 'agendado' ? 'Lance inicial' : 'Lance atual') : 'Lance mínimo';
+      const local = [l.city, l.state].filter(Boolean).join('/');
+      return `<a class="hero-card ${['a', 'b', 'c'][i]}" href="/lote/${slugDoLote(l)}" tabindex="-1">
+        <img src="${esc(imagem(l.photos[0], 480))}" alt="" loading="eager">
+        <span class="hero-card-txt">
+          <b>${esc(l.title_display || l.title_raw)}</b>
+          <span class="mono">${esc(dinheiro(lance))}</span>
+          <small>${esc([rotulo, local].filter(Boolean).join(' · '))}</small>
+        </span>
+      </a>`;
+    })
     .join('');
-
-  // O chip não recarrega nada: ele guarda o recorte que o submit da busca vai usar.
-  let escolhido = '';
-  for (const b of chips.querySelectorAll('.chip')) {
-    b.onclick = () => {
-      for (const o of chips.querySelectorAll('.chip')) o.setAttribute('aria-pressed', String(o === b));
-      escolhido = b.dataset.query;
-    };
-  }
-  $('formBusca').addEventListener('submit', (ev) => {
-    if (!escolhido) return;
-    ev.preventDefault();
-    const p = new URLSearchParams(escolhido);
-    const q = $('q').value.trim();
-    if (q) p.set('q', q);
-    window.location.href = `/busca?${p}`;
-  });
 }
 
 function pintaNumeros(d) {
@@ -197,45 +195,6 @@ function pintaNumeros(d) {
     obs.disconnect();
     for (const dt of faixa.querySelectorAll('dt')) dt.textContent = nInt(Number(dt.dataset.valor) || 0);
   }, 1500);
-}
-
-/**
- * Painel "encerrando agora". O mockup tinha um contador de lances por minuto
- * subindo sozinho; não recebemos lance nenhum, então o painel mostra o que é
- * verdade e igualmente urgente: o que encerra primeiro e quantos encerram por hora.
- */
-function pintaPainel(d) {
-  const lotes = d.encerrando ?? [];
-  $('painelJanela').textContent = `${nInt(d.encerram24h)} em 24h`;
-
-  if (!lotes.length) {
-    $('painelNome').textContent = 'Nenhum lote com prazo definido agora.';
-    $('painelValor').textContent = '—';
-    return;
-  }
-  const p = lotes[0];
-  $('painelValor').textContent = dinheiro(p.current_bid ?? p.min_bid) ?? 'sem lance publicado';
-  $('painelNome').textContent = p.title_display || p.title_raw;
-  $('painelOnde').textContent = [[p.city, p.state].filter(Boolean).join('/'), p.quando].filter(Boolean).join(' · ');
-
-  $('feed').innerHTML = lotes
-    .slice(1, 5)
-    .map(
-      (l) => `<li>
-        <span class="txt">
-          <b>${esc(l.title_display || l.title_raw)}</b>
-          <small>${esc([[l.city, l.state].filter(Boolean).join('/'), l.quando].filter(Boolean).join(' · '))}</small>
-        </span>
-        <span class="v">${esc(dinheiro(l.current_bid ?? l.min_bid) ?? '—')}</span>
-      </li>`,
-    )
-    .join('');
-
-  const horas = d.porHora ?? [];
-  const teto = Math.max(1, ...horas);
-  $('barras').innerHTML = horas
-    .map((n, i) => `<i style="height:${Math.max(6, Math.round((n / teto) * 100))}%" title="${n} encerram em ${i + 1}h"></i>`)
-    .join('');
 }
 
 function pintaLeiloeiros(lista) {
@@ -355,17 +314,15 @@ async function iniciar() {
   try {
     d = await (await fetch('/api/vitrine')).json();
   } catch {
-    $('painelNome').textContent = 'Não foi possível carregar o índice agora.';
     return;
   }
   $('heroFontes').textContent = nInt(d.fontes);
   $('heroLotes').textContent = nInt(d.total);
   $('esperaLotes').textContent = nInt(d.total);
-  $('seloLeiloeiros').textContent = nInt(d.totalLeiloeiros);
 
   pintaCategorias(d.categorias ?? []);
   pintaNumeros(d);
-  pintaPainel(d);
+  pintaPilha(d.recentes);
   pintaLeiloeiros(d.leiloeiros);
   pintaLotes(d.recentes);
 

@@ -3,14 +3,12 @@ import { BellPlus, LayoutGrid, List, Map as MapIcon, SlidersHorizontal } from 'l
 import type { Facets, Lot, RespostaMapa, SearchResponse } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { ORDENACOES } from '@/lib/labels';
-import { type EstadoBusca, contaFiltros, paramsDaBusca, patchDoBem } from '@/lib/filtros';
+import { type EstadoBusca, contaFiltros, paramsDaBusca } from '@/lib/filtros';
 import { FilterSidebar } from '@/components/FilterSidebar';
 import { LotCard } from '@/components/LotCard';
 import { MapaLotes } from '@/components/MapaLotes';
 import { FolhaMapa } from '@/components/FolhaMapa';
-import { BuscaHero } from '@/components/BuscaHero';
 import { PainelBusca } from '@/components/PainelBusca';
-import { CATEGORIAS, Categorias } from '@/components/Categorias';
 import { FiltrosAtivos, filtrosAtivos } from '@/components/FiltrosAtivos';
 import { VistosRecentes } from '@/components/VistosRecentes';
 import { ComoFunciona } from '@/components/ComoFunciona';
@@ -44,9 +42,6 @@ export function Busca({
   const [mapa, setMapa] = useState<RespostaMapa | null>(null);
   const [ehCelular, setEhCelular] = useState(false);
   const [mapaCarregando, setMapaCarregando] = useState(false);
-  const [indice, setIndice] = useState<{ total: number; fontes: number } | null>(null);
-  const [destaques, setDestaques] = useState<Lot[]>([]);
-  const [fotosCat, setFotosCat] = useState<Record<string, string>>({});
   const seq = useRef(0);
   const seqMapa = useRef(0);
   const resultadosRef = useRef<HTMLElement>(null);
@@ -96,29 +91,6 @@ export function Busca({
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs]);
-
-  // Topo e categorias guardam o que viram uma vez: refazer a cada filtro faria o hero pular
-  // e as categorias perderem a foto justamente da categoria que o filtro esconde.
-  useEffect(() => {
-    if (!dados) return;
-    if (!indice && !qAdiado.trim() && contaFiltros(estado) === 0) {
-      setIndice({ total: dados.total, fontes: dados.facets.sources.length });
-    }
-    if (destaques.length < 3) {
-      const comFoto = dados.items.filter((l) => l.photos?.length && !l.bid_suspect && (l.current_bid ?? l.min_bid) != null);
-      if (comFoto.length >= 3) setDestaques(comFoto.slice(0, 3));
-    }
-    const faltando = CATEGORIAS.filter((c) => !fotosCat[c.id]);
-    if (faltando.length) {
-      const novas: Record<string, string> = {};
-      for (const l of dados.items) {
-        const cat = l.asset_type === 'imovel' ? 'imovel' : l.vehicle_type;
-        if (cat && l.photos?.[0] && !fotosCat[cat] && !novas[cat]) novas[cat] = l.photos[0];
-      }
-      if (Object.keys(novas).length) setFotosCat((antes) => ({ ...antes, ...novas }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dados]);
 
   // O mapa usa os MESMOS filtros da lista, menos página, ordenação e o ponto
   // escolhido: um ponto selecionado não pode apagar os outros do mapa.
@@ -195,16 +167,6 @@ export function Busca({
     setQAdiado(estado.q);
     if (estado.page !== 1) aoMudar({ page: 1 });
     (document.activeElement as HTMLElement | null)?.blur();
-    rolarParaResultados();
-  }
-
-  function escolherCategoria(id: string) {
-    if (id === 'imovel') {
-      aoMudar(patchDoBem({ ...estado, multi: { ...estado.multi, vehicleType: [] } }, ehImovel ? '' : 'imovel'));
-    } else {
-      const ja = estado.multi.vehicleType.length === 1 && estado.multi.vehicleType[0] === id;
-      aoMudar({ assetType: '', multi: { ...estado.multi, vehicleType: ja ? [] : [id], propertyType: [] }, page: 1 });
-    }
     rolarParaResultados();
   }
 
@@ -328,17 +290,7 @@ export function Busca({
 
   return (
     <>
-      {!ehMapa && (
-        <BuscaHero
-          totalIndice={indice?.total ?? null}
-          nFontes={indice?.fontes ?? null}
-          destaques={destaques}
-          aoAbrir={aoAbrirLote}
-          aoVerLotes={rolarParaResultados}
-          aoCriarAlerta={aoCriarAlerta}
-        />
-      )}
-      <div className={`faixa pb-wrap${ehMapa ? ' compacto' : ''}`}>
+      <div className="faixa pb-wrap">
         <PainelBusca
           estado={estado}
           facetas={facetas}
@@ -347,7 +299,6 @@ export function Busca({
           aoMudar={aoMudar}
           aoEnviar={enviar}
         />
-        {!ehMapa && <Categorias estado={estado} facetas={facetas} fotos={fotosCat} aoEscolher={escolherCategoria} />}
       </div>
 
       <main ref={resultadosRef} id="resultados" className={`faixa layout${ehMapa ? ' vista-mapa' : ''}`}>

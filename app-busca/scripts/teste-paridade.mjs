@@ -272,7 +272,19 @@ async function efeitoDe(nome, acao, naUrl) {
 await efeitoDe('15a. situação do bem', () => page.locator('.lateral-desktop .f-opcoes[aria-label="Situação do bem"] .f-op', { hasText: 'Sinistrado' }).click(), 'docType=sinistrado');
 await efeitoDe('15b. encerra hoje', () => page.locator('.lateral-desktop .f-op', { hasText: 'Encerra hoje' }).click(), 'prazo=hoje');
 await efeitoDe('15c. abaixo da avaliação', () => page.locator('.lateral-desktop .f-sw', { hasText: 'Abaixo da avaliação' }).click(), 'abaixo=1');
-await efeitoDe('15d. categoria no topo', () => page.locator('.cat', { hasText: 'Motos' }).click(), 'vehicleType=moto');
+{
+  // A categoria mora na landing e leva à busca já filtrada.
+  await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
+  await esperaBusca();
+  const antes = await total();
+  await page.goto(`${API}/`, { waitUntil: 'networkidle' });
+  await Promise.all([page.waitForURL((u) => u.pathname === '/busca'), page.locator('.tipo', { hasText: 'Motos' }).click()]);
+  await page.waitForLoadState('networkidle');
+  await esperaBusca();
+  const depois = await total();
+  if (depois > 0 && depois < antes && page.url().includes('vehicleType=moto')) ok('15d. categoria na landing leva à busca filtrada', `${antes} -> ${depois}`);
+  else falha('15d. categoria na landing leva à busca filtrada', `${antes} -> ${depois}, url=${page.url()}`);
+}
 
 await page.goto(`${API}/busca?assetType=veiculo`, { waitUntil: 'networkidle' });
 await esperaBusca();

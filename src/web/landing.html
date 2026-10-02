@@ -78,71 +78,26 @@
 
 <main>
 <section class="hero" id="topo">
-  <div class="malha"></div>
   <div class="faixa hero-grade">
-    <div>
-      <p class="selo selo-verify sobe" style="--atraso:40ms">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-        <span><b id="seloLeiloeiros">114</b> leiloeiros oficiais identificados nos lotes</span>
-      </p>
-
-      <h1 class="sobe" style="--atraso:120ms">Todo leilão do Brasil <span>numa busca só.</span></h1>
-
+    <div class="hero-texto">
+      <p class="hero-selo sobe" style="--atraso:40ms"><i></i><span><b id="heroLotes">—</b> lotes ativos de <b id="heroFontes">—</b> fontes</span></p>
+      <h1 class="sobe" style="--atraso:120ms">Leilões de veículos e imóveis, <em>numa só busca</em></h1>
       <p class="hero-sub sobe" style="--atraso:200ms">
-        Veículos e imóveis de <b id="heroFontes">9</b> plataformas de leilão, com lance, data de
-        encerramento e link direto para o leiloeiro. Sem taxa para procurar e sem comissão sobre o arremate.
+        Compare lance, prazo e avaliação de várias plataformas de leilão. Salve a busca como alerta e
+        saiba do próximo lote antes de abrir site por site. Sem taxa para procurar e sem comissão sobre o arremate.
       </p>
-
-      <div class="busca-caixa sobe" style="--atraso:280ms">
-        <form class="busca-linha" id="formBusca" action="/busca" method="get">
-          <label class="sr-only" for="q">Buscar lote</label>
-          <div class="busca-campo">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-            <input id="q" name="q" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="none"
-                   placeholder="Busque: t-cross, hilux, apartamento, trator...">
-          </div>
-          <button class="btn btn-g" type="submit">Buscar lotes</button>
-        </form>
-        <div class="chips" id="chips" role="group" aria-label="Filtrar por categoria"></div>
+      <div class="hero-cta sobe" style="--atraso:280ms">
+        <a class="btn-cta" href="/busca">Ver os lotes <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn-fantasma" href="/alertas">Criar alerta</a>
       </div>
-
-      <div class="hero-provas sobe" style="--atraso:340ms">
-        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--verify)" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/></svg> Placa e chassi mascarados na entrada</span>
-        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--signal)" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 004 0"/></svg> Alerta quando um lote novo casa com a sua busca</span>
-        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--brand-bright)" aria-hidden="true"><path d="M14 4l6 6M3 21l3-1 11-11-2-2L4 18z"/></svg> <b id="heroLotes">—</b> lotes indexados</span>
-      </div>
+      <ul class="hero-confianca sobe" style="--atraso:340ms">
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg> Preço com o rótulo certo</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg> Placas mascaradas</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg> Link direto para a fonte</li>
+      </ul>
     </div>
-
-    <aside class="painel sobe" style="--atraso:160ms" aria-labelledby="painelTitulo">
-      <span class="brilho halo"></span>
-      <div class="painel-topo">
-        <span class="olho" id="painelTitulo"><span class="bolha pulso"></span> Encerrando agora</span>
-        <span class="mono" style="font-size:11px;color:var(--ink-soft)" id="painelJanela">—</span>
-      </div>
-
-      <div class="painel-destaque">
-        <p class="rot">Lote mais próximo do encerramento</p>
-        <p class="val" id="painelValor">—</p>
-        <p class="nome" id="painelNome">carregando…</p>
-        <p class="onde" id="painelOnde"></p>
-      </div>
-
-      <div class="barras">
-        <div class="barras-rot">
-          <span>Encerramentos por hora</span>
-          <b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg> <span id="barrasNota">próximas 12h</span></b>
-        </div>
-        <div class="barras-trilho" id="barras" role="img" aria-label="Distribuição de encerramentos nas próximas 12 horas"></div>
-      </div>
-
-      <ul class="feed" id="feed"></ul>
-
-      <div class="painel-rodape">
-        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--signal)" aria-hidden="true"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 004 0"/></svg> Alerta por busca salva</span>
-        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--verify)" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/></svg> Dado pessoal mascarado</span>
-        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--brand-bright)" aria-hidden="true"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg> Link direto à origem</span>
-      </div>
-    </aside>
+    <!-- Decorativo para leitor de tela: os mesmos lotes estão em "Últimos lotes mapeados". -->
+    <div class="hero-pilha" id="heroPilha" aria-hidden="true"></div>
   </div>
 </section>
 
@@ -154,9 +109,8 @@
   <div class="sec-cab">
     <span class="olho"><span class="bolha"></span> Categorias</span>
     <h2>Filtre por categoria e vá direto ao lote</h2>
-    <p>Cada categoria mostra quantos lotes estão abertos agora na base. O filtro vale para a busca
-      inteira, incluindo os alertas que você criar. Judiciais cruza com as outras: é a natureza do
-      leilão, não o tipo do bem.</p>
+    <p>Cada categoria mostra quantos lotes estão abertos agora na base, com a foto de um deles.
+      O clique leva à busca já filtrada.</p>
   </div>
   <div class="cats" id="cats"></div>
 </section>

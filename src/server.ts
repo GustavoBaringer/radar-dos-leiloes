@@ -736,20 +736,15 @@ app.get('/api/vitrine', async () => {
   // As categorias são as do índice de verdade, com a mesma query que o filtro da
   // busca usa — assim o número do cartão e o resultado do clique não divergem.
   const CATEGORIAS = [
-    { id: 'veiculos', label: 'Veículos', dica: 'carros, picapes, SUVs, utilitários', icone: 'carro',
-      query: 'assetType=veiculo&vehicleType=carro,picape,suv,utilitario',
-      onde: `asset_type='veiculo' AND vehicle_type IN ('carro','picape','suv','utilitario')` },
-    { id: 'imoveis', label: 'Imóveis', dica: 'casas, apartamentos, terrenos, comerciais', icone: 'casa',
-      query: 'assetType=imovel', onde: `asset_type='imovel'` },
-    { id: 'motos', label: 'Motos', dica: 'street, scooter, trail, sucata', icone: 'moto',
-      query: 'assetType=veiculo&vehicleType=moto', onde: `vehicle_type='moto'` },
-    { id: 'maquinas', label: 'Máquinas e agro', dica: 'tratores, escavadeiras, reboques', icone: 'maquina',
-      query: 'assetType=veiculo&vehicleType=maquina,reboque', onde: `vehicle_type IN ('maquina','reboque')` },
-    { id: 'judiciais', label: 'Judiciais', dica: 'penhora, execução, inventário', icone: 'martelo',
-      query: 'docType=judicial', onde: `doc_type='judicial'` },
+    { id: 'carro', label: 'Carros', icone: 'carro', query: 'vehicleType=carro', onde: `vehicle_type='carro'` },
+    { id: 'suv', label: 'SUVs', icone: 'carro', query: 'vehicleType=suv', onde: `vehicle_type='suv'` },
+    { id: 'moto', label: 'Motos', icone: 'moto', query: 'vehicleType=moto', onde: `vehicle_type='moto'` },
+    { id: 'picape', label: 'Picapes', icone: 'caminhao', query: 'vehicleType=picape', onde: `vehicle_type='picape'` },
+    { id: 'caminhao', label: 'Caminhões', icone: 'caminhao', query: 'vehicleType=caminhao', onde: `vehicle_type='caminhao'` },
+    { id: 'imovel', label: 'Imóveis', icone: 'casa', query: 'assetType=imovel', onde: `asset_type='imovel'` },
   ];
 
-  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora] = await Promise.all([
+  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora, fotosCat] = await Promise.all([
     query<any>(
       `SELECT count(DISTINCT source_id)::int AS fontes,
               count(*)::int AS total,
@@ -801,6 +796,14 @@ app.get('/api/vitrine', async () => {
           AND l.auction_end_utc <  now() + h * interval '1 hour'
         GROUP BY h ORDER BY h`,
     ),
+    // Uma foto por categoria, a mais recente: o cartão da categoria mostra um lote de verdade.
+    query<any>(
+      `SELECT DISTINCT ON (cat) cat, photos->>0 AS foto FROM (
+         SELECT CASE WHEN asset_type = 'imovel' THEN 'imovel' ELSE vehicle_type END AS cat, photos, first_seen_at, id
+           FROM lots WHERE ${ABERTOS} AND photos IS NOT NULL AND jsonb_array_length(photos) > 0
+       ) t WHERE cat IN (${CATEGORIAS.map((c) => `'${c.id}'`).join(',')})
+       ORDER BY cat, first_seen_at DESC, id DESC`,
+    ),
   ]);
 
   const c = categorias[0] ?? {};
@@ -818,7 +821,11 @@ app.get('/api/vitrine', async () => {
     ufs,
     leiloeiros,
     recentes,
-    categorias: CATEGORIAS.map(({ onde: _onde, ...rest }, i) => ({ ...rest, total: c[`c${i}`] ?? 0 })),
+    categorias: CATEGORIAS.map(({ onde: _onde, ...rest }, i) => ({
+      ...rest,
+      total: c[`c${i}`] ?? 0,
+      foto: fotosCat.find((f: any) => f.cat === rest.id)?.foto ?? null,
+    })),
     encerrando: encerrando.map((l: any) => ({ ...l, quando: emQuanto(l.auction_end_utc) })),
     porHora: porHora.map((r: any) => r.total),
   };
