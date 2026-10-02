@@ -92,18 +92,112 @@ function contar(el, valor) {
 
 const btnMenu = $('btnMenu');
 const menuMovel = $('menuMovel');
-btnMenu.onclick = () => {
-  const aberto = menuMovel.dataset.aberto === '1';
-  menuMovel.dataset.aberto = aberto ? '0' : '1';
-  btnMenu.setAttribute('aria-expanded', String(!aberto));
-  btnMenu.setAttribute('aria-label', aberto ? 'Abrir menu' : 'Fechar menu');
-};
-for (const a of menuMovel.querySelectorAll('a')) {
-  a.addEventListener('click', () => {
-    menuMovel.dataset.aberto = '0';
-    btnMenu.setAttribute('aria-expanded', 'false');
-  });
+function menu(abrir) {
+  menuMovel.dataset.aberto = abrir ? '1' : '0';
+  btnMenu.setAttribute('aria-expanded', String(abrir));
+  btnMenu.setAttribute('aria-label', abrir ? 'Fechar menu' : 'Abrir menu');
 }
+const menuAberto = () => menuMovel.dataset.aberto === '1';
+btnMenu.onclick = () => menu(!menuAberto());
+for (const a of menuMovel.querySelectorAll('a')) a.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && menuAberto()) {
+    menu(false);
+    btnMenu.focus();
+  }
+});
+document.addEventListener('pointerdown', (e) => {
+  if (menuAberto() && !menuMovel.contains(e.target) && !btnMenu.contains(e.target)) menu(false);
+});
+// Aberto ao girar o tablet para paisagem, o painel sumia pelo CSS mas o botão seguia "expandido".
+window.matchMedia('(min-width:1024px)').addEventListener('change', (m) => m.matches && menu(false));
+
+/* ------------------------------------------------------------------ */
+/* Visitante já logado: a landing mostra o menu do app, não o de venda */
+/* ------------------------------------------------------------------ */
+const SETA =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+async function aplicarSessao() {
+  let eu;
+  try {
+    // Cookie de sessão é HttpOnly: o único jeito de a landing saber quem é o
+    // visitante é perguntar ao servidor. id > 0 é sessão real (anônimo é 0).
+    const r = await fetch('/api/me', { headers: { accept: 'application/json' } });
+    if (!r.ok) return;
+    eu = await r.json();
+  } catch {
+    return;
+  }
+  // Mesmo critério da página do lote (server: publico = authLigada && anônimo):
+  // sem portão (dev) o visitante é o dono; com portão, logado é id > 0.
+  const idConta = Number(eu?.conta?.id) || 0;
+  const logado = !eu?.authLigada || idConta > 0;
+  if (!logado) return;
+
+  const app = [
+    ['/busca', 'Busca'],
+    ['/alertas', 'Alertas'],
+    ['/favoritos', 'Favoritos'],
+    ...(eu.papel === 'admin' ? [['/cobertura', 'Cobertura']] : []),
+  ];
+  const linksApp = app.map(([href, txt]) => `<a href="${href}">${txt}</a>`).join('');
+
+  const navDesktop = document.querySelector('.topo-inner nav');
+  if (navDesktop) navDesktop.innerHTML = linksApp;
+
+  // Preserva o botão do hambúrguer (#btnMenu) e seus handlers: troca só os dois
+  // primeiros itens, "Entrar" e "Assinar", pelas ações de quem já tem conta.
+  document.querySelector('.topo-acoes .link-quieto')?.replaceWith(
+    Object.assign(document.createElement('a'), { className: 'link-quieto', href: '/auth/logout', textContent: 'Sair' }),
+  );
+  const btnAssinar = document.querySelector('.topo-acoes .btn');
+  if (btnAssinar) {
+    btnAssinar.setAttribute('href', '/busca');
+    btnAssinar.innerHTML = `Acessar o Radar ${SETA}`;
+  }
+
+  menuMovel.innerHTML = linksApp + '<a href="/auth/logout">Sair</a>';
+
+  // Rodapé, bloco "Conta": "Criar conta/Entrar" não cabem para quem já entrou.
+  const conta = document.querySelector('.rodape-grade a[href="#cadastro"]');
+  if (conta) { conta.setAttribute('href', '/busca'); conta.textContent = 'Ir para o Radar'; }
+  const entrarRodape = document.querySelector('.rodape-grade a[href="/login"]');
+  if (entrarRodape) { entrarRodape.setAttribute('href', '/auth/logout'); entrarRodape.textContent = 'Sair'; }
+
+  document.documentElement.classList.add('sessao-ativa');
+}
+aplicarSessao();
+
+// Rolagem própria em vez de `scroll-behavior:smooth`: o navegador desliga a do
+// CSS quando o sistema pede menos animação (Windows com "Efeitos de animação"
+// desligado), e aí todo link da página virava salto seco.
+let rolagem = 0;
+const cancelaRolagem = () => cancelAnimationFrame(rolagem);
+for (const ev of ['wheel', 'touchstart', 'keydown']) window.addEventListener(ev, cancelaRolagem, { passive: true });
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="#"]');
+  if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  const id = a.getAttribute('href').slice(1);
+  const alvo = id && document.getElementById(id);
+  if (!alvo) return;
+  e.preventDefault();
+  const de = window.scrollY;
+  const para = id === 'topo' ? 0 : Math.max(0, alvo.getBoundingClientRect().top + de);
+  const dur = Math.min(900, Math.max(420, Math.abs(para - de) * 0.35));
+  const t0 = performance.now();
+  const suave = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+  cancelaRolagem();
+  const passo = (agora) => {
+    const t = Math.min(1, (agora - t0) / dur);
+    window.scrollTo({ top: de + (para - de) * suave(t), behavior: 'instant' });
+    if (t < 1) rolagem = requestAnimationFrame(passo);
+  };
+  rolagem = requestAnimationFrame(passo);
+  history.pushState(null, '', `#${id}`);
+  if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
+  alvo.focus({ preventScroll: true });
+});
 
 /* ------------------------------------------------------------------ */
 /* Conteúdo                                                            */
@@ -121,10 +215,13 @@ const svg = (nome) =>
   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[nome] ?? ICONES.martelo}</svg>`;
 
 const imagem = (url, w) => `/api/img?u=${encodeURIComponent(url)}&w=${w}`;
+// "Imagem em breve" da fonte não é foto: como fundo de categoria, o texto dela cobria o rótulo.
+const fotoReal = (url) => (url && !/indisp|sem[-_]?foto|em[-_]?breve/i.test(url) ? url : null);
 
 /** A foto é de um lote real da categoria; sem nenhum com foto, o cartão fica no degradê. */
 function pintaCategorias(cats) {
   $('cats').innerHTML = cats
+    .map((c) => ({ ...c, foto: fotoReal(c.foto) }))
     .map(
       (c) => `<a class="tipo${c.foto ? '' : ' sem-foto'}" href="/busca?${esc(c.query)}"${c.foto ? ` style="background-image:url('${esc(imagem(c.foto, 480))}')"` : ''}>
         <span class="tipo-ico">${svg(c.icone)}</span>
@@ -166,6 +263,7 @@ function pintaNumeros(d) {
     { v: d.encerram24h, rot: 'lotes encerram nas próximas 24h', det: 'quem sabe antes, chega antes' },
   ];
   $('numeros').innerHTML = itens
+    .filter((i) => i.v != null)
     .map(
       (i) => `<div>
         <dt class="mono" data-valor="${i.v ?? ''}">0</dt>
@@ -256,8 +354,15 @@ function mascaraCelular(v) {
   const meio = d.length === 11 ? 7 : 6;
   return `(${d.slice(0, 2)}) ${d.slice(2, meio)}-${d.slice(meio)}`;
 }
-$('cadDocumento').addEventListener('input', (e) => { e.target.value = mascaraDocumento(e.target.value); });
-$('cadCelular').addEventListener('input', (e) => { e.target.value = mascaraCelular(e.target.value); });
+function mascarar(el, formata) {
+  const antes = digitos(el.value.slice(0, el.selectionStart ?? el.value.length)).length;
+  el.value = formata(el.value);
+  let i = 0;
+  for (let n = 0; i < el.value.length && n < antes; i++) if (/\d/.test(el.value[i])) n++;
+  el.setSelectionRange(i, i);
+}
+$('cadDocumento').addEventListener('input', (e) => mascarar(e.target, mascaraDocumento));
+$('cadCelular').addEventListener('input', (e) => mascarar(e.target, mascaraCelular));
 
 const formCadastro = $('formCadastro');
 const avisoCadastro = $('avisoCadastro');
@@ -267,13 +372,39 @@ const mostraAviso = (texto, ok) => {
   avisoCadastro.className = `aviso ${ok ? 'aviso-ok' : 'aviso-erro'}`;
   avisoCadastro.textContent = texto;
 };
+// O erro fica colado no campo: com um aviso único embaixo do botão, no celular a
+// mensagem caía fora da tela e o foco ia para um campo sem explicação.
+function limpaErros() {
+  for (const m of formCadastro.querySelectorAll('.erro-campo')) m.remove();
+  for (const c of formCadastro.querySelectorAll('[aria-invalid]')) {
+    c.removeAttribute('aria-invalid');
+    c.removeAttribute('aria-describedby');
+  }
+}
 const erroNoCampo = (id, texto) => {
-  mostraAviso(texto, false);
-  $(id)?.focus();
+  const campo = $(id);
+  if (!campo) return mostraAviso(texto, false);
+  limpaErros();
+  const msg = document.createElement('small');
+  msg.className = 'erro-campo';
+  msg.id = `${id}-erro`;
+  msg.textContent = texto;
+  (campo.closest('.campo, .aceite') ?? campo).after(msg);
+  campo.setAttribute('aria-invalid', 'true');
+  campo.setAttribute('aria-describedby', msg.id);
+  campo.focus();
 };
+formCadastro.addEventListener('input', (e) => {
+  if (e.target.getAttribute?.('aria-invalid') !== 'true') return;
+  $(`${e.target.id}-erro`)?.remove();
+  e.target.removeAttribute('aria-invalid');
+  e.target.removeAttribute('aria-describedby');
+});
 
 formCadastro.addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  limpaErros();
+  avisoCadastro.hidden = true;
   const nome = $('cadNome').value.trim();
   const documento = digitos($('cadDocumento').value);
   const email = $('cadEmail').value.trim();
@@ -321,12 +452,27 @@ formCadastro.addEventListener('submit', async (ev) => {
 
 /* ------------------------------------------------------------------ */
 
+// Sem a vitrine, o que depende dela some em vez de ficar em "—" ou "0" para sempre.
+function semVitrine() {
+  $('heroLotes').closest('.hero-selo').hidden = true;
+  $('cadastroFrase').hidden = true;
+  $('numeros').closest('section').hidden = true;
+  for (const id of ['lotes', 'categorias', 'cobertura']) {
+    $(id).hidden = true;
+    for (const a of document.querySelectorAll(`a[href="#${id}"]`)) (a.closest('li') ?? a).hidden = true;
+  }
+}
+
 async function iniciar() {
   observar();
   let d;
   try {
-    d = await (await fetch('/api/vitrine')).json();
+    const r = await fetch('/api/vitrine', { signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) throw new Error(String(r.status));
+    d = await r.json();
+    if (d?.total == null) throw new Error('vitrine vazia');
   } catch {
+    semVitrine();
     return;
   }
   $('heroLotes').textContent = nInt(d.total);

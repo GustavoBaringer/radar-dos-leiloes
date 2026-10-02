@@ -36,7 +36,8 @@
   {"@type":"Question","name":"Vocês são leiloeiros? Eu dou o lance aqui?","acceptedAnswer":{"@type":"Answer","text":"Não. O Radar não realiza leilões nem intermedeia lances. Cada lote tem o link para a página oficial do leilão, onde você se habilita e dá o lance direto com o leiloeiro."}},
   {"@type":"Question","name":"Que tipos de bem eu encontro?","acceptedAnswer":{"@type":"Answer","text":"Carros, motos, picapes, SUVs, caminhões e imóveis residenciais, comerciais e rurais, de leilões judiciais e extrajudiciais em todo o país."}},
   {"@type":"Question","name":"Como funcionam os alertas?","acceptedAnswer":{"@type":"Answer","text":"Você faz uma busca com os filtros que quiser, como modelo, região e faixa de preço, e salva. Sempre que entrar um lote novo que combine com ela, você recebe o aviso."}},
-  {"@type":"Question","name":"Quanto custa e o que está incluso?","acceptedAnswer":{"@type":"Answer","text":"R$ 69,90 por mês, com acesso completo a imóveis e veículos: busca, filtros, mapa, favoritos e alertas."}},
+  {"@type":"Question","name":"Quanto custa e o que está incluso?","acceptedAnswer":{"@type":"Answer","text":"R$ 69,90 por mês, com acesso completo a imóveis e veículos: busca com filtros, mapa com a localização dos lotes, alertas de lote novo, favoritos e link direto para o leilão oficial."}},
+  {"@type":"Question","name":"Consigo ver os lotes no mapa?","acceptedAnswer":{"@type":"Answer","text":"Sim. A busca tem um modo mapa que agrupa os lotes por região. Você aproxima até a sua cidade, toca num ponto e vê só os lotes dali, com os mesmos filtros da busca."}},
   {"@type":"Question","name":"Posso cancelar quando quiser?","acceptedAnswer":{"@type":"Answer","text":"Sim. Não há fidelidade nem multa: você cancela quando quiser e não é cobrado no mês seguinte."}},
   {"@type":"Question","name":"Quais são as formas de pagamento?","acceptedAnswer":{"@type":"Answer","text":"Cartão de crédito, PIX ou boleto."}},
   {"@type":"Question","name":"Comprar em leilão é seguro?","acceptedAnswer":{"@type":"Answer","text":"Leilões oficiais são conduzidos por leiloeiros registrados e seguem um edital. Como em qualquer compra, leia o edital, confira a situação do bem e as condições de pagamento antes de dar o lance."}},
@@ -56,6 +57,7 @@
     </a>
     <nav aria-label="Seções">
       <a href="#lotes">Lotes</a>
+      <a href="#mapa">Mapa</a>
       <a href="#categorias">Categorias</a>
       <a href="#como">Como funciona</a>
       <a href="#planos">Planos</a>
@@ -65,12 +67,13 @@
       <a class="link-quieto" href="/login">Entrar</a>
       <a class="btn" href="#cadastro">Assinar <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
       <button class="abre-menu" type="button" id="btnMenu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menuMovel">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
       </button>
     </div>
   </div>
   <nav class="menu-movel" id="menuMovel" data-aberto="0" aria-label="Seções">
     <a href="#lotes">Lotes</a>
+    <a href="#mapa">Mapa</a>
     <a href="#categorias">Categorias</a>
     <a href="#como">Como funciona</a>
     <a href="#planos">Planos</a>
@@ -85,7 +88,7 @@
   <div class="faixa hero-grade">
     <div class="hero-texto">
       <p class="hero-selo sobe" style="--atraso:40ms"><i></i><span><b id="heroLotes">—</b> lotes em leilão agora, em todo o Brasil</span></p>
-      <h1 class="sobe" style="--atraso:120ms">Imóveis e veículos em leilão. <em>Num só lugar, com aviso na hora.</em></h1>
+      <h1 class="sobe" style="--atraso:120ms">Imóveis e veículos em leilão. <em>Num só lugar</em></h1>
       <p class="hero-sub sobe" style="--atraso:200ms">
         Pare de procurar leilão em dezenas de sites. Salve a sua busca e receba um aviso assim que
         entrar o lote que combina com você, antes de todo mundo.
@@ -171,6 +174,27 @@
   <div class="cartoes" id="lotesGrade" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))"></div>
 </section>
 
+<section class="faixa sec" id="mapa">
+  <div class="mapa-grade">
+    <div class="sec-cab">
+      <span class="olho"><span class="bolha"></span> Mapa</span>
+      <h2>Veja no mapa onde está cada lote</h2>
+      <p>Os lotes aparecem agrupados por região. Aproxime até a sua cidade e toque num ponto para ver
+        só o que está ali, sem garimpar lista de outro estado.</p>
+      <ul class="mapa-pontos">
+        <li><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg></span><span><b>Do país à sua cidade</b>Aproxime e os grupos se abrem em cidades.</span></li>
+        <li><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg></span><span><b>Toque e veja os lotes dali</b>A lista mostra só o que está naquele ponto.</span></li>
+        <li><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span><span><b>Com os seus filtros</b>Tipo, preço e prazo valem no mapa também.</span></li>
+      </ul>
+      <a class="btn btn-g" href="#cadastro">Quero usar o mapa</a>
+    </div>
+    <figure class="mapa-vitrine">
+      <img src="/mapa-lotes.jpg" alt="Mapa do Brasil no Radar de Leilões, com os lotes agrupados por região" width="1100" height="908" loading="lazy" decoding="async">
+      <figcaption class="mapa-dica"><span class="bolha pulso"></span> Toque num ponto para ver os lotes da cidade</figcaption>
+    </figure>
+  </div>
+</section>
+
 <section class="faixa sec" id="cobertura">
   <div class="sec-cab">
     <span class="olho"><span class="bolha"></span> Cobertura</span>
@@ -186,7 +210,16 @@
     <h2>Um plano, tudo incluso</h2>
     <p>Imóveis e veículos no mesmo acesso. Sem fidelidade, sem letra miúda.</p>
   </div>
-  <div class="plano-unico">
+  <div class="plano-unico plano-trio">
+    <aside class="plano-lado esq">
+      <span class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+      <h3>O lote chega até você</h3>
+      <p>Salve a busca uma vez. Quando entrar um lote que combina, o aviso aparece no celular.</p>
+      <div class="notif" aria-hidden="true">
+        <div class="push"><span class="app"><i></i></span><div><b>Radar de Leilões <span>agora</span></b><small>Lote novo na sua busca “Hilux · SP · até R$ 150 mil”</small></div></div>
+        <div class="push fraca"><span class="app"><i></i></span><div><b>Radar de Leilões <span>2 h</span></b><small>Apartamento em Curitiba/PR entrou na busca “2 quartos”</small></div></div>
+      </div>
+    </aside>
     <article class="plano plano-destaque">
       <span class="selo selo-brand">Acesso completo</span>
       <h3>Radar de Leilões</h3>
@@ -194,7 +227,8 @@
       <p class="nota">menos de R$ 2,40 por dia · cancele quando quiser</p>
       <ul>
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Imóveis e veículos de todo o Brasil</li>
-        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Busca e filtros completos, com mapa</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Busca e filtros completos</li>
+        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Mapa dos lotes, do país à sua cidade</li>
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Alertas de lote novo para as suas buscas</li>
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Prazo, lance e avaliação lado a lado</li>
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Favoritos e link direto para o leilão oficial</li>
@@ -202,6 +236,12 @@
       <a class="btn btn-g" href="#cadastro">Assinar agora</a>
       <p class="pagamento">Cartão de crédito, PIX ou boleto</p>
     </article>
+    <aside class="plano-lado dir">
+      <span class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg></span>
+      <h3>Veja onde cada lote está</h3>
+      <p>O mapa agrupa os lotes por região. Aproxime até a sua cidade e toque num ponto para ver o que tem ali.</p>
+      <a class="mini-mapa" href="#mapa" aria-label="Ver a seção do mapa" style="background-image:url(/mapa-lotes.jpg)"></a>
+    </aside>
   </div>
 </section>
 
@@ -216,7 +256,7 @@
       <h2>Crie sua conta e comece a receber alertas</h2>
       <p class="cadastro-sub">
         Preencha seus dados e, em seguida, você recebe o link para ativar a assinatura de
-        R$ 69,90 por mês. Hoje são <b id="cadastroLotes">—</b> lotes esperando por você.
+        R$ 69,90 por mês.<span id="cadastroFrase"> Hoje são <b id="cadastroLotes">—</b> lotes esperando por você.</span>
       </p>
       <ul class="cadastro-lista">
         <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg> Sem fidelidade: cancele quando quiser.</li>
@@ -271,8 +311,11 @@
       <p>Você faz uma busca com os filtros que quiser, como modelo, região e faixa de preço, e salva.
         Sempre que entrar um lote novo que combine com ela, você recebe o aviso.</p></details>
     <details><summary>Quanto custa e o que está incluso?</summary>
-      <p>R$ 69,90 por mês, com acesso completo a imóveis e veículos: busca, filtros, mapa, favoritos
-        e alertas.</p></details>
+      <p>R$ 69,90 por mês, com acesso completo a imóveis e veículos: busca com filtros, mapa com a
+        localização dos lotes, alertas de lote novo, favoritos e link direto para o leilão oficial.</p></details>
+    <details><summary>Consigo ver os lotes no mapa?</summary>
+      <p>Sim. A busca tem um modo mapa que agrupa os lotes por região. Você aproxima até a sua
+        cidade, toca num ponto e vê só os lotes dali, com os mesmos filtros da busca.</p></details>
     <details><summary>Posso cancelar quando quiser?</summary>
       <p>Sim. Não há fidelidade nem multa: você cancela quando quiser e não é cobrado no mês seguinte.</p></details>
     <details><summary>Quais são as formas de pagamento?</summary>
@@ -303,7 +346,7 @@
   <div class="faixa rodape-grade">
     <div>
       <a class="logo" href="#topo" style="display:flex;align-items:center;gap:10px;font-family:var(--fonte-display);font-weight:600">
-        <span class="marca-radar"><i class="malha"></i><span class="cone"></span><span class="ponto"></span></span>
+        <span class="marca-radar"><i class="malha"></i><span class="cone varre"></span><span class="ponto"></span></span>
         Radar de Leilões
       </a>
       <p style="margin:14px 0 0;max-width:30ch;font-size:13px;line-height:1.65;color:var(--ink-soft)">
@@ -316,6 +359,7 @@
         <li><a href="#categorias">Veículos</a></li>
         <li><a href="#categorias">Imóveis</a></li>
         <li><a href="#lotes">Lotes de hoje</a></li>
+        <li><a href="#mapa">Mapa dos lotes</a></li>
       </ul>
     </div>
     <div>
