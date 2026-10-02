@@ -36,6 +36,18 @@ const app = Fastify({ logger: false });
 await app.register(formbody);
 
 /**
+ * IP do cliente para rate-limit e prova de consentimento. Por padrão usa o IP
+ * da CONEXÃO (não forjável). O código antigo confiava em `x-forwarded-for` cru,
+ * que o cliente envia à vontade e zerava o freio de força bruta. Atrás de CDN,
+ * defina IP_HEADER (ex.: cf-connecting-ip) E trave a origem para só aceitar o CDN.
+ */
+const IP_HEADER = process.env.IP_HEADER?.trim().toLowerCase();
+const ipDoCliente = (req: any): string => {
+  const h = IP_HEADER ? req.headers[IP_HEADER] : undefined;
+  return String((Array.isArray(h) ? h[0] : h) ?? req.ip ?? '').split(',')[0].trim() || 'desconhecido';
+};
+
+/**
  * Portão de senha. Só liga quando APP_SENHA existe no ambiente, então o uso
  * local continua sem atrito. O service worker do push precisa passar livre:
  * o navegador o busca sem cookie de sessão e um 302 ali quebraria o push.
@@ -70,6 +82,7 @@ const PUBLICAS = new Set([
   '/slug.js',
   '/nopic.svg',
   '/nopic-imovel.svg',
+  '/mapa-lotes.jpg',
 ]);
 /**
  * A PÁGINA do lote é pública; a API continua fechada.
@@ -340,10 +353,7 @@ if (authLigada()) {
       /* idem */
     }
   }
-  const ipDe = (req: any) =>
-    String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.ip ?? '')
-      .split(',')[0]
-      .trim() || 'desconhecido';
+  const ipDe = ipDoCliente;
 
   app.post('/api/login', async (req, reply) => {
     const corpo = (req.body ?? {}) as any;
@@ -379,6 +389,14 @@ if (authLigada()) {
       .header('location', destinoSeguro(corpo.de))
       .send();
   });
+} else {
+  // Sem portão (APP_SENHA vazio) o "Entrar" da landing dava 404: a rota só
+  // existia com a senha ligada. Sem sessão para abrir, entrar é ir para a busca.
+  app.get('/login', async (_req, reply) => reply.code(302).header('location', '/busca').send());
+  // Logout sem portão: não há sessão, mas o link não pode dar 404. Limpa e volta à landing.
+  app.get('/auth/logout', async (_req, reply) =>
+    reply.header('set-cookie', `${COOKIE}=; Path=/; Max-Age=0`).code(302).header('location', '/').send(),
+  );
 }
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -518,8 +536,9 @@ app.get('/lote/:slug', async (req, reply) => {
   // /api/lot/:id entrega — o SELECT curto de antes só servia para montar meta,
   // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
   // divergir campo a campo.
-  const lot = Number.isFinite(id) ? await getLot(id) : null;
-  if (!lot) return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(html);
+  const lot = Number.isSafeInteger(id) ? await getLot(id) : null;
+  // 404 com a casca: quem chega cai na busca, e o robô não indexa link morto como página boa.
+  if (!lot) return reply.code(404).type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(html);
 
   const titulo = lot.title_display || lot.title_raw;
   const local = [lot.city, lot.state].filter(Boolean).join('/');
@@ -585,11 +604,19 @@ app.get('/lote/:slug', async (req, reply) => {
   // Anônimo (o robô do WhatsApp, quem recebeu o link) vê a página do lote e o
   // convite para entrar — não a busca, que exige conta e devolveria 401 em todo
   // fetch do cliente.
-  const publico = (req as any).eu === ANONIMO || (req as any).papel == null;
+  // Página pública é só para anônimo real. Sem portão (dev) o hook de auth não
+  // roda e papel fica null: tratar isso como público jogava o lote recarregado
+  // na página pública com "Entrar", mesmo sendo o dono logado.
+  const publico = authLigada() && (req as any).eu === ANONIMO;
+  // O HTML vai para qualquer um (a página do lote é pública). O cliente não usa
+  // `raw` nem os campos de verificação, então eles não vão no __LOTE__: `raw`
+  // carrega nº de processo judicial de algumas fontes, e o resto é interno.
+  const loteSeguro: any = { ...lot };
+  for (const k of ['raw', 'search_text', 'verify_result', 'verify_fails', 'verified_at', 'closed_reason', 'closed_at']) delete loteSeguro[k];
   const render = temAppNovo ? await carregarRender() : null;
   if (render) {
     try {
-      const marcado = render(lot, publico);
+      const marcado = render(loteSeguro, publico);
       /**
        * O React 19 emite `<link rel="preload">` para as fotos do lote. São
        * elementos HOISTABLE: pertencem ao `<head>`, e o `renderToString`
@@ -608,7 +635,7 @@ app.get('/lote/:slug', async (req, reply) => {
       });
       // `</script` dentro do JSON fecharia a tag e viraria injeção de HTML a
       // partir de um título escrito pelo leiloeiro.
-      const estado = JSON.stringify(lot).replaceAll('<', '\\u003c');
+      const estado = JSON.stringify(loteSeguro).replaceAll('<', '\\u003c');
       corpo = corpo
         .replace('<div id="root"></div>', `<div id="root">${html}</div>`)
         .replace(
@@ -888,10 +915,8 @@ app.post('/api/cadastro', async (req, reply) => {
   const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
   const falha = (campo: string, erro: string) => reply.code(400).send({ erro, campo });
 
-  const ip = String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.ip ?? '')
-    .split(',')[0]
-    .trim();
-  if (await cadastroLimitado(ip || 'desconhecido')) {
+  const ip = ipDoCliente(req);
+  if (await cadastroLimitado(ip)) {
     return reply.code(429).send({ erro: 'Muitas tentativas. Tente novamente em alguns minutos.' });
   }
 
@@ -1022,7 +1047,8 @@ app.get('/api/search/mapa', async (req) => {
 app.get('/api/lot/:id', async (req, reply) => {
   const { id } = req.params as { id: string };
   // Sem isso o Postgres estourava 500 vazando código interno (22P02).
-  if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'id inválido' });
+  // isSafeInteger além do regex: id só-dígitos porém gigante estourava o bigint (22003).
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id))) return reply.code(400).send({ error: 'id inválido' });
   const lot = await getLot(Number(id));
   if (!lot) return reply.code(404).send({ error: 'lote não encontrado' });
   return lot;
@@ -1116,9 +1142,11 @@ app.patch('/api/alerts/:id', async (req, reply) => {
   if (canais.includes('email') && !b.email) {
     return reply.code(400).send({ erro: 'canal e-mail exige um endereço' });
   }
+  // owner_id no WHERE, igual ao DELETE: sem ele, qualquer um editava o alerta de outro.
+  const dono = (await donoDe(req)).userId;
   const [a] = await query<any>(
-    `UPDATE alerts SET label = COALESCE($2, label), channels = $3, email = $4 WHERE id = $1 RETURNING *`,
-    [Number(id), b.label ? String(b.label).slice(0, 80) : null, canais, b.email ?? null],
+    `UPDATE alerts SET label = COALESCE($2, label), channels = $3, email = $4 WHERE id = $1 AND owner_id = $5 RETURNING *`,
+    [Number(id), b.label ? String(b.label).slice(0, 80) : null, canais, b.email ?? null, dono],
   );
   if (!a) return reply.code(404).send({ erro: 'alerta não encontrado' });
   return a;
@@ -1147,7 +1175,7 @@ app.get('/api/alerts/hits', async (req) => {
   // o lote com o mesmo componente de card da listagem, e um SELECT reduzido
   // aqui significaria um segundo card, com campos faltando, para manter.
   return query(`
-    SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.brand, l.model, l.year_make, l.year_model,
+    SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
            l.current_bid, l.min_bid, l.appraisal, l.bid_suspect, l.asset_type, l.vehicle_type,
            l.source_category, l.property_type, l.city, l.state, l.photos, l.photo_count,
@@ -1191,7 +1219,7 @@ app.get('/api/favorites', async (req) => {
   // Mesma lista de colunas do card de alertas: um SELECT reduzido aqui
   // significaria um segundo card, com campos faltando, para manter.
   return query(`
-    SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.brand, l.model, l.year_make, l.year_model,
+    SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
            l.current_bid, l.min_bid, l.appraisal, l.bid_suspect, l.asset_type, l.vehicle_type,
            l.source_category, l.property_type, l.city, l.state, l.photos, l.photo_count,
@@ -1467,20 +1495,38 @@ app.post('/api/collect', async (req, reply) => {
  * no cliente deixaria o dado de coleta trafegar até o navegador de quem não
  * pode ver — basta abrir o DevTools na aba de rede para ler.
  */
-const clients = new Map<any, Papel>();
+const clients = new Map<any, { papel: Papel; userId: number }>();
 const subscriber = makeRedis();
 await subscriber.subscribe(CHANNEL_UPDATES);
 subscriber.on('message', (_channel, message) => {
-  // Telemetria de coleta e de encerramento é de administrador; lance e alerta
-  // vão para todos. "37 lotes encerrados" não é acionável para quem só busca.
-  let soAdmin = false;
+  let dados: any;
   try {
-    soAdmin = ['collect', 'encerrados'].includes(JSON.parse(message)?.type);
+    dados = JSON.parse(message);
   } catch {
     /* mensagem malformada segue o caminho comum */
   }
-  for (const [socket, papel] of clients) {
-    if (soAdmin && papel !== 'admin') continue;
+
+  // Alerta é de UM dono: o broadcast mandava os disparos (com ownerId e e-mail)
+  // para todos os sockets. Entrega só ao dono e sem e-mail nem ownerId.
+  if (dados?.type === 'alertas') {
+    const limpos = (dados.disparos ?? []).map((d: any) => ({ ...d, email: undefined, ownerId: undefined }));
+    for (const [socket, info] of clients) {
+      const meus = authLigada() ? limpos.filter((_: any, i: number) => dados.disparos[i].ownerId === info.userId) : limpos;
+      if (!meus.length) continue;
+      try {
+        socket.send(JSON.stringify({ type: 'alertas', disparos: meus }));
+      } catch {
+        clients.delete(socket);
+      }
+    }
+    return;
+  }
+
+  // Telemetria de coleta e de encerramento é de administrador; lance vai para
+  // todos. "37 lotes encerrados" não é acionável para quem só busca.
+  const soAdmin = ['collect', 'encerrados'].includes(dados?.type);
+  for (const [socket, info] of clients) {
+    if (soAdmin && info.papel !== 'admin') continue;
     try {
       socket.send(message);
     } catch {
@@ -1490,12 +1536,51 @@ subscriber.on('message', (_channel, message) => {
 });
 
 app.get('/ws', { websocket: true }, (socket, req) => {
-  // O hook de autenticação já validou o cookie antes do upgrade; aqui só
-  // guardamos o papel que ele decodificou.
-  clients.set(socket, papelDe(req));
+  // O hook já validou o cookie antes do upgrade; guardamos papel e dono para
+  // o filtro de alerta por usuário no envio.
+  clients.set(socket, { papel: papelDe(req), userId: Number((req as any).eu?.userId) || 0 });
   socket.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
   socket.on('close', () => clients.delete(socket));
   socket.on('error', () => clients.delete(socket));
+});
+
+// Navegação para rota inexistente recebia o JSON cru do Fastify, em inglês. API segue em JSON.
+const PAGINA_404 = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Página não encontrada · Radar de Leilões</title>
+<style>:root{color-scheme:dark}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;
+background:#05070f;color:#eef3ff;font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center}
+h1{font-size:24px;margin:0 0 8px}p{color:#93a4c4;margin:0 0 22px}a{display:inline-block;margin:0 6px;padding:11px 18px;
+border-radius:10px;text-decoration:none;font-weight:600}.p{background:#2f6bff;color:#fff}.s{border:1px solid #1e2941;color:#eef3ff}</style>
+</head><body><main><h1>Esta página não existe</h1><p>O endereço pode ter mudado ou o lote saiu do ar.</p>
+<a class="p" href="/busca">Buscar lotes</a><a class="s" href="/">Ir para o início</a></main></body></html>`;
+app.setNotFoundHandler((req, reply) => {
+  const html = String(req.headers.accept ?? '').includes('text/html');
+  if (req.method === 'GET' && html && !req.url.startsWith('/api/')) {
+    return reply.code(404).type('text/html; charset=utf-8').send(PAGINA_404);
+  }
+  return reply.code(404).send({ erro: 'não encontrado', rota: req.url.split('?')[0] });
+});
+
+// Erro cru vazava a mensagem do Postgres (código, coluna, tipo) ao cliente.
+// 4xx mantém a mensagem (é do próprio app); 5xx vira genérico, com o detalhe no log.
+app.setErrorHandler((err: any, req, reply) => {
+  const code = err?.statusCode && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
+  if (code >= 500) console.error('[erro]', req.method, req.url.split('?')[0], err?.message);
+  const html = String(req.headers.accept ?? '').includes('text/html') && !req.url.startsWith('/api/');
+  if (html) return reply.code(code).type('text/html; charset=utf-8').send(PAGINA_404);
+  return reply.code(code).send({ erro: code >= 500 ? 'erro interno' : String(err?.message ?? 'erro') });
+});
+
+// Cabeçalhos de segurança em tudo. Sem CSP aqui: exige inventário de origens e
+// um erro quebraria a página inteira — fica como passo à parte.
+app.addHook('onSend', async (req, reply, payload) => {
+  reply.header('x-content-type-options', 'nosniff');
+  reply.header('x-frame-options', 'SAMEORIGIN');
+  reply.header('referrer-policy', 'strict-origin-when-cross-origin');
+  // Resposta com dado de conta não pode ficar em cache compartilhado.
+  if (req.url.startsWith('/api/me')) reply.header('cache-control', 'no-store');
+  return payload;
 });
 
 await ensureSources();
