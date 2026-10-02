@@ -888,6 +888,9 @@ app.get('/api/search', async (req) => {
     place: q.place,
     onlyWithDate: q.onlyWithDate === 'true',
     onlyWithPhoto: q.onlyWithPhoto === 'true',
+    docType: q.docType,
+    endsWithin: q.endsWithin as any,
+    belowAppraisal: q.belowAppraisal === 'true',
     includeEnded: q.includeEnded === 'true',
     sort: (q.sort as any) ?? 'ending_soon',
     page: num(q.page) ?? 1,
@@ -917,6 +920,7 @@ app.get('/api/search/mapa', async (req) => {
     priceMin: num(q.priceMin), priceMax: num(q.priceMax),
     yearMin: num(q.yearMin), yearMax: num(q.yearMax),
     onlyWithDate: q.onlyWithDate === 'true', onlyWithPhoto: q.onlyWithPhoto === 'true',
+    docType: q.docType, endsWithin: q.endsWithin as any, belowAppraisal: q.belowAppraisal === 'true',
     includeEnded: q.includeEnded === 'true',
   });
 });

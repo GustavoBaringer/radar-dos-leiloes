@@ -224,6 +224,12 @@ export interface SearchParams {
   yearMax?: number;
   onlyWithDate?: boolean;
   onlyWithPhoto?: boolean;
+  /** Situação do bem (sinistrado, conservado, judicial...), como `campos.docType()` grava. */
+  docType?: Multi;
+  /** Prazo pela mesma data que vence o lote: fim do timer, ou início do pregão. */
+  endsWithin?: 'hoje' | '7d';
+  /** Lance abaixo da avaliação publicada, sem contar valor marcado como atípico. */
+  belowAppraisal?: boolean;
   /**
    * Ponto do mapa: 'lat,lon' (coordenada da fonte) ou 'c:CHAVECIDADE/UF'
    * (cidade sem coordenada própria). É o que o clique num ponto manda de volta.
@@ -242,7 +248,7 @@ export interface SearchResponse {
   pageSize: number;
   interpreted: { brand: string | null; model: string | null; freeTerms: string[] };
   items: any[];
-  facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[] };
+  facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[]; docTypes: any[] };
 }
 
 /**
@@ -328,6 +334,7 @@ function montaFiltro(p: SearchParams) {
   const tiposVeiculo = PLista('vehicle_type', p.vehicleType, 'vehicleTypes');
   PLista('property_type', p.propertyType, 'propertyTypes');
   PLista('city_key', p.city, 'cities');
+  PLista('doc_type', p.docType, 'docTypes');
   // Peça e lote misto não são o produto: só aparecem se pedidos de propósito.
   if (!p.assetType && !tiposVeiculo.length) P(`asset_type <> 'outro'`);
   if (p.priceMin != null) P('COALESCE(current_bid, min_bid) >= ?', p.priceMin);
@@ -336,6 +343,14 @@ function montaFiltro(p: SearchParams) {
   if (p.yearMax != null) P('year_model <= ?', p.yearMax);
   if (p.onlyWithDate) P('(auction_start_utc IS NOT NULL OR auction_end_utc IS NOT NULL)');
   if (p.onlyWithPhoto) P('photo_count > 0');
+  if (p.endsWithin === 'hoje' || p.endsWithin === '7d') {
+    // "Hoje" é o dia de Brasília: em UTC, um pregão às 22h já cairia em amanhã.
+    const limite = p.endsWithin === 'hoje'
+      ? `(date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '1 day') AT TIME ZONE 'America/Sao_Paulo'`
+      : `now() + interval '7 days'`;
+    P(`(CASE WHEN closing_model = 'timer_por_lote' THEN auction_end_utc ELSE auction_start_utc END) < ${limite}`);
+  }
+  if (p.belowAppraisal) P('appraisal > COALESCE(current_bid, min_bid) AND COALESCE(current_bid, min_bid) > 0 AND NOT bid_suspect');
 
   // Sem faceta: bbox e ponto não são dropdown, não há o que recontar. E o
   // predicado é decomposto (city_key/state, ou lat/lon arredondado) em vez de
@@ -471,7 +486,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     );
   }
 
-  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet] = await Promise.all([
+  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await Promise.all([
     facet('state', 'states', 30),
     facetCidade(),
     facet('source_id', 'sources'),
@@ -489,6 +504,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     // Situação conta pelo status EFETIVO: lote de pregão cuja hora passou
     // aparece como aberto na coluna e como encerrado na tela.
     facet(`CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END`, 'statuses', 10),
+    facet('doc_type', 'docTypes'),
   ]);
 
   return {
@@ -497,7 +513,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     pageSize,
     interpreted: { brand: parsed.brand, model: parsed.model, freeTerms: parsed.freeTerms },
     items,
-    facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet },
+    facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet, docTypes },
   };
 }
 

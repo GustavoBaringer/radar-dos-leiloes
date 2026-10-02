@@ -108,6 +108,8 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   if (f.yearMin != null) sql.push(`year_model >= ${ph(Number(f.yearMin))}`);
   if (f.yearMax != null) sql.push(`year_model <= ${ph(Number(f.yearMax))}`);
   if (f.onlyWithPhoto) sql.push('photo_count > 0');
+  emLista('doc_type', f.docType);
+  if (f.belowAppraisal) sql.push('appraisal > COALESCE(current_bid, min_bid) AND COALESCE(current_bid, min_bid) > 0 AND NOT bid_suspect');
 
   // Lote fora do escopo (peça, lote misto) nunca dispara alerta.
   sql.push(`asset_type <> 'outro'`);
