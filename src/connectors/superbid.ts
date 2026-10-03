@@ -1,7 +1,7 @@
 import { comNavegador, getJsonViaNavegador } from './navegador.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, classifyAsset } from '../core/normalize.js';
 
 const BASE = 'https://offer-query.superbid.net/offers/';
 const HEADERS = { origin: 'https://www.superbid.net', referer: 'https://www.superbid.net/' };
@@ -64,10 +64,17 @@ function toUtc(brt?: string | null, epochMs?: number | null): Date | null {
 
 function mapOffer(o: any): CanonicalLot | null {
   const product = o.product ?? {};
-  const pt = PRODUCT_TYPES[product?.productType?.id];
-  if (!pt) return null;
+  let pt = PRODUCT_TYPES[product?.productType?.id];
   const title = product.shortDesc ?? o.offerDescription ?? '';
-  if (!title) return null;
+  if (!pt || !title) return null;
+  // A categoria da fonte às vezes erra: "VEICULO CAMINHONETE ..." veio como
+  // imóvel e "Veículo HYUNDAI/HR HDB" caiu em /imoveis/ (03/10). Para imóvel o
+  // título sozinho decide — melhor um falso alarme de veículo do que perder o
+  // bem inteiro numa categoria de terreno.
+  if (pt.asset === 'imovel') {
+    const cls = classifyAsset(title, null, null);
+    if (cls.assetType !== 'imovel') pt = { asset: cls.assetType, hint: 'veiculos' };
+  }
   if (pt.asset === 'veiculo' && looksLikePart(title)) return null;
 
   const detail = o.offerDetail ?? {};

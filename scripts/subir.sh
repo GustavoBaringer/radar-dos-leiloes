@@ -14,7 +14,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-NODE="${NODE_BIN:-$HOME/.nvm/versions/node/v24.19.0/bin/node}"
+# v24.19.0 ficou pra trás quando o nvm atualizou: o caminho fixo quebrava o
+# script inteiro. Agora: NODE_BIN, senão o node do PATH, senão a última versão
+# instalada pelo nvm.
+NODE="${NODE_BIN:-$(command -v node 2>/dev/null || ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)}"
+[ -x "$NODE" ] || { echo "node não encontrado — instale via nvm ou exporte NODE_BIN" >&2; exit 1; }
 PORTA="${PORTA:-4500}"
 LOCAL="http://localhost:$PORTA"
 COM_TUNEL=1

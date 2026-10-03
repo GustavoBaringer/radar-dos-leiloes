@@ -764,10 +764,10 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "semeadeira": a fonte escreve das duas formas e só a segunda estava aqui.
   // Sigla solta ficou de fora: "magnum" e "hitech" são trator E outras coisas.
   [/\b(plataforma (de )?(corte|milho|graos|cereais)|plataforma (draper|flexivel)|draper|terraflex|acabadora de asfalto|plaina|semeadora|escarificador|grade (aradoura|niveladora|nivelador)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira)\b/, 'maquina'],
-  [/\b(lancha|jet ?ski|embarcacao|iate|veleiro)\b/, 'nautico'],
+  [/\b(lancha|jet ?ski|embarcacao|iate|veleiro|balsa)\b/, 'nautico'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
-  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|o 4\d{2} (rs|rse))\b/, 'onibus'],
+  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|caio|o 4\d{2} (rs|rse))\b/, 'onibus'],
   // Família que no Brasil só existe em caminhão. "AX0R" com zero no lugar do O
   // aparece cru no vlance. "Titan" ficou de fora: é VW 19.320 Titan e Honda CG
   // 125 Titan ao mesmo tempo — o CG já é pego pela regra de moto.
@@ -782,11 +782,11 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "Caminhão Mercedes Benz 1718 com baú da marca Facchini" virando reboque.
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
   // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
   // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
   // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
-  [/\bmercedes\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
+  [/\b(mercedes|m ?\.? ?benz|mb)\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
   // "VW/8.140" e "VW/8.150E" (prefixo de 1 dígito, série 140/Delivery) saíam
   // do "vw ?\d{2} ?\d{3}\b" de cima: exigia 2 dígitos, e o "\b" final falhava
   // quando o sufixo vem colado a letra ("150E"). Achado em 24/09 no bomvalor,
@@ -801,7 +801,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // acima falha sem espaço) ficavam carro. "CG" sozinho é ambíguo demais pra
   // valer sem a marca do lado — por isso não entra solto na lista de cima.
   [/\bhonda\b.{0,15}?\bcg\b/, 'moto'],
-  [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro)\b/, 'picape'],
+  [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro|caminhonete|pickup)\b/, 'picape'],
   [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[469]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
   [/\b(sprinter|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo)\b/, 'utilitario'],
 ];
@@ -870,15 +870,15 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
-  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico)\b/, 'caminhao'],
-  [/\b(onibus|microonibus|marcopolo|comil|neobus)\b/, 'onibus'],
-  [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier)\b/, 'picape'],
+  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
+  [/\b(onibus|microonibus|marcopolo|comil|neobus|caio)\b/, 'onibus'],
+  [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],
   [/\b(sprinter|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia)\b/, 'utilitario'],
   // "2008" e "3008" só valem colados à marca: sozinhos casavam com ANO/MODELO
   // 2008 e transformaram 30 lotes (inclusive uma retroescavadeira) em SUV.
   [/\b(peugeot[ /-]*[23]008|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|tucson|ix35|sw4|rav4|ecosport|asx|outlander|sportage|xc40|xc60|tiguan|taos|territory|commander|bronco|jimny|corolla cross)\b/, 'suv'],
   [/\b(reboque|semirreboque|semi ?reboque|carreta|randon|trailer)\b/, 'reboque'],
-  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/, 'maquina'],
+  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|betoneira)\b/, 'maquina'],
   [/\b(lancha|barco|jet ?ski|embarcacao)\b/, 'nautico'],
 ];
 
@@ -928,13 +928,15 @@ const CATEGORIA_IMOVEL: [RegExp, PropertyType][] = [
   // "hectare" e "faz." apareceram em lote de fração ideal que não diz o tipo
   // em nenhum outro lugar ("Parte Ideal correspondente a 2,72 hectares").
   [/\b(fazenda|faz\.|sitio|chacara|gleba|rural|agricol|pastagem|haras|hectare)/, 'rural'],
-  // "BOX Nº 11 DO EDIFÍCIO" é vaga/depósito em edital; "box" sozinho não serve,
-  // porque aparece em descrição de banheiro.
-  [/\b(vaga|garagem|box\s*n[ºo°]?\.?\s*\d|box\s+\d)/, 'vaga'],
   [/\b(apart|apto|kitnet|kitinete|flat|studio|cobertura|duplex|triplex)/, 'apartamento'],
   [/\b(casa|sobrado|residencia|moradia|geminad)/, 'casa'],
   [/\b(terreno|lote|area de terra|data de terra|quadra)/, 'terreno'],
   [/\b(sala|loja|conjunto comercia|galp[ao]|predio|comercia|escritorio|industria|fabrica|barrac[ao]|pavilh[ao]|hotel|pousada|posto|clinica)/, 'comercial'],
+  // "vaga" por ÚLTIMO: "Apartamento 49 m² (01 vaga)", "Sala Comercial ... com 01
+  // vaga" e "Casa em Condomínio ... 01 vaga" têm a vaga como acessório do bem —
+  // antes dela decidia e o imóvel inteiro virava "vaga de garagem" (achado em
+  // 03/10: dezenas de apartamentos do megaleiloes classificados como vaga).
+  [/\b(vaga|garagem|box\s*n[ºo°]?\.?\s*\d|box\s+\d)/, 'vaga'],
 ];
 
 export function classifyProperty(
@@ -965,10 +967,45 @@ export function classifyAsset(
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
 
+  const tituloDeclaraVeiculo =
+    /^(veiculo|automovel|moto|motocicleta|caminhao|onibus|trator|caminhonete|lancha|embarcacao)\b/.test(titulo) ||
+    /^bens moveis\b/.test(titulo) ||
+    /\b(caminhonete|caminhao|motocicleta|onibus|trator|betoneira|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/.test(titulo);
+
   if (cat) {
-    if (/\b(imove|apartament|casa|terreno|sala|loja|gleba|fazenda|sitio|chacara|galp[ao]|predio|sobrado|vaga|rural|comercia|residencia|industria)/.test(cat)) {
-      return { assetType: 'imovel', vehicleType: null };
+    if (/\b(imove|apartament|casa|terreno|sala|loja|gleba|fazenda|sitio|chacara|galp[ao]|predio|sobrado|vaga|rural|comercia|residencia|industria|box|sobreloja|laje|fracao|multipropriedade|deposito|posto)/.test(cat)) {
+      // A categoria da fonte às vezes erra: Superbid gravou "Terrenos Rurais"
+      // num lote cujo título é "VEICULO CAMINHONETE I/KIA UK2500 HD SC", e o
+      // grupolance enfiou sob /imoveis/ um "Veículo HYUNDAI/HR HDB" (03/10).
+      // Quando o título declara o bem como VEÍCULO e não declara imóvel, ele
+      // vence a categoria — senão o lote cairia no filtro de terreno/vaga.
+      if (tituloDeclaraVeiculo && !MARCADORES_IMOVEL.test(titulo)) {
+        // Segue o fluxo normal de veículo abaixo, sem confiar na categoria.
+      } else {
+        return { assetType: 'imovel', vehicleType: null };
+      }
     }
+  }
+
+  // Imóvel declarado no TÍTULO com categoria vazia ou-lixo da fonte: sem este
+  // guarda "Fazenda - Gleba D" (cat "Instalações") e "Conjunto Comercial"
+  // (cat null no megaleiloes) caíam no default 'veiculo/carro' — achado na
+  // auditoria de 03/10. O marcador é mais restrito que MARCADORES_IMOVEL:
+  // "casa"/"fazenda" ficam de fora porque poluem títulos de veículo no vlance
+  // ("Honda/NXR 150 - Fazenda Nova/GO" viraria imóvel).
+  // Também bate "casa"/"fazenda" quando NÃO é o padrão de município
+  // ("- Fazenda Nova/GO"): "Casa em Condomínio..." é imóvel; "Palio - Casa
+  // Nova/SP" é carro. Antes o default era "tudo que não conhece = carro";
+  // melhor reconhecer imóvel pelo título do que cair nele.
+  const marcadorImovelForte =
+    /\b(apartamento|sobrado|kitnet|kitinete|gleba|chacara|laje|sobreloja|agencia|posto|sala comercial|conjunto comercial|fracao|multipropriedade|area rural|matricula \d|terreno|imovel|imoveis)\b/.test(titulo) ||
+    /\barea (com|construida)\b/.test(titulo) ||
+    // "casa"/"fazenda" só valem quando NÃO são padrão de município
+    // ("- Fazenda Nova/GO"): "Casa em Condomínio..." é imóvel; "Palio - Casa
+    // Nova/SP" é carro.
+    (/\b(casa|fazenda)\b/.test(titulo) && !/\b(fazenda|casa)\s+[a-z]+\s+[a-z]{2}\b/.test(titulo));
+  if (!tituloDeclaraVeiculo && marcadorImovelForte) {
+    return { assetType: 'imovel', vehicleType: null };
   }
 
   // Categoria de bem que não é veículo decide antes do título: "CAIXA DE SOM PULSE"
@@ -999,8 +1036,13 @@ export function classifyAsset(
     }
   }
 
-  if (!cat && MARCADORES_IMOVEL.test(titulo)) {
-    return { assetType: 'imovel', vehicleType: null };
+  // (o bloco de imóvel-por-título está acima; removido este antigo, que
+  // jogava "Fazenda Nova/GO" de moto no filtro de imóvel — achado em 03/10)
+  if (/^bens moveis\b/.test(titulo)) {
+    // Lote de massa falida com itens variados ("betoneira, gerador, portas,
+    // cadeiras"): não é nem imóvel (categoria da fonte dizia terreno) nem um
+    // veículo único — cai em 'outro' e sai do filtro de terreno e de carro.
+    return { assetType: 'outro', vehicleType: null };
   }
   if (looksLikePart(titleRaw)) {
     return { assetType: 'outro', vehicleType: 'peca' };
