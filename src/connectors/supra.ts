@@ -87,7 +87,7 @@ function conectorDaPlataforma(cfg: {
       let fetched = 0;
       let skipped = 0;
       let httpStatus = 0;
-      const select = 'id,slug,title,lot_number,status,evaluation_value,highest_bid_value,bid_count,bid_increment,commission_percentage,address,featured_image_url,auction_id,hidden,categories(name),lot_phases(start_date,end_date,phase_order)';
+      const select = 'id,slug,title,lot_number,status,evaluation_value,highest_bid_value,bid_count,bid_increment,commission_percentage,address,featured_image_url,auction_id,hidden,categories(name),lot_phases(start_date,end_date,phase_order),auctions!auction_id(auctioneers!auctioneer_id(name))';
 
       for (let offset = 0; lots.length < limit; offset += Math.max(limit, 50)) {
         const url =
@@ -126,6 +126,12 @@ function conectorDaPlataforma(cfg: {
             continue;
           }
 
+          const leiloeiro =
+            row.auctions?.auctioneers?.name ??
+            row.auction?.auctioneers?.name ??
+            row.auctioneers?.name ??
+            row.auctioneer?.name ??
+            null;
           lots.push({
             sourceId: cfg.id,
             externalId: String(row.id),
@@ -153,6 +159,7 @@ function conectorDaPlataforma(cfg: {
             city: local?.city ?? null,
             state: local?.uf ?? null,
             photos: row.featured_image_url ? [row.featured_image_url] : [],
+            auctioneerName: leiloeiro ? String(leiloeiro).trim() : null,
             raw: { statusFonte: row.status, auctionId: row.auction_id, lotNumber: row.lot_number },
           });
         }
