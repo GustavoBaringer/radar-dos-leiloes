@@ -25,8 +25,14 @@ import { paulobotelho } from './paulobotelho.js';
 import { tableau } from './tableau.js';
 import { schulmann, karlapepe, leiloesbraga } from './labasoft.js';
 import { lucianleiloes } from './lucianleiloes.js';
+import { supraTenants } from './supra.js';
 
-export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor, leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes, benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes];
+export const connectors: Connector[] = [
+  superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor,
+  leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes,
+  benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes,
+  ...supraTenants,
+];
 
 export function getConnector(id: string): Connector | undefined {
   return connectors.find((c) => c.def.id === id);

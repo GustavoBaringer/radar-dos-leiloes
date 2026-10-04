@@ -161,6 +161,34 @@ const PLATAFORMAS: Array<[string, RegExp]> = [
 ];
 const SINAL_LOTE = /(lance\s+(inicial|atual|m[ií]nimo)|aberto\s+para\s+lances|lote\s*\d|encerra\s+em|pr[oó]ximos\s+leil[õo]es|dou-lhe)/i;
 
+/**
+ * Qual conector atende cada plataforma — é a MESMA lista que os multi-tenant
+ * leem no `discovered_sites`, então a sonda tem de escrevê-la junto. Sem isto
+ * a coluna `connector_id` envelhecia com o resto: as correções manuais dos
+ * sites de junta comercial (grupolance, portalzuk, os 4 da plataforma Ares)
+ * apontavam para um conector enquanto `platform` continuava null.
+ */
+const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
+  soleon: 'soleon',
+  'suporte-leiloes': 'suporteleiloes',
+  superbid: 'superbid',
+  leiloesbr: 'leiloesbr',
+  leilotech: 'leilotech',
+  'vip-leiloes': null,
+  'sua-plataforma': 'suaplataforma',
+  'leilao-pro': 'leilaopro',
+  vlance: 'vlance',
+  leiloar: 'leiloar',
+  bomvalor: 'bomvalor',
+  sishp: 'sishp',
+  mega: 'megaleiloes',
+  // White-label sem plataforma nomeada no HTML: quem descobre na mão escreve a
+  // plataforma na linha e a sonda passa a PRESERVAR (ver o COALESCE lá embaixo).
+  'ares-postgrest': null,
+  'hasta-publica': null,
+  goadopt: null,
+};
+
 async function pega(url: string, timeout = 12000) {
   const res = await request(url, {
     headers: { 'user-agent': UA, accept: 'text/html,*/*', 'accept-language': 'pt-BR,pt;q=0.9' },
@@ -233,10 +261,18 @@ export async function sondarSites(limite = 150, concorrencia = 12): Promise<Resu
         const alvo = fila.shift();
         if (!alvo) break;
         const r = await sondar(alvo.domain);
+        const det = r.platform ? CONECTOR_POR_PLATAFORMA[r.platform] : null;
         await query(
-          `UPDATE discovered_sites SET http_status=$2, has_lots=$3, platform=$4, title=$5, note=$6, checked_at=now()
-            WHERE domain=$1`,
-          [alvo.domain, r.status, r.hasLots, r.platform, r.title, r.note],
+          `UPDATE discovered_sites
+             SET http_status=$2,
+                 has_lots=$3,
+                 platform=COALESCE(discovered_sites.platform, $4),
+                 connector_id=COALESCE(discovered_sites.connector_id, $5),
+                 title=$6,
+                 note=$7,
+                 checked_at=now()
+           WHERE domain=$1`,
+          [alvo.domain, r.status, r.hasLots, r.platform, det, r.title, r.note],
         );
         if (r.status === 200) noAr++;
         if (r.platform) comPlataforma++;
