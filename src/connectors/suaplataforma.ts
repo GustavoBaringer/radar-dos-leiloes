@@ -118,10 +118,16 @@ function mapLot(l: any, host: string): CanonicalLot | null {
   const assetType = tipoDaCategoria(l.Categoria);
   if (!assetType) return null;
 
-  const fotos: string[] = (Array.isArray(l.Fotos) ? l.Fotos : [])
-    // `Foto` já vem com a extensão; concatenar ".jpg" produz 404.
-    .map((f: any) => (f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null))
-    .filter(Boolean) as string[];
+  const fotos: string[] = [
+    ...(Array.isArray(l.Fotos) ? l.Fotos : []).map((f: any) =>
+      f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null,
+    ),
+    ...(Array.isArray(l.FotosLista) ? l.FotosLista : []).map((f: any) =>
+      f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null,
+    ),
+  ]
+    .map((x) => x)
+    .filter((x, i, a): x is string => !!x && a.indexOf(x) === i);
 
   return {
     sourceId: 'suaplataforma',
