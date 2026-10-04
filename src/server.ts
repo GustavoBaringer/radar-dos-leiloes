@@ -846,7 +846,7 @@ app.get('/api/vitrine', async () => {
     { id: 'imovel', label: 'Imóveis', icone: 'casa', query: 'assetType=imovel', onde: `asset_type='imovel'` },
   ];
 
-  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora, fotosCat] = await Promise.all([
+  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora, fotosCat, heroes] = await Promise.all([
     query<any>(
       `SELECT count(DISTINCT source_id)::int AS fontes,
               count(*)::int AS total,
@@ -906,8 +906,17 @@ app.get('/api/vitrine', async () => {
        ) t WHERE cat IN (${CATEGORIAS.map((c) => `'${c.id}'`).join(',')})
        ORDER BY cat, first_seen_at DESC, id DESC`,
     ),
+    // heroes: lotes aptos ao card flutuante — o filtro de preço obrigatório
+    // evita que lotes sem campo de lance (parquedosleiloes) roubem a pilha.
+    query<any>(
+      `SELECT ${COLUNAS_CARTAO} FROM (
+         SELECT *, row_number() OVER (PARTITION BY source_id ORDER BY first_seen_at DESC, id DESC) AS n
+           FROM lots
+          WHERE ${ABERTOS} AND photos IS NOT NULL AND jsonb_array_length(photos) > 0
+            AND (current_bid IS NOT NULL OR min_bid IS NOT NULL) AND NOT bid_suspect
+       ) t WHERE n <= 2 ORDER BY first_seen_at DESC, id DESC LIMIT 3`,
+    ),
   ]);
-
   const c = categorias[0] ?? {};
   const emQuanto = (fim: string) => {
     const dif = new Date(fim).getTime() - Date.now();
@@ -923,6 +932,7 @@ app.get('/api/vitrine', async () => {
     ufs,
     leiloeiros,
     recentes,
+    heroes,
     categorias: CATEGORIAS.map(({ onde: _onde, ...rest }, i) => ({
       ...rest,
       total: c[`c${i}`] ?? 0,

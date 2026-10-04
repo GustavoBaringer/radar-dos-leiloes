@@ -477,7 +477,7 @@ async function iniciar() {
 
   pintaCategorias(d.categorias ?? []);
   pintaNumeros(d);
-  pintaPilha(d.recentes);
+  pintaPilha(d.heroes ?? d.recentes);
   pintaLotes(d.recentes);
 
   $('ufs').innerHTML = (d.ufs ?? [])
