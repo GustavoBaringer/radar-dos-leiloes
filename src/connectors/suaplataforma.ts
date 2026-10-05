@@ -136,7 +136,18 @@ function mapLot(l: any, host: string): CanonicalLot | null {
     // sobrescreve o outro em silêncio.
     externalId: `${host}:${id}`,
     lotUrl: l.URLlote ? `https://${host}/${String(l.URLlote).replace(/^\/+/, '')}` : null,
-    titleRaw: titulo,
+    titleRaw: (() => {
+      const t = titulo;
+      if (t && !/^\s*(judicial|extrajudicial)\s*$/i.test(t.trim()) && t.trim().length > 10) return t;
+      try {
+        const m = l.URLlote?.match(/\/lote\/([^/]+)/);
+        if (m) {
+          const slug = decodeURIComponent(m[1]).replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+          if (slug) return slug.toUpperCase();
+        }
+      } catch {}
+      return t;
+    })(),
     // `LabelModalidade` e não os booleans `IsJudicial`/`IsExtraJudicial`:
     // medido lote com rótulo "Extrajudicial" e os dois booleans em false.
     docType: l.LabelModalidade ? String(l.LabelModalidade) : null,
