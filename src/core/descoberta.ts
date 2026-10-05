@@ -158,6 +158,11 @@ const PLATAFORMAS: Array<[string, RegExp]> = [
   ['globoleiloes', /globoleiloes\.com\.br|Globo Leilões|inertia-vendor/i],
   ['leiloesfreire', /leiloesfreire\.com\.br|Leilões Freire|lote_destaque_imagem/i],
   ['rochaleiloes', /rochaleiloes\.com\.br|Rocha Leilões|<home-banners/i],
+  ['benedetto', /benedettoleiloes\.com\.br|Benedetto Leilões|storage\/lote/i],
+  ['docx-html', /Central Sul de Leilões|centralsuldeleiloes\.com\.br|cristianoescolaleiloes\.com\.br|Leiloaria Smart|leiloariasmart\.com\.br|Lara Forster Leilões|leiloeslaraforster\.com\.br|arremate\.lel\.br|caiapoleiloes\.com\.br|norteleiloes\.com\.br|roisoft/i],
+  // Plataforma ASP.NET white-label: a home costuma ser institucional e só traz
+  // o selo/link para leilovia.com.br; o catálogo real fica em /leiloes.aspx.
+  ['leilovia', /leilovia\.com\.br|leiloes\.aspx|lote-lista/i],
   ['soleon', /soleon|d1mdxpzu4pgcoh\.cloudfront\.net|plataformasoleon/i],
   ['suporte-leiloes', /suporteleiloes|\.leilao\.br/i],
   ['superbid', /superbid|sbwebservices|s4bdigital/i],
@@ -212,6 +217,9 @@ const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
   globoleiloes: 'globoleiloes',
   leiloesfreire: 'leiloesfreire',
   rochaleiloes: 'rochaleiloes',
+  benedetto: 'benedetto',
+  'docx-html': 'docxhtml',
+  leilovia: 'leilovia',
   goadopt: null,
 };
 

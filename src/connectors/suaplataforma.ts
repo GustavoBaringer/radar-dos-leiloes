@@ -19,6 +19,17 @@ import * as campos from '../core/campos.js';
 
 const PAGINA = 200;
 
+function leiloeiroDoHost(host: string): string {
+  return host
+    .replace(/^www\./, '')
+    .replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '')
+    .replace(/leiloes?|leiloeiro/gi, ' Leilões ')
+    .replace(/[-_.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 /**
  * Status do lote → canônico. Os rótulos são os medidos em campo, em
  * `GetLoteRealTime[0].Lote_SubStatus_Label`.
@@ -163,6 +174,7 @@ function mapLot(l: any, host: string): CanonicalLot | null {
     bidIncrement: num(rt?.ValorIncremento),
     appraisal: num(l.ValorAvaliacao ?? rt?.ValorAvaliacao),
     feesPct: num(rt?.Comissao),
+    auctioneerName: leiloeiroDoHost(host),
     // A fonte identifica o COMITENTE, não o leiloeiro.
     sellerName: l.Comitente ? String(l.Comitente) : null,
     // O `localDoTitulo` cobre o formato "…, Cidade/UF" do título. Quando ele

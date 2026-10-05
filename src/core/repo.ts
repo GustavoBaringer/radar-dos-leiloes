@@ -425,7 +425,13 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
       : p.sort === 'price_desc'
         ? 'bid_suspect ASC, COALESCE(current_bid, min_bid) DESC NULLS LAST'
         : p.sort === 'recent'
-          ? 'first_seen_at DESC'
+          // Lotes recém-importados de fontes que publicam placeholder oficial
+          // (HC/Leilovia: /imagens/sem-imagem.jpg; Projud: SemFoto.jpg) não
+          // têm foto real para backfill. Se `recent` ordenar só por ingestão,
+          // uma coleta nova dessas fontes domina a primeira página com nopic.
+          // Mantemos os lotes no índice, mas priorizamos quem tem ao menos uma
+          // foto real quando a intenção da tela é vitrine de novidades.
+          ? '(photo_count > 0) DESC, first_seen_at DESC'
           : p.sort === 'discount'
             ? 'bid_suspect ASC, CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0 THEN COALESCE(current_bid,min_bid)/appraisal ELSE 9 END ASC'
             // Pregão sem fim cuja abertura já passou tinha a menor data e abria "Encerra

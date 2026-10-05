@@ -19,6 +19,10 @@ import { query } from '../core/db.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+function leiloeiroDoHost(host: string): string {
+  return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 LIMIT $1`,
@@ -111,6 +115,7 @@ export const leilotech: Connector = {
           sourceId: 'leilotech',
           externalId: `${host}:${l.id}`,
           lotUrl: `https://${host}/lote/${l.id}/${l.slug}`,
+          auctioneerName: leiloeiroDoHost(host),
           titleRaw: l.titulo,
           brand: parsed.brand,
           model: parsed.model,

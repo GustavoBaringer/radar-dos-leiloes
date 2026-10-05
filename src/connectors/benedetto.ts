@@ -94,6 +94,7 @@ export const benedetto: Connector = {
         sourceId: 'benedetto',
         externalId: id,
         lotUrl: `${HOST}/lance/${id}`,
+        auctioneerName: 'Benedetto Leilões',
         titleRaw: titulo.slice(0, 200),
         brand: parsed.brand,
         model: parsed.model,
