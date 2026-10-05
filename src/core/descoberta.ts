@@ -144,6 +144,20 @@ const agente = new Agent({ connect: { rejectUnauthorized: false } }).compose(
 );
 
 const PLATAFORMAS: Array<[string, RegExp]> = [
+  ['mega', /megaleiloes\.com\.br|Mega Leilões/i],
+  ['grupolance', /grupolance\.com\.br|Grupo Lance/i],
+  ['portalzuk', /portalzuk\.com\.br|zukerman\.com\.br|Zuk/i],
+  ['parquedosleiloes', /parquedosleiloes\.com\.br|Parque dos Leilões/i],
+  ['lucianleiloes', /lucianleiloes\.com\.br|Lucian Leilões/i],
+  ['hasta-publica', /hastapublica\.com\.br|valland\.com\.br|Valland Leilões|LoteSmall/i],
+  ['flexleiloes', /flexleiloes\.com\.br|FlexLeil(?:&otilde;|õ)es|js\/leilao\.js/i],
+  ['alfaleiloes', /alfaleiloes\.com|Alfa Leilões|logo-alfa-card/i],
+  ['casadeleiloes', /casadeleiloes\.com\.br|Casa de Leilões|lote-lista/i],
+  ['grupocarvalho', /grupocarvalholeiloes\.com\.br|Grupo Carvalho Leilões|midias-plataforma\.s3/i],
+  ['simonleiloes', /simonleiloes\.com\.br|Simon Leilões|prod-simonleiloes-assets/i],
+  ['globoleiloes', /globoleiloes\.com\.br|Globo Leilões|inertia-vendor/i],
+  ['leiloesfreire', /leiloesfreire\.com\.br|Leilões Freire|lote_destaque_imagem/i],
+  ['rochaleiloes', /rochaleiloes\.com\.br|Rocha Leilões|<home-banners/i],
   ['soleon', /soleon|d1mdxpzu4pgcoh\.cloudfront\.net|plataformasoleon/i],
   ['suporte-leiloes', /suporteleiloes|\.leilao\.br/i],
   ['superbid', /superbid|sbwebservices|s4bdigital/i],
@@ -182,10 +196,22 @@ const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
   bomvalor: 'bomvalor',
   sishp: 'sishp',
   mega: 'megaleiloes',
+  grupolance: 'grupolance',
+  portalzuk: 'portalzuk',
+  parquedosleiloes: 'parquedosleiloes',
+  lucianleiloes: 'lucianleiloes',
   // White-label sem plataforma nomeada no HTML: quem descobre na mão escreve a
   // plataforma na linha e a sonda passa a PRESERVAR (ver o COALESCE lá embaixo).
   'ares-postgrest': null,
-  'hasta-publica': null,
+  'hasta-publica': 'hastapublica',
+  flexleiloes: 'flexleiloes',
+  alfaleiloes: 'alfaleiloes',
+  casadeleiloes: 'casadeleiloes',
+  grupocarvalho: 'grupocarvalho',
+  simonleiloes: 'simonleiloes',
+  globoleiloes: 'globoleiloes',
+  leiloesfreire: 'leiloesfreire',
+  rochaleiloes: 'rochaleiloes',
   goadopt: null,
 };
 
@@ -283,6 +309,49 @@ export async function sondarSites(limite = 150, concorrencia = 12): Promise<Resu
   );
 
   return { sondados: alvos.length, noAr, comPlataforma, mudaramDePlataforma: mudaram };
+}
+
+/** Sonda uma lista fechada de domínios, preservando a mesma regra da rotina geral. */
+export async function sondarDominios(dominios: string[], concorrencia = 6): Promise<ResultadoSonda> {
+  const unicos = [...new Set(dominios.map((d) => d.trim().toLowerCase()).filter(Boolean))];
+  const existentes = await query<{ domain: string; platform: string | null }>(
+    `SELECT domain, platform FROM discovered_sites WHERE domain = ANY($1::text[])`,
+    [unicos],
+  );
+  const antes = new Map(existentes.map((a) => [a.domain, a.platform]));
+  const fila = existentes.map((e) => e.domain);
+  const mudaram: string[] = [];
+  let noAr = 0;
+  let comPlataforma = 0;
+
+  await Promise.all(
+    Array.from({ length: concorrencia }, async () => {
+      while (fila.length) {
+        const domain = fila.shift();
+        if (!domain) break;
+        const r = await sondar(domain);
+        const det = r.platform ? CONECTOR_POR_PLATAFORMA[r.platform] : null;
+        await query(
+          `UPDATE discovered_sites
+             SET http_status=$2,
+                 has_lots=$3,
+                 platform=COALESCE(discovered_sites.platform, $4),
+                 connector_id=COALESCE(discovered_sites.connector_id, $5),
+                 title=$6,
+                 note=$7,
+                 checked_at=now()
+           WHERE domain=$1`,
+          [domain, r.status, r.hasLots, r.platform, det, r.title, r.note],
+        );
+        if (r.status === 200) noAr++;
+        if (r.platform) comPlataforma++;
+        const anterior = antes.get(domain) ?? null;
+        if (anterior !== r.platform) mudaram.push(`${domain}: ${anterior ?? '—'} → ${r.platform ?? '—'}`);
+      }
+    }),
+  );
+
+  return { sondados: fila.length + existentes.length, noAr, comPlataforma, mudaramDePlataforma: mudaram };
 }
 
 /** Registra em collection_runs para a tela de cobertura enxergar a descoberta. */

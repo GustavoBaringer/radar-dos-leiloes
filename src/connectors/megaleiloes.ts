@@ -180,6 +180,7 @@ function conectorDaPlataforma(cfg: {
               sourceId: cfg.id,
               externalId: c.id,
               lotUrl: c.url,
+              auctioneerName: cfg.nome,
               titleRaw: c.titulo,
               brand: parsed?.brand ?? null,
               model: parsed?.model ?? null,

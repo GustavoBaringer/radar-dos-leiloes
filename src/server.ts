@@ -2,6 +2,19 @@ import Fastify from 'fastify';
 import { request as undiciRequest } from 'undici';
 import sharp from 'sharp';
 import { insecureDispatcher, HOSTS_TLS_INCOMPLETO } from './connectors/http.js';
+import { Agent } from 'undici';
+
+/**
+ * Mesma política de TLS do insecureDispatcher(), porém sem seguir redirect: o proxy
+ * de imagem precisa enxergar o 301 para validar o host de destino contra a
+ * allowlist antes de saltar (o undici por padrão já não segue, mas o Agent
+ * compartilhado dos conectores é criado com interceptors de redirect).
+ */
+let insecureSemRedirectAgent: Agent | null = null;
+function insecureSemRedirect(): Agent {
+  insecureSemRedirectAgent ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureSemRedirectAgent;
+}
 import fastifyStatic from '@fastify/static';
 import { pathToFileURL } from 'node:url';
 import formbody from '@fastify/formbody';
@@ -1382,6 +1395,31 @@ const IMG_HOSTS = new Set([
   'www.freitasleiloeiro.com.br',
   'www.leilaoeletronico.com.br',
   'leilaoeletronico.com.br',
+  'www.casadeleiloes.com.br',
+  'casadeleiloes.com.br',
+  'rochaleiloes.com.br',
+  // Destino de redirect: o static.suporteleiloes.com.br é CNAME do CDN do
+  // Lidér e responde 301 para cá. Entra na lista porque o proxy precisa poder
+  // saltar para ele.
+  'static.liderleiloes.com.br',
+]);
+
+/**
+ * Vários sites respondem 301 do apex para o www (vialeiloes, tableau, suporte),
+ * e o apex em si às vezes nem conecta. `www.` é a mesma origem, não um host
+ * novo: aceitar o par não abre a allowlist.
+ */
+function hostPermitido(host: string): boolean {
+  if (IMG_HOSTS.has(host)) return true;
+  return host.startsWith('www.') && IMG_HOSTS.has(host.slice(4));
+}
+
+/**
+ * Buckets com hotlink protection respondem 403 quando o referer não é o site que
+ * publica a foto. A chave é o host do bucket; o valor é o referer que o site manda.
+ */
+const IMG_REFERER = new Map<string, string>([
+  ['s3-sa-east-1.amazonaws.com', 'https://www.valland.com.br/'],
 ]);
 
 /**
@@ -1427,6 +1465,26 @@ function sendNopic(reply: any, motivo: string) {
     .header('cache-control', 'public, max-age=300')
     .header('x-nopic-motivo', motivo)
     .send(NOPIC);
+}
+
+/**
+ * Reconhece imagem pelos magic bytes, paracuando a origem não manda content-type
+ * (ou manda um genérico). Só raster e só o que o sharp decodifica — SVG fica de
+ * fora de propósito, pelo mesmo motivo do filtro acima.
+ */
+function tipoPorMagicBytes(b: Buffer): string {
+  if (b.length < 12) return '';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'; // JPEG/JFIF
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'; // PNG
+  if (b.subarray(0, 3).toString('latin1') === 'GIF') return 'image/gif';
+  if (b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP')
+    return 'image/webp';
+  if (b.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const brand = b.subarray(8, 12).toString('latin1');
+    if (brand.startsWith('avif') || brand.startsWith('avis') || brand === 'mif1') return 'image/avif';
+    if (brand.startsWith('heic') || brand.startsWith('heix') || brand.startsWith('mif1')) return 'image/heic';
+  }
+  return '';
 }
 
 /**
@@ -1487,31 +1545,63 @@ app.get('/api/img', async (req, reply) => {
   }
 
   try {
-    const res = await undiciRequest(target.href, {
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
-        referer: `${target.origin}/`,
-      },
-      headersTimeout: 15000,
-      bodyTimeout: 15000,
-      ...(HOSTS_TLS_INCOMPLETO.has(target.host) ? { dispatcher: insecureDispatcher() } : {}),
-    });
-    const type = String(res.headers['content-type'] ?? '');
-    // SVG é imagem mas carrega script: servido do nosso domínio viraria XSS.
-    if (res.statusCode !== 200 || !type.startsWith('image/') || type.includes('svg')) {
+    // Redirect manual: muita foto só responde depois do 301 (vialeiloes.com.br
+    // manda para www, superbid idem). undiciRequest não segue e devolvia 301,
+    // que o filtro de baixo tratava como falha e devolvia nopic.
+    let alvo = target;
+    let res: Awaited<ReturnType<typeof undiciRequest>> | null = null;
+    for (let salto = 0; salto <= 3; salto++) {
+      res = await undiciRequest(alvo.href, {
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+          // Hotlink: alguns buckets (o cdnhp da Hasta Pública, por exemplo) só
+          // entregam a imagem quando o referer é o site que a publica; sem isso
+          // respondem 403. Mandamos o próprio site da fonte como referer.
+          referer: IMG_REFERER.get(alvo.host) ?? `${alvo.origin}/`,
+        },
+        headersTimeout: 15000,
+        bodyTimeout: 15000,
+        // Sem isto o undici segue o redirect sozinho e a allowlist de host não é
+        // conferida no salto; o laço abaixo faz o salto à mão para poder validar.
+        ...(HOSTS_TLS_INCOMPLETO.has(alvo.host) ? { dispatcher: insecureSemRedirect() } : {}),
+      });
+      const redireciona = res.statusCode >= 300 && res.statusCode < 400 && res.headers.location;
+      if (!redireciona) break;
+      res.body.dump();
+      const proximo = new URL(String(res.headers.location), alvo.href);
+      // Redirect para fora da allowlist (ou para http) não é seguido: sairia do
+      // contrato de "só buscamos hosts de imagem conhecidos".
+      if (proximo.protocol !== 'https:' || !hostPermitido(proximo.host)) {
+        return sendNopic(reply, 'redirect-fora-da-lista');
+      }
+      if (salto === 3) return sendNopic(reply, 'redirects-demais');
+      alvo = proximo;
+      res = null;
+    }
+    if (!res) return sendNopic(reply, 'redirect-sem-destino');
+    // Teto de tamanho: foto de leilão não passa de poucos MB; acima disso é abuso.
+    const MAX_IMG_BYTES = 20 * 1024 * 1024;
+    const declarado = String(res.headers['content-type'] ?? '');
+    if (res.statusCode !== 200) {
       res.body.dump();
       return sendNopic(reply, `origem-${res.statusCode}`);
     }
-    // Teto de tamanho: foto de leilão não passa de poucos MB; acima disso é abuso.
-    const MAX_IMG_BYTES = 20 * 1024 * 1024;
     if (Number(res.headers['content-length']) > MAX_IMG_BYTES) {
       res.body.dump();
       return sendNopic(reply, 'imagem-grande-demais');
     }
     const original = Buffer.from(await res.body.arrayBuffer());
     if (original.byteLength > MAX_IMG_BYTES) return sendNopic(reply, 'imagem-grande-demais');
+
+    // Tipo vem do cabeçalho quando ele é de imagem raster; senão, dos magic bytes.
+    // Alguns endures (lucianleiloes) respondem 200 sem content-type nenhum — o header
+    // sozinho rejeitaria JPEG válido e o cartão cairia no placeholder.
+    // SVG nunca entra: é imagem mas carrega script e sairia do nosso domínio como XSS.
+    let type = declarado.startsWith('image/') && !declarado.includes('svg') ? declarado : '';
+    if (!type) type = tipoPorMagicBytes(original);
+    if (!type) return sendNopic(reply, 'tipo-desconhecido');
 
     let out = original;
     let outType = type;
