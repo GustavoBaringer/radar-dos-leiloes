@@ -1380,6 +1380,8 @@ const IMG_HOSTS = new Set([
   'cdn3.freitasleiloeiro.com.br',
   's3-sa-east-1.amazonaws.com',
   'www.freitasleiloeiro.com.br',
+  'www.leilaoeletronico.com.br',
+  'leilaoeletronico.com.br',
 ]);
 
 /**
