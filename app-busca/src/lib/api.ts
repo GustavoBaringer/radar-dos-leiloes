@@ -12,8 +12,18 @@ export class ApiError extends Error {
   }
 }
 
+/** A casca pode vir do cache do service worker após a sessão expirar. Nesse
+ * caso o servidor responde 401 à API; sem este gate o usuário fica numa tela
+ * parcial com erro em vez de voltar ao login. */
+function redirecionaSeNaoAutenticado(status: number) {
+  if (status !== 401 || typeof window === 'undefined' || window.location.pathname === '/login') return;
+  const de = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(`/login?de=${encodeURIComponent(de)}`);
+}
+
 async function get<T>(url: string, sinal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { credentials: 'same-origin', signal: sinal });
+  redirecionaSeNaoAutenticado(res.status);
   if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -26,6 +36,7 @@ async function envia<T>(url: string, metodo: string, corpo?: unknown): Promise<T
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
   const dado = await res.json().catch(() => ({}) as any);
+  redirecionaSeNaoAutenticado(res.status);
   if (!res.ok) throw new ApiError(res.status, dado?.erro ?? `HTTP ${res.status}`);
   return dado as T;
 }
