@@ -5,6 +5,7 @@
 - Objetivo atual: ampliar cobertura de leiloeiros oficiais sem poluir com arte, colecionáveis, peças/partes e itens fora de imóvel/veículo/máquina/equipamento.
 - Landing usa `totalLeiloeiros` = `COUNT(*) FROM auctioneers WHERE domain IS NOT NULL AND domain <> ''`.
 - Filtro global anti-colecionáveis fica em `src/core/normalize.ts` / `upsertLots()`.
+- Vault do Obsidian desta máquina: `C:/Users/gustavo.pereira01/ObsidianVault` (WSL: `/mnt/c/Users/gustavo.pereira01/ObsidianVault`).
 
 ## Comandos úteis
 - Typecheck: `npm run typecheck`.

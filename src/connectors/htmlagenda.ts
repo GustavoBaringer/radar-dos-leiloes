@@ -11,6 +11,8 @@ const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos
 const ESCOPO = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|sala|loja|fazenda|rural|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento|sucata/i;
 
 async function tenants(limite: number): Promise<string[]> {
+  const explicitos = String(process.env.HTMLAGENDA_DOMAINS ?? '').trim();
+  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter(Boolean);
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='html-agenda' AND http_status=200 AND has_lots IS NOT FALSE
       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC LIMIT $1`,
