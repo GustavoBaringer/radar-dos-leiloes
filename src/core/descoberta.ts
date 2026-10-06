@@ -159,23 +159,23 @@ const PLATAFORMAS: Array<[string, RegExp]> = [
   ['leiloesfreire', /leiloesfreire\.com\.br|Leilões Freire|lote_destaque_imagem/i],
   ['rochaleiloes', /rochaleiloes\.com\.br|Rocha Leilões|<home-banners/i],
   ['benedetto', /benedettoleiloes\.com\.br|Benedetto Leilões|storage\/lote/i],
-  ['docx-html', /Central Sul de Leilões|centralsuldeleiloes\.com\.br|cristianoescolaleiloes\.com\.br|Leiloaria Smart|leiloariasmart\.com\.br|Lara Forster Leilões|leiloeslaraforster\.com\.br|arremate\.lel\.br|caiapoleiloes\.com\.br|norteleiloes\.com\.br|roisoft/i],
+  ['docx-html', /Central Sul de Leilões|centralsuldeleiloes\.com\.br|cristianoescolaleiloes\.com\.br|Leiloaria Smart|leiloariasmart\.com\.br|Lara Forster Leilões|leiloeslaraforster\.com\.br|arremate\.lel\.br|caiapoleiloes\.com\.br|norteleiloes\.com\.br|roisoft|listar-dados|LED_DIA_F/i],
   // Plataforma ASP.NET white-label: a home costuma ser institucional e só traz
   // o selo/link para leilovia.com.br; o catálogo real fica em /leiloes.aspx.
   ['leilovia', /leilovia\.com\.br|leiloes\.aspx|lote-lista/i],
   ['soleon', /soleon|d1mdxpzu4pgcoh\.cloudfront\.net|plataformasoleon/i],
   ['suporte-leiloes', /suporteleiloes|\.leilao\.br/i],
-  ['superbid', /superbid|sbwebservices|s4bdigital/i],
+  ['superbid', /superbid|sbwebservices|s4bdigital|Superbid Exchange/i],
   ['leiloesbr', /leiloesbr\.com\.br/i],
-  ['leilotech', /leilotech/i],
+  ['leilotech', /leilotech|cdn\.leilotech|__TENANT__|v2-seo-snapshot|ws\.leilotech/i],
   ['vip-leiloes', /vipleiloes/i],
   ['sua-plataforma', /suaplataformadeleilao/i],
   ['leilao-pro', /leilao\.pro|ileiloes/i],
   // vlance é o MESMO contrato do leiloesjudiciais (POST /core/api/get-lotes):
   // um conector serve os ~30 tenants.
-  ['vlance', /\/v3\/js\/vlance|leiloesjudiciais|vlance\//i],
+  ['vlance', /\/v3\/js\/vlance|leiloesjudiciais|vlance\/|core\/api\/get-lotes/i],
   ['leiloar', /plataformaleiloar|\/externo\/min-js/i],
-  ['bomvalor', /bomvalor\.com\.br/i],
+  ['bomvalor', /bomvalor\.com\.br|servicos\.bomvalor/i],
   ['sishp', /\/sishp\//i],
 ];
 const SINAL_LOTE = /(lance\s+(inicial|atual|m[ií]nimo)|aberto\s+para\s+lances|lote\s*\d|encerra\s+em|pr[oó]ximos\s+leil[õo]es|dou-lhe)/i;
