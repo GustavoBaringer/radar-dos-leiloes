@@ -42,6 +42,23 @@ const TAMANHO_FOTO = '640x480';
 
 const TIPOS: Record<number, 'veiculo' | 'imovel'> = { 1: 'veiculo', 3: 'imovel' };
 
+/**
+ * Leiloeiros oficiais encontrados nos DOCX estaduais em Downloads (05/10/2026)
+ * e confirmados no contrato V-Lance real antes de entrar no conector:
+ *
+ * - LISTA DE LEILOEIROS DE GOIAS.docx traz `leiloesjudiciaisgo.com.br`, que
+ *   redireciona para `alvaroleiloes.com.br`. A API responde nos dois tipos:
+ *   tipo=1 => veículos, tipo=3 => imóveis.
+ * - O mesmo DOCX traz `leiloescentrooeste.com.br`; a API tem imóveis em tipo=3
+ *   e zero veículos hoje. Mesmo assim fica no tenant fixo para cobrir o
+ *   leiloeiro oficial e preencher `auctioneerName` por lote.
+ *
+ * Eles entram ANTES do tenant agregado grande (`api.leiloesjudiciais.com.br`),
+ * porque o coletor para ao bater o `limit`; se o Serrano vier primeiro, estes
+ * oficiais menores nunca são alcançados numa coleta normal.
+ */
+const DOCX_VLANCE_TENANTS = ['www.leiloescentrooeste.com.br', 'www.alvaroleiloes.com.br'];
+
 function texto(html?: string | null): string {
   return String(html ?? '')
     .replace(/<[^>]+>/g, ' ')
@@ -188,7 +205,9 @@ async function tenants(limite: number): Promise<string[]> {
   // MEDIDO: no Serrano a API mora em `api.`, não no host do site — `www` devolve
   // 404 e o domínio sem prefixo devolve 301. O catálogo tem só os tenants menores,
   // então o maior entra explicitamente.
-  if (!lista.includes('api.leiloesjudiciais.com.br')) lista.unshift('api.leiloesjudiciais.com.br');
+  for (const host of [...DOCX_VLANCE_TENANTS, 'api.leiloesjudiciais.com.br'].reverse()) {
+    if (!lista.includes(host)) lista.unshift(host);
+  }
   return lista;
 }
 
