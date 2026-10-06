@@ -866,7 +866,7 @@ app.get('/api/vitrine', async () => {
     query<any>(
       `SELECT count(DISTINCT source_id)::int AS fontes,
               count(*)::int AS total,
-              count(DISTINCT auctioneer_name) FILTER (WHERE auctioneer_name <> '')::int AS "totalLeiloeiros",
+              (SELECT count(*)::int FROM auctioneers WHERE domain IS NOT NULL AND domain <> '') AS "totalLeiloeiros",
               count(*) FILTER (WHERE first_seen_at > now() - interval '24 hours')::int AS "novos24h",
               count(*) FILTER (WHERE closing_model = 'timer_por_lote'
                                AND auction_end_utc BETWEEN now() AND now() + interval '24 hours')::int AS "encerram24h"
