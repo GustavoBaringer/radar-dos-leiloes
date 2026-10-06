@@ -7,7 +7,7 @@ import { classifyAsset, classifySeller, looksLikePart, parseTitle } from '../cor
 import * as campos from '../core/campos.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36';
-const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/lotes-encerrando', '/lotes'];
+const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos/proximos', '/evento.php', '/leilao', '/lotes-encerrando', '/lotes'];
 const ESCOPO = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|sala|loja|fazenda|rural|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento|sucata/i;
 
 async function tenants(limite: number): Promise<string[]> {
@@ -44,7 +44,7 @@ async function linksDePagina(base: string, path: string): Promise<{ status: numb
   const links = new Set<string>();
   $('a[href]').each((_, a) => {
     const href = $(a).attr('href') ?? '';
-    if (!/\/(lote|lotes|leilao|eventos\/leilao)\//i.test(href)) return;
+    if (!/(\/(lote|lotes|leilao|eventos\/leilao)\/|evento\.php|agenda\.aspx)/i.test(href)) return;
     const u = absoluta(base, href);
     if (u) links.add(u);
   });
@@ -66,7 +66,7 @@ async function loteDeUrl(host: string, url: string): Promise<CanonicalLot | null
   const body = texto(html).slice(0, 6000);
   const local = campos.localDeTexto(`${titulo} ${body}`);
   const preco = dinheiro(body.match(/(?:lance\s*(?:inicial|atual|mínimo|minimo)|avaliaç[aã]o|valor)\D{0,80}(R\$\s*[\d.,]+)/i)?.[1]);
-  const id = `${host}:${url.match(/\/(?:lote|lotes|leilao)\/([^/?#]+)/i)?.[1] ?? url}`;
+  const id = `${host}:${url.match(/\/(?:lote|lotes|leilao)\/([^/?#]+)/i)?.[1] ?? url.match(/(?:id|cod|evento)=([^&#]+)/i)?.[1] ?? url}`;
   return {
     sourceId: 'htmlagenda', externalId: id, lotUrl: url, titleRaw: titulo,
     brand: parsed.brand, model: parsed.model, yearMake: parsed.yearMake, yearModel: parsed.yearModel,
