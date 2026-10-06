@@ -298,9 +298,9 @@ if (oidcLigado()) {
   /**
    * Login por provedor OIDC (Keycloak).
    *
-   * O `redirect_uri` é derivado do host da requisição, não de variável fixa: a
-   * POC é acessada por localhost E pelo túnel, e um valor fixo quebraria um dos
-   * dois. O provedor só aceita URIs que estão na allowlist do client, então
+    * O `redirect_uri` é derivado do host da requisição, não de variável fixa,
+    * para funcionar em desenvolvimento e produção. O provedor só aceita URIs
+    * que estão na allowlist do client, então
    * derivar do host não abre redirecionamento arbitrário.
    */
   const uriDeCallback = (req: any) => {
@@ -387,8 +387,8 @@ if (oidcLigado()) {
    * Freio de força bruta no login.
    *
    * Medido antes disto: dez senhas erradas seguidas devolviam dez 401 sem
-   * atraso nenhum. Com uma senha só protegendo o índice inteiro e a POC exposta
-   * por túnel público, isso é o furo mais explorável que existia.
+    * atraso nenhum. Com uma senha só protegendo o índice inteiro, isso é o furo
+    * mais explorável que existia.
    *
    * O contador vive no Redis, não em memória: o processo reinicia a cada edição
    * de código, e um contador que zera no restart não é freio.
@@ -538,8 +538,8 @@ const APP_ROTAS = ['/busca', '/alertas', '/favoritos', '/cobertura'];
 
 /**
  * A URL do estático carrega a data de modificação. `cache-control: max-age=0`
- * com ETag não basta: quem acessa pelo túnel passa pela borda da Cloudflare,
- * que cacheia .js e .css por conta própria e serviu versão velha por horas.
+ * com ETag não basta: uma camada de cache externa pode cachear .js e .css por
+ * conta própria e servir versão velha por horas.
  * Mudando a URL, nenhuma camada de cache tem o que reaproveitar.
  */
 const ESTATICOS = ['slug.js', 'cartao.js', 'landing.js', 'landing.css', 'cartao.css'];
@@ -552,8 +552,8 @@ const SITE = (process.env.SITE_URL ?? 'http://localhost:4500').replace(/\/$/, ''
  * `SITE_URL` não está definido em desenvolvimento, e o padrão `localhost:4500`
  * ia parar dentro do og:image — que o robô do WhatsApp não alcança, então o
  * preview vinha sem foto mesmo com a meta presente. O host da requisição é o
- * endereço por onde o visitante REALMENTE chegou (o domínio do túnel, o
- * domínio de produção), e é ele que serve para montar URL absoluta.
+ * endereço por onde o visitante REALMENTE chegou, e é ele que serve para
+ * montar URL absoluta.
  *
  * `SITE_URL` continua vencendo quando configurado: em produção a origem
  * canônica é decisão nossa, não do cabeçalho que o cliente mandou.
@@ -617,11 +617,10 @@ app.get('/lote/:slug', async (req, reply) => {
   // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
   // divergir campo a campo.
   const lot = Number.isSafeInteger(id) ? await getLot(id) : null;
-  // Não devolve a casca do SPA: ela tentaria buscar o lote, receberia 401/404 e
-  // redirecionaria visualmente para a busca. Um ID/slug inválido termina aqui.
-  if (!lot) return reply.code(404).type('text/html; charset=utf-8').header('cache-control', 'no-store').send(
-    '<!doctype html><meta charset="utf-8"><title>Lote não encontrado · Radar de Leilões</title><h1>Lote não encontrado</h1><p>O endereço é inválido ou o lote não está mais disponível.</p><p><a href="/busca">Voltar para a busca</a></p>',
-  );
+  // Nunca entrega a casca do SPA numa URL inválida: ela poderia montar a busca
+  // mantendo `/lote/<id>` na barra. O destino canônico de rota/lote inexistente
+  // é a busca.
+  if (!lot) return reply.code(302).header('location', '/busca').header('cache-control', 'no-store').send();
   const html = cascaDoApp();
 
   const titulo = lot.title_display || lot.title_raw;
