@@ -38,13 +38,14 @@ import { rochaleiloes } from './rochaleiloes.js';
 import { docxhtml } from './docxhtml.js';
 import { maycosantos } from './maycosantos.js';
 import { htmlagenda } from './htmlagenda.js';
+import { rocketleiloes, savoyleiloes } from './supabaseleiloes.js';
 
 export const connectors: Connector[] = [
   superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor,
   leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes,
   benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes,
   hastapublica, flexleiloes, alfaleiloes, casadeleiloes, grupocarvalho, simonleiloes, globoleiloes, leiloesfreire, rochaleiloes,
-  docxhtml, maycosantos, htmlagenda,
+  docxhtml, maycosantos, htmlagenda, rocketleiloes, savoyleiloes,
   ...supraTenants,
 ];
 
