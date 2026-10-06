@@ -820,7 +820,7 @@ app.get('/api/home', async () => {
   const [[{ fontes, total, totalLeiloeiros }], ufs] = await Promise.all([
     query<{ fontes: number; total: number; totalLeiloeiros: number }>(
       `SELECT count(DISTINCT source_id)::int AS fontes, count(*)::int AS total,
-              count(DISTINCT auctioneer_name) FILTER (WHERE auctioneer_name <> '')::int AS "totalLeiloeiros"
+              (SELECT count(*)::int FROM auctioneers WHERE domain IS NOT NULL AND domain <> '') AS "totalLeiloeiros"
          FROM lots WHERE status IN ('aberto','agendado','sem_data')`,
     ),
     query<{ uf: string; total: number }>(
