@@ -101,18 +101,12 @@ const PUBLICAS = new Set([
   '/mapa-lotes.jpg',
 ]);
 /**
- * A PÁGINA do lote é pública; a API continua fechada.
- *
- * Isso é possível porque o SSR lê do Postgres direto (`getLot`), sem passar por
- * `/api/lot/:id` — abrir a página não abre endpoint nenhum. Sem isso, o robô do
- * WhatsApp levava 302 para /login e o preview do link mostrava "Entrar · Radar
- * de Leilões" em vez do lote.
- *
- * O que o visitante anônimo vê é decidido no render: o lote e o link para o
- * leiloeiro, não a busca nem as facetas.
+ * Página de lote também exige sessão. O detalhe não pode ser uma exceção ao
+ * portão: além de expor dados, a casca do SPA recebida por anônimo caía em
+ * `/busca` quando a API devolvia 401.
  */
 const ehPublica = (caminho: string) =>
-  PUBLICAS.has(caminho) || caminho.startsWith('/lote/') || caminho.startsWith('/assets/');
+  PUBLICAS.has(caminho) || caminho.startsWith('/assets/');
 
 const PAGINA_LOGIN = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Radar de Leilões</title>
@@ -261,9 +255,7 @@ if (oidcLigado()) {
       (req as any).papel = eu.papel;
       return;
     }
-    // Cookie presente mas inválido (expirado, adulterado) numa rota pública:
-    // segue como anônimo em vez de mandar para o login. Quem compartilhou o
-    // link não tem culpa da sessão velha de quem o abriu.
+    // Cookie presente mas inválido em rota realmente pública: segue como anônimo.
     if (ehPublica(caminho) && req.method === 'GET') {
       (req as any).papel = 'comum';
       (req as any).eu = ANONIMO;
@@ -290,7 +282,7 @@ if (oidcLigado()) {
     if (!v.startsWith('/') || v.startsWith('//')) return DESTINO_PADRAO;
     const caminho = v.split('?')[0];
     const permitido =
-      caminho === '/' || APP_ROTAS.includes(caminho) || caminho.startsWith('/lote/');
+      caminho === '/' || APP_ROTAS.includes(caminho) || /^\/lote\/(?:[a-z0-9]+-)?\d+$/i.test(caminho);
     return permitido ? v : DESTINO_PADRAO;
   }
   const escapaAtributo = (v: string) =>
@@ -619,15 +611,18 @@ app.get('/lote/:slug', async (req, reply) => {
   if (!temAppNovo) {
     return reply.code(503).type('text/plain; charset=utf-8').send('app-busca não construído');
   }
-  const html = cascaDoApp();
-  const id = Number(/-(\d+)$/.exec(String((req.params as any).slug ?? ''))?.[1]);
+  const id = Number(/(?:^|-)(\d+)$/.exec(String((req.params as any).slug ?? ''))?.[1]);
   // O SSR renderiza a gaveta inteira, então precisa do MESMO objeto que
   // /api/lot/:id entrega — o SELECT curto de antes só servia para montar meta,
   // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
   // divergir campo a campo.
   const lot = Number.isSafeInteger(id) ? await getLot(id) : null;
-  // 404 com a casca: quem chega cai na busca, e o robô não indexa link morto como página boa.
-  if (!lot) return reply.code(404).type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(html);
+  // Não devolve a casca do SPA: ela tentaria buscar o lote, receberia 401/404 e
+  // redirecionaria visualmente para a busca. Um ID/slug inválido termina aqui.
+  if (!lot) return reply.code(404).type('text/html; charset=utf-8').header('cache-control', 'no-store').send(
+    '<!doctype html><meta charset="utf-8"><title>Lote não encontrado · Radar de Leilões</title><h1>Lote não encontrado</h1><p>O endereço é inválido ou o lote não está mais disponível.</p><p><a href="/busca">Voltar para a busca</a></p>',
+  );
+  const html = cascaDoApp();
 
   const titulo = lot.title_display || lot.title_raw;
   const local = [lot.city, lot.state].filter(Boolean).join('/');
