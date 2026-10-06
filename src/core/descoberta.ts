@@ -146,7 +146,7 @@ const agente = new Agent({ connect: { rejectUnauthorized: false } }).compose(
 const PLATAFORMAS: Array<[string, RegExp]> = [
   ['mega', /megaleiloes\.com\.br|Mega Leilões/i],
   ['grupolance', /grupolance\.com\.br|Grupo Lance/i],
-  ['portalzuk', /portalzuk\.com\.br|zukerman\.com\.br|Zuk/i],
+  ['portalzuk', /portalzuk\.com\.br|zukerman\.com\.br|frazaoleiloes\.com\.br|lut\.com\.br|Zuk/i],
   ['parquedosleiloes', /parquedosleiloes\.com\.br|Parque dos Leilões/i],
   ['lucianleiloes', /lucianleiloes\.com\.br|Lucian Leilões/i],
   ['hasta-publica', /hastapublica\.com\.br|valland\.com\.br|Valland Leilões|LoteSmall/i],
@@ -174,7 +174,9 @@ const PLATAFORMAS: Array<[string, RegExp]> = [
   // vlance é o MESMO contrato do leiloesjudiciais (POST /core/api/get-lotes):
   // um conector serve os ~30 tenants.
   ['vlance', /\/v3\/js\/vlance|leiloesjudiciais|vlance\/|core\/api\/get-lotes/i],
-  ['leiloar', /plataformaleiloar|\/externo\/min-js/i],
+  ['leiloar', /plataformaleiloar|bem-card|bens\/pesquisaAvancada|\/externo\/min-js|d1lance\.com|leiloeirodian\.com\.br|nortedeminasleiloes\.com\.br|leiloesdonorte\.com\.br/i],
+  ['labasoft', /labasoft|featured-post|karlapepe\.lel\.br|leiloesbraga\.lel\.br/i],
+  ['html-agenda', /\/agenda-de-leiloes|\/lotes-encerrando|\/eventos\/leilao\/|\/lote\/\d+|\/leilao\/\d+/i],
   ['bomvalor', /bomvalor\.com\.br|servicos\.bomvalor/i],
   ['sishp', /\/sishp\//i],
 ];
