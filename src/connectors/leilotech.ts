@@ -19,6 +19,13 @@ import { query } from '../core/db.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+/**
+ * Tenants oficiais achados nos DOCX estaduais e confirmados no contrato
+ * Leilotech. Entram fixos porque a descoberta pode não ter rodado ainda — e,
+ * se ficarem só no catálogo, uma coleta pequena pode nunca alcançá-los.
+ */
+const DOCX_LEILOTECH_TENANTS = ['arrematabem.com.br'];
+
 function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
@@ -28,7 +35,9 @@ async function tenants(limite: number): Promise<string[]> {
     `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 LIMIT $1`,
     [limite],
   );
-  return rows.map((r) => r.domain);
+  const out = [...DOCX_LEILOTECH_TENANTS];
+  for (const r of rows) if (!out.includes(r.domain)) out.push(r.domain);
+  return out.slice(0, limite);
 }
 
 function statusDe(v: string): LotStatus {

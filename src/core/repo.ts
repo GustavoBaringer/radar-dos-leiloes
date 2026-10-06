@@ -1,5 +1,5 @@
 import { query, pool } from './db.js';
-import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico, termoComoRegex } from './normalize.js';
+import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico, termoComoRegex, looksLikeCollectible } from './normalize.js';
 import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
@@ -58,9 +58,19 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
       const plateMasked = l.plateMasked ?? scrubbed.plateMasked;
       const versionFonte = l.version ? scrubPlates(l.version).text : null;
       const bidSuspect = isBidSuspect(campos.dinheiro(l.currentBid) ?? campos.dinheiro(l.minBid), campos.dinheiro(l.appraisal));
+      const raw: any = l.raw ?? null;
+      const textoEscopo = [
+        titleRaw,
+        l.sourceCategory,
+        raw?.descricao,
+        raw?.description,
+        raw?.leilao,
+        raw?.categoria,
+      ].filter(Boolean).join(' ');
+      const collectible = looksLikeCollectible(textoEscopo);
       const cls = classifyAsset(titleRaw, l.sourceCategory, l.sourceGroup);
       // O conector, quando sabe, manda o tipo de bem explícito e ele vence.
-      const assetType = l.assetType ?? cls.assetType;
+      const assetType = collectible ? 'outro' : (l.assetType ?? cls.assetType);
       // O produto só publica imóveis e veículos. Qualquer bem classificado como
       // "outro" (móveis, impressoras, roupas, equipamentos avulsos etc.) não
       // deve nascer/reabrir na coleta.

@@ -52,12 +52,21 @@ const TIPOS: Record<number, 'veiculo' | 'imovel'> = { 1: 'veiculo', 3: 'imovel' 
  * - O mesmo DOCX traz `leiloescentrooeste.com.br`; a API tem imóveis em tipo=3
  *   e zero veículos hoje. Mesmo assim fica no tenant fixo para cobrir o
  *   leiloeiro oficial e preencher `auctioneerName` por lote.
+ * - `marcelolimaleiloes.com.br` também está no DOCX de GO e responde imóveis.
+ * - Os DOCX de RR/AC/AM trazem `galvanileiloes.com.br` e
+ *   `deonizialeiloes.com.br`; ambos respondem veículos e imóveis.
  *
  * Eles entram ANTES do tenant agregado grande (`api.leiloesjudiciais.com.br`),
  * porque o coletor para ao bater o `limit`; se o Serrano vier primeiro, estes
  * oficiais menores nunca são alcançados numa coleta normal.
  */
-const DOCX_VLANCE_TENANTS = ['www.leiloescentrooeste.com.br', 'www.alvaroleiloes.com.br'];
+const DOCX_VLANCE_TENANTS = [
+  'www.leiloescentrooeste.com.br',
+  'www.alvaroleiloes.com.br',
+  'www.marcelolimaleiloes.com.br',
+  'www.galvanileiloes.com.br',
+  'www.deonizialeiloes.com.br',
+];
 
 function texto(html?: string | null): string {
   return String(html ?? '')

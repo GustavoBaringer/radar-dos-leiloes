@@ -319,6 +319,19 @@ const PART_MARKERS = [
   'mobilete', 'bomba injetora', 'cabine de', 'eixo de', 'eixos de',
 ];
 
+/**
+ * Termos que denunciam colecionável/brinquedo, não o bem real. Pegadinha real:
+ * `maycosantos.lel.br` (lista oficial de RR) publica Hot Wheels e figuras de
+ * ação. Títulos como "Volkswagen Golf MK2" parecem veículo para o parser, mas a
+ * descrição/categoria deixa claro que é miniatura 1:64 lacrada.
+ */
+const COLLECTIBLE_MARKERS = [
+  'hot wheels', 'miniatura', 'die cast', 'diecast', 'escala 1 64', 'escala 1 43',
+  'carrinho', 'carrinhos', 'brinquedo', 'colecionavel', 'colecionaveis',
+  'blister', 'lacrado na embalagem', 'figura de acao', 'boneco', 'cartas pokemon',
+  'estampas ilustradas', 'micro collection', 'toy story', 'pixar', 'mattel',
+];
+
 const brandIndex = new Map<string, BrandDef>();
 for (const b of BRANDS) {
   for (const a of [...b.aliases, b.canonical]) brandIndex.set(compact(a), b);
@@ -363,6 +376,11 @@ export function completaVeiculo(titleRaw: string, brand: string | null, vehicleT
 export function looksLikePart(title: string): boolean {
   const f = fold(title);
   return PART_MARKERS.some((m) => f.includes(fold(m)));
+}
+
+export function looksLikeCollectible(title: string): boolean {
+  const f = fold(title);
+  return COLLECTIBLE_MARKERS.some((m) => f.includes(fold(m)));
 }
 
 export interface ParsedVehicle {
@@ -1075,6 +1093,9 @@ export function classifyAsset(
     // Lote de massa falida com itens variados ("betoneira, gerador, portas,
     // cadeiras"): não é nem imóvel (categoria da fonte dizia terreno) nem um
     // veículo único — cai em 'outro' e sai do filtro de terreno e de carro.
+    return { assetType: 'outro', vehicleType: null };
+  }
+  if (looksLikeCollectible(titleRaw)) {
     return { assetType: 'outro', vehicleType: null };
   }
   if (looksLikePart(titleRaw)) {
