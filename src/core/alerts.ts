@@ -1,6 +1,6 @@
 import { query } from './db.js';
 import { VENCIDO } from './encerramento.js';
-import { parseQuery, fold } from './normalize.js';
+import { parseQuery, termoComoRegex } from './normalize.js';
 
 /**
  * Casamento de alertas.
@@ -63,7 +63,7 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   // `\y` é fronteira de palavra no Postgres. LIKE '%taos%' casava dentro de
   // "sertaosantana" — o search_text guarda pares de palavras COLADOS (para
   // "t cross" achar "tcross"), e isso fabrica substring que não existe no texto.
-  const porPalavra = (termo: string) => `search_text ~ ${ph(`\\y${fold(termo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\y`)}`;
+  const porPalavra = (termo: string) => `search_text ~ ${ph(termoComoRegex(termo))}`;
 
   if (p.brand && p.model) {
     sql.push(`((brand = ${ph(p.brand)} AND model = ${ph(p.model)}) OR (${porPalavra(p.brand)} AND ${porPalavra(p.model)}))`);
@@ -72,9 +72,11 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   } else if (p.model) {
     sql.push(`(model = ${ph(p.model)} OR ${porPalavra(p.model)})`);
   }
-  for (const t of p.freeTerms) sql.push(`search_text LIKE ${ph(`%${t}%`)}`);
+  // Termo livre também por fronteira de palavra: com LIKE, "marea" casava
+  // dentro de "comarea" (de "com área") e o alerta disparava para imóvel.
+  for (const t of p.freeTerms) sql.push(porPalavra(t));
   if (!p.brand && !p.model && !p.freeTerms.length && p.compactTerm) {
-    sql.push(`search_text LIKE ${ph(`%${p.compactTerm}%`)}`);
+    sql.push(porPalavra(p.compactTerm));
   }
 
   const f = a.filters ?? {};

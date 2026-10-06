@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
-    "worker": "tsx src/queue/worker.ts",
+    "dev": "node --env-file=.env node_modules/.bin/tsx watch src/server.ts",
+    "start": "node --env-file=.env node_modules/.bin/tsx src/server.ts",
+    "worker": "node --env-file=.env node_modules/.bin/tsx src/queue/worker.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "collect": "tsx scripts/collect.ts",
+    "collect": "node --env-file=.env node_modules/.bin/tsx scripts/collect.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

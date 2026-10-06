@@ -45,7 +45,10 @@ const certDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'certs');
 const temCert = existsSync(join(certDir, 'local.crt')) && existsSync(join(certDir, 'local.key'));
 
 const app = Fastify({ logger: false });
-// O formulário de login envia urlencoded; sem isto req.body vem undefined.
+if (!oidcLigado()) {
+  console.error('FATAL: OIDC desligado. Configure OIDC_ISSUER/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET no ambiente.');
+  process.exit(1);
+}
 await app.register(formbody);
 
 /**

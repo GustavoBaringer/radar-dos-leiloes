@@ -1,5 +1,5 @@
 import { query, pool } from './db.js';
-import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico } from './normalize.js';
+import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico, termoComoRegex } from './normalize.js';
 import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
@@ -61,6 +61,21 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
       const cls = classifyAsset(titleRaw, l.sourceCategory, l.sourceGroup);
       // O conector, quando sabe, manda o tipo de bem explícito e ele vence.
       const assetType = l.assetType ?? cls.assetType;
+      // O produto só publica imóveis e veículos. Qualquer bem classificado como
+      // "outro" (móveis, impressoras, roupas, equipamentos avulsos etc.) não
+      // deve nascer/reabrir na coleta.
+      if (assetType === 'outro') {
+        await client.query(
+          `UPDATE lots
+             SET status='encerrado', closed_reason='fora_escopo_asset_type_outro',
+                 closed_at=COALESCE(closed_at, now()), verified_at=now(),
+                 verify_result='coleta_outro_nao_imovel_veiculo'
+           WHERE source_id=$1 AND external_id=$2
+             AND status IN ('aberto','agendado')`,
+          [l.sourceId, l.externalId],
+        );
+        continue;
+      }
       // Imóvel nunca carrega tipo de veículo: sem esta trava, "Sala Comercial"
       // herdava 'carro' do classificador e entrava no filtro de veículo.
       const vehicleType = assetType === 'veiculo' ? (l.vehicleType ?? cls.vehicleType) : null;
@@ -290,9 +305,13 @@ function montaFiltro(p: SearchParams) {
 
   if (parsed.brand) P('brand = ?', parsed.brand);
   if (parsed.model) P('model = ?', parsed.model);
-  for (const t of parsed.freeTerms) P('search_text LIKE ?', `%${t}%`);
+  // Termo livre casa por FRONTEIRA DE PALAVRA, não por substring: o search_text
+  // guarda as palavras coladas ("t cross" → "tcross") e o LIKE '%termo%' entrava
+  // dentro delas. Medido em 05/10/2026: `q=marea` trazia 511 imóveis porque
+  // "com área" colava em "comarea" e "388 m² - Área" em "marea".
+  for (const t of parsed.freeTerms) P('search_text ~ ?', termoComoRegex(t));
   if (!parsed.brand && !parsed.model && parsed.freeTerms.length === 0 && parsed.compactTerm) {
-    P('search_text LIKE ?', `%${parsed.compactTerm}%`);
+    P('search_text ~ ?', termoComoRegex(parsed.compactTerm));
   }
 
   // A regra de vencimento mora em encerramento.ts, que é quem a GRAVA uma vez

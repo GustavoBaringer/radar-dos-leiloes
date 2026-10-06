@@ -14,6 +14,10 @@ export function fold(input: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    // O ²/³/¹ é dígito, não pontuação: "347m²" virava "347m" — nada — e o que
+    // vier depois colava nele. Virando "347m2" o termo "347m2" volta a casar e
+    // "M²ÁREA" deixa de fabricar o token "marea" (medido em 05/10/2026).
+    .replace(/[\u00b9\u00b2\u00b3]/g, (c) => (c === '\u00b2' ? '2' : c === '\u00b3' ? '3' : '1'))
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
@@ -526,13 +530,42 @@ export function parseTitle(titleRaw: string, hintBrand?: string | null, hintMode
 /**
  * Texto de busca gravado no lote. Guarda a forma com espaços E a compacta,
  * para que "t cross" e "tcross" caiam no mesmo índice trigram.
+ *
+ * A cola é feita SÓ DENTRO de uma palavra da fonte. Colar também de uma palavra
+ * para a outra fabricava palavra que não existe em nenhum anúncio do lote:
+ * "com área" virava `comarea`, "em área" virava `emarea` e "388 m² - Área
+ * integrada" virava `marea` (antes o `²` sumia no fold e sobrava um token `m`). Medido
+ * em 05/10/2026: `q=marea` devolvia 511 imóveis e 27 veículos, dos quais só 6
+ * eram Marea de verdade — o resto era imóvel colado.
  */
 export function buildSearchText(parts: Array<string | null | undefined>): string {
-  const folded = fold(parts.filter(Boolean).join(' '));
-  const tokens = folded.split(' ').filter(Boolean);
+  const tokens: string[] = [];
   const compacted = new Set<string>();
-  for (let i = 0; i < tokens.length - 1; i++) compacted.add(tokens[i] + tokens[i + 1]);
-  return [folded, ...compacted].join(' ').trim();
+  for (const palavra of parts.filter(Boolean).join(' ').split(/\s+/)) {
+    const ts = fold(palavra).split(' ').filter(Boolean);
+    tokens.push(...ts);
+    for (let i = 0; i < ts.length - 1; i++) compacted.add(ts[i] + ts[i + 1]);
+  }
+  return [tokens.join(' '), ...compacted].join(' ').trim();
+}
+
+const REGEX_ESPECIAL = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * Termo de busca ancorado no INÍCIO de uma palavra, para o predicado
+ * `search_text ~ ?`. `\y` é fronteira de palavra no Postgres.
+ *
+ * O `search_text` guarda também as palavras coladas ("T-CROSS" → `t cross`
+ * `tcross`), então `LIKE '%termo%'` entrava dentro delas e fabricava falso
+ * positivo em qualquer consulta: "taos" casava em "sertaosantana", "argo" em
+ * "cargo", "marea" em "comarea". Medido em 05/10/2026, `q=marea` devolvia 572
+ * lotes e só 6 eram Marea.
+ *
+ * Só a fronteira da ESQUERDA: sem isso "casa" parava de achar "casas" e "area"
+ * parava de achar "areas", que é onde a busca real mora.
+ */
+export function termoComoRegex(termo: string): string {
+  return `\\y${fold(termo).replace(REGEX_ESPECIAL, '\\$&')}`;
 }
 
 export interface ParsedQuery {
