@@ -72,7 +72,7 @@ setTimeout(() => {
 
 /** Contador do zero até o valor. Sem tween: a curva é a mesma power2.out do export. */
 function contar(el, valor) {
-  if (semAnimacao || valor == null) {
+  if (valor == null) {
     el.textContent = nInt(valor);
     return;
   }
@@ -273,7 +273,9 @@ function pintaNumeros(d) {
   // O contador corre quando a faixa entra na tela — animar fora de vista gasta
   // quadro e o usuário perde justamente o efeito. Mas "0 lotes no índice" numa
   // landing é pior que qualquer animação perdida, então há prazo: passado ele,
-  // os números aparecem prontos, com ou sem observador.
+  // o contador dispara mesmo assim — sempre animando, nunca setando o valor
+  // direto (o usuário cobrava "apareceu tudo de uma vez" quando a faixa ficava
+  // abaixo de 35% da viewport, o que travava o observador e caía no atalho).
   const faixa = $('numeros');
   let correu = false;
   const correr = () => {
@@ -284,12 +286,7 @@ function pintaNumeros(d) {
   };
   const obs = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && correr(), { threshold: 0.35 });
   obs.observe(faixa);
-  setTimeout(() => {
-    if (correu) return;
-    correu = true;
-    obs.disconnect();
-    for (const dt of faixa.querySelectorAll('dt')) dt.textContent = nInt(Number(dt.dataset.valor) || 0);
-  }, 1500);
+  setTimeout(correr, 1500);
 }
 
 function pintaLotes(lotes) {
