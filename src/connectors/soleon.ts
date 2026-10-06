@@ -72,8 +72,8 @@ function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
     const style = $c.find('a[style*="background"]').first().attr('style') ?? '';
     const foto = $c.find('.image-lote img').attr('src') ?? style.match(/url\(['"]?([^'")]+)/)?.[1] ?? null;
 
-    // O <h5> costuma trazer só a CATEGORIA ("CAMINHONETE", "AUTOMÓVEL"); a
-    // descrição é que tem marca, modelo e ano. Usa a descrição quando existir.
+    // A descrição é texto operacional/jurídico em muitos tenants (inclusive
+    // Bidmax); só a use quando o h5 for a categoria genérica do bem.
     const descricao = $c
       .find('div[style*="justify"]')
       .first()
@@ -81,8 +81,11 @@ function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
       .replace(/^\s*Descri[çc][ãa]o\s*:?\s*/i, '')
       .replace(/\s+/g, ' ')
       .trim();
+    const textoCard = $c.text().replace(/\s+/g, ' ').trim();
     const h5 = $c.find('h5').first().text().replace(/\s+/g, ' ').trim();
-    const titulo = (descricao.length > h5.length ? descricao : h5 || descricao).slice(0, 180);
+    const h5Generico = /^(ve[ií]culo|autom[oó]vel|carro|moto|motocicleta|caminhonete|caminh[aã]o|ônibus|onibus|utilit[aá]rio)$/i.test(h5);
+    const marcaModelo = textoCard.match(/Marca\s*\/\s*Modelo\s*:\s*(.+?)(?=\s+(?:Placa|Ano|Cor|Combust[ií]vel)\s*:|$)/i)?.[1]?.trim() ?? '';
+    const titulo = (!h5Generico && h5 ? h5 : marcaModelo || descricao).slice(0, 180);
     const bloco = $c.find('[class*="label_lote"]').first();
     const rotulo = $c.find('.etiqueta').first().text().trim() || $c.find('.my-auto h5').first().text().trim() || null;
     const valorTxt = $c.find('.lance').first().text().trim() || $c.find('.my-auto h4').first().text().trim();
@@ -96,13 +99,15 @@ function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
       status: statusDe(bloco.attr('class') ?? ''),
       rotuloValor: rotulo,
       valor: dinheiro(valorTxt),
-      corpo: $c.text().replace(/\s+/g, ' ').trim(),
+      corpo: textoCard,
     });
   });
   return out;
 }
 
 async function tenants(limitTenants: number): Promise<string[]> {
+  const explicitos = String(process.env.SOLEON_DOMAINS ?? '').trim();
+  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter(Boolean);
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'soleon' AND http_status = 200 AND has_lots IS NOT FALSE
