@@ -76,9 +76,19 @@ export interface LegacyHostDependencies {
   };
 }
 export interface LegacyHostPaths { projectRoot: string; webRoot: string; appDist: string; certDir: string; dataDir: string }
-export interface LegacyHostOptions { env: NodeJS.ProcessEnv; paths: LegacyHostPaths; dependencies: LegacyHostDependencies }
+export interface LegacyHostOptions {
+  env: NodeJS.ProcessEnv;
+  paths: LegacyHostPaths;
+  dependencies: LegacyHostDependencies;
+  /**
+   * Piloto Nest: a rota legada deixa de ser registrada aqui (Fastify não aceita
+   * dois handlers para o mesmo GET) — antibot, 404, erro e cabeçalhos seguem
+   * iguais. Padrão false mantém o contrato atual intacto.
+   */
+  excludeLegacyBrands?: boolean;
+}
 
-export async function createLegacyHost({ env, paths, dependencies }: LegacyHostOptions) {
+export async function createLegacyHost({ env, paths, dependencies, excludeLegacyBrands = false }: LegacyHostOptions) {
   if (!dependencies.oidc.oidcLigado()) throw new Error('OIDC obrigatório para iniciar o host.');
   const proxyTrustConfig = loadProxyTrustConfig(env);
   const app = Fastify({ logger: false, trustProxy: proxyTrustConfig.trustedProxyCidrs.length ? [...proxyTrustConfig.trustedProxyCidrs] : false, bodyLimit: 16 * 1024 });
@@ -1262,7 +1272,7 @@ app.get('/api/alerts', withReadResources(async (req) => {
   const { page, pageSize, offset } = parsePagination((req.query as any)?.page, (req.query as any)?.pageSize);
   const [{ total }] = await query<{ total: number }>('SELECT count(*)::int AS total FROM alerts WHERE owner_id = $1', [eu.userId]);
   const rows = await query(
-    `SELECT a.id, a.label, a.q, a.channels, a.email,
+    `SELECT a.id, a.label, a.q, a.channels, a.email, a.filters,
             (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id) AS total,
             (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id AND NOT h.seen) AS nao_vistos
        FROM alerts a WHERE a.owner_id = $1 ORDER BY a.created_at DESC, a.id DESC LIMIT $2 OFFSET $3`,
@@ -1279,7 +1289,7 @@ app.post('/api/alerts', withReadResources(async (req, reply) => {
   const canais = b.channels ?? ['sino'];
   const [a] = await query<any>(
     `INSERT INTO alerts (label, q, filters, channels, email, owner_id) VALUES ($1,$2,$3,$4,$5,$6)
-     RETURNING id, label, q, channels, email`,
+     RETURNING id, label, q, channels, email, filters`,
     [b.label ?? (q || 'Alerta'), q || null, JSON.stringify(filters), canais, b.email ?? null, (await donoDe(req)).userId],
   );
   /**
@@ -1309,7 +1319,7 @@ app.patch('/api/alerts/:id', withReadResources(async (req, reply) => {
   const dono = (await donoDe(req)).userId;
   const [a] = await query<any>(
     `UPDATE alerts SET label = COALESCE($2, label), channels = $3, email = $4 WHERE id = $1 AND owner_id = $5
-     RETURNING id, label, q, channels, email`,
+     RETURNING id, label, q, channels, email, filters`,
     [alertId, b.label ?? null, canais, b.email ?? null, dono],
   );
   if (!a) return reply.code(404).send({ erro: 'alerta não encontrado' });
@@ -1677,7 +1687,9 @@ app.get('/api/sources', async (req, reply) => {
   return rows;
 });
 
-registerBrandsRoute(app, (sql) => query<{ brand: string; count: number }>(sql), withReadResources, BRAND_LIST);
+if (!excludeLegacyBrands) {
+  registerBrandsRoute(app, (sql) => query<{ brand: string; count: number }>(sql), withReadResources, BRAND_LIST);
+}
 
 /** Espelha como a consulta foi interpretada — usado para depurar a busca. */
 app.get('/api/explain', withReadResources(async (req) => {
@@ -1782,5 +1794,5 @@ const initializeResources = () => initialization ??= (async () => {
   try { await app.close(); } catch (closeError) { throw new AggregateError([error, closeError], 'Host startup and cleanup both failed.'); }
   throw error;
 });
-return { app, initializeResources };
+return { app, initializeResources, legacyBrandsRegistered: !excludeLegacyBrands };
 }

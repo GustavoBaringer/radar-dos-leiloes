@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Search, Trash2 } from 'lucide-react';
 import type { Alerta, Hit } from '@/lib/types';
 import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api } from '@/lib/api';
@@ -13,6 +13,8 @@ interface Props {
   aoAbrirLote: (id: number) => void;
   toast: (t: string) => void;
   aoEditar: (a: Alerta) => void;
+  /** Abre a busca com os filtros do alerta já aplicados. */
+  aoAplicar: (a: Alerta) => void;
   /** Sobe quando um alerta é criado/editado fora daqui, para recarregar. */
   versao: number;
   aoContarNaoVistos: (n: number) => void;
@@ -23,7 +25,7 @@ interface Props {
 }
 
 export function Alertas({
-  aoAbrirLote, toast, aoEditar, versao, aoContarNaoVistos, favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
+  aoAbrirLote, toast, aoEditar, aoAplicar, versao, aoContarNaoVistos, favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
 }: Props) {
   const [alertas, setAlertas] = useState<{ items: Alerta[]; page: number; hasMore: boolean } | null>(null);
   const [hits, setHits] = useState<{ items: Hit[]; page: number; hasMore: boolean } | null>(null);
@@ -132,6 +134,9 @@ export function Alertas({
               <span className="alerta-lotes mono">
                 {a.total} lote{a.total === 1 ? '' : 's'}
               </span>
+              <button className="ico" onClick={() => aoAplicar(a)} aria-label={`Aplicar filtros de ${a.label}`} title="Aplicar filtros na busca">
+                <Search size={15} aria-hidden />
+              </button>
               <button className="ico" onClick={() => aoEditar(a)} aria-label={`Editar ${a.label}`} title="Editar alerta">
                 <Pencil size={15} aria-hidden />
               </button>

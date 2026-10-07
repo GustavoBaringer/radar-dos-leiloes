@@ -7,6 +7,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const testFiles = [
   'scripts/teste-host-contrato.mjs',
   'scripts/teste-bootstrap-lifecycle.mjs',
+  'scripts/teste-nest-brands-contrato.mjs',
 ].map((file) => resolve(projectRoot, file));
 for (const testFile of testFiles) {
   if (!existsSync(testFile)) {

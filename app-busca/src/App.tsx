@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Alerta, Lot, WsMessage } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { applyAccountSummary, beginFavoriteMutation, emptyFavoriteContext, mergeFavoriteResponse, settleFavoriteMutation, summaryIsCurrent, type FavoriteReadStamp } from '@/lib/favorite-context';
-import { type EstadoBusca, ESTADO_VAZIO, estadoDaUrl, urlDoEstado, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
+import { type EstadoBusca, ESTADO_VAZIO, estadoDaUrl, urlDoEstado, urlDoAlerta, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
 import { money } from '@/lib/format';
 import { registrarVisto } from '@/lib/vistos';
 import { idDoSlug, slugDoLote } from '@/lib/slug';
@@ -280,6 +280,15 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   // Vista e ordenação são jeito de VER, não filtro: "Limpar tudo" no mapa voltava para a grade.
   const limpar = useCallback(() => setEstado((e) => ({ ...ESTADO_VAZIO, multi: { ...ESTADO_VAZIO.multi }, vista: e.vista, sort: e.sort })), []);
 
+  /** Alerta vira busca: mesma tela, filtros do alerta já pintados. */
+  const aplicarAlerta = useCallback((a: Alerta) => {
+    const alvo = urlDoAlerta(a);
+    setLote(null);
+    setEstado(estadoDaUrl(alvo.slice(alvo.indexOf('?') + 1)));
+    setAba('busca');
+    if (location.pathname + location.search !== alvo) history.pushState({ aba: 'busca' }, '', alvo);
+  }, []);
+
   /** O alerta guarda a busca da tela: termo + filtros ativos. */
   const abrirDialogoCriar = useCallback(() => {
     const filtros: Record<string, string | boolean> = {};
@@ -397,6 +406,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
           aoAbrirLote={abrirLote}
           toast={toast}
           aoEditar={abrirDialogoEditar}
+          aoAplicar={aplicarAlerta}
           versao={versaoAlertas}
           aoContarNaoVistos={aoContarNaoVistos}
           favoritos={favoritos}

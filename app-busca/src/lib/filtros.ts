@@ -132,6 +132,28 @@ export function urlDoEstado(e: EstadoBusca): string {
   return `/busca${qs ? `?${qs}` : ''}`;
 }
 
+/**
+ * URL de busca equivalente a um alerta salvo. O alerta guarda os mesmos
+ * nomes de filtro da API (abaixo aplica `abaixo=1` na URL, multi vem como
+ * 'SP,RJ'); montamos o EstadoBusca e deixamos urlDoEstado serializar — assim
+ * o link sai canônico, igual ao gerado pela própria tela de busca.
+ */
+export function urlDoAlerta(a: { q: string | null; filters?: Record<string, unknown> | null }): string {
+  const f = a.filters ?? {};
+  const e: EstadoBusca = { ...ESTADO_VAZIO, multi: { ...ESTADO_VAZIO.multi } };
+  e.q = a.q ?? '';
+  for (const id of CAMPOS_FILTRO) if (typeof f[id] === 'string' && f[id]) e[id] = f[id];
+  for (const id of MULTI_IDS) if (typeof f[id] === 'string' && f[id]) e.multi[id] = f[id].split(',').filter(Boolean);
+  const flag = (v: unknown) => v === true || v === 'true' || v === '1';
+  e.onlyWithDate = flag(f.onlyWithDate);
+  e.onlyWithPhoto = flag(f.onlyWithPhoto);
+  e.abaixo = flag(f.belowAppraisal) || flag(f.abaixo);
+  if (f.endsWithin === 'hoje' || f.endsWithin === '7d') e.prazo = f.endsWithin;
+  else if (f.prazo === 'hoje' || f.prazo === '7d') e.prazo = f.prazo;
+  if (typeof f.place === 'string' && f.place) e.local = f.place;
+  return urlDoEstado(e);
+}
+
 /** Caminho inverso: a URL pinta a tela. Vale para link de fora e para o "voltar". */
 export function estadoDaUrl(busca: string): EstadoBusca {
   const p = new URLSearchParams(busca);

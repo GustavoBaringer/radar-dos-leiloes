@@ -101,6 +101,8 @@ export interface Alerta {
   total: number;
   /** Disparos ainda não vistos deste alerta (subconsulta em alert_hits). */
   nao_vistos?: number;
+  /** Filtros salvos no alerta — reaproveitados para abrir a busca. */
+  filters?: Record<string, unknown>;
 }
 
 export interface PaginatedResponse<T> {

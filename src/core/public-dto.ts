@@ -72,6 +72,8 @@ export interface PublicAlert {
   email: string | null;
   total: number;
   nao_vistos: number;
+  /** Filtros salvos no alerta (objeto JSON) — a tela de busca reaproveita. */
+  filters: Record<string, unknown>;
 }
 
 type Row = Record<string, unknown>;
@@ -198,5 +200,8 @@ export function toPublicAlert(value: unknown): PublicAlert {
     email: text(source.email),
     total: number(source.total) ?? 0,
     nao_vistos: number(source.nao_vistos) ?? 0,
+    filters: source.filters && typeof source.filters === 'object' && !Array.isArray(source.filters)
+      ? source.filters as Record<string, unknown>
+      : {},
   };
 }
