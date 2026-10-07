@@ -23,7 +23,9 @@
     "test:antibot:challenge:integration": "node --import tsx --test scripts/teste-antibot-challenge-integration.ts",
     "test:antibot:operations": "node --import tsx --test scripts/teste-antibot-operations.ts",
     "test:security-deps": "node --import tsx scripts/teste-dependencias-seguranca.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:isolated": "node scripts/run-safe-tests.mjs",
+    "test:coverage": "node scripts/run-safe-tests.mjs --coverage"
   },
   "dependencies": {
     "@fastify/formbody": "^9.0.0",

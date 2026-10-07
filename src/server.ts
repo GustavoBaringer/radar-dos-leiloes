@@ -30,6 +30,7 @@ import { garantirUsuario, identidadePorSub, usuarioDoPortao, ANONIMO, type Ident
 import { query } from './core/db.js';
 import { documento, celularValido, emailValido } from './core/cadastro.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';
+import { registerBrandsRoute } from './modules/catalogo/adapters/http/brands.legacy.js';
 import { connectors } from './connectors/index.js';
 import { collectQueue, makeRedis, CHANNEL_UPDATES } from './queue/queues.js';
 import { loadAntibotConfig } from './core/antibot/config.js';
@@ -1544,12 +1545,7 @@ app.get('/api/sources', async (req, reply) => {
   return rows;
 });
 
-app.get('/api/brands', withReadResources(async () => {
-  const rows = await query<{ brand: string; count: number }>(
-    'SELECT brand, COUNT(*)::int AS count FROM lots WHERE brand IS NOT NULL GROUP BY 1 ORDER BY 2 DESC',
-  );
-  return { known: BRAND_LIST, present: rows };
-}));
+registerBrandsRoute(app, (sql) => query<{ brand: string; count: number }>(sql), withReadResources, BRAND_LIST);
 
 /** Espelha como a consulta foi interpretada — usado para depurar a busca. */
 app.get('/api/explain', withReadResources(async (req) => {
