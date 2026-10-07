@@ -4,6 +4,7 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 
 /**
  * LEILOTECH — 1 domínio só (topoleiloes.com.br), catálogo pequeno (~12 lotes
@@ -32,12 +33,9 @@ function leiloeiroDoHost(host: string): string {
 
 async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
-    `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 LIMIT $1`,
-    [limite],
+    `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 ORDER BY domain`,
   );
-  const out = [...DOCX_LEILOTECH_TENANTS];
-  for (const r of rows) if (!out.includes(r.domain)) out.push(r.domain);
-  return out.slice(0, limite);
+  return rotateTenants([...DOCX_LEILOTECH_TENANTS, ...rows.map((r) => r.domain)], limite);
 }
 
 function statusDe(v: string): LotStatus {

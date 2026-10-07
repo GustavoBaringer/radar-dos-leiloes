@@ -5,6 +5,7 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 
 /**
  * Plataforma white-label SOLEON: um conector para N leiloeiros.
@@ -111,11 +112,9 @@ async function tenants(limitTenants: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'soleon' AND http_status = 200 AND has_lots IS NOT FALSE
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC
-      LIMIT $1`,
-    [limitTenants],
+       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain);
+  return rotateTenants(rows.map((r) => r.domain), limitTenants);
 }
 
 /**

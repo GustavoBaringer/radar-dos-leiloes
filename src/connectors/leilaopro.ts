@@ -4,6 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 import * as campos from '../core/campos.js';
 
 /**
@@ -44,12 +45,10 @@ function dinheiro(v?: string | null): number | null {
 async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
-      WHERE platform = 'leilao-pro' AND http_status = 200 AND has_lots IS NOT FALSE
-      ORDER BY auctioneers DESC, domain
-      LIMIT $1`,
-    [limite],
+       WHERE platform = 'leilao-pro' AND http_status = 200 AND has_lots IS NOT FALSE
+       ORDER BY auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain);
+  return rotateTenants(rows.map((r) => r.domain), limite);
 }
 
 /**

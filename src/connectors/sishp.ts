@@ -4,6 +4,7 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 
 /**
  * SISHP — rede de 8 domínios (vinco, sfrazão, wleiloes...) que COMPARTILHA o
@@ -44,10 +45,9 @@ function leiloeiroDoHost(host: string): string {
 
 async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
-    `SELECT domain FROM discovered_sites WHERE platform='sishp' AND http_status=200 ORDER BY auctioneers DESC LIMIT $1`,
-    [limite],
+    `SELECT domain FROM discovered_sites WHERE platform='sishp' AND http_status=200 ORDER BY auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain);
+  return rotateTenants(rows.map((r) => r.domain), limite);
 }
 
 function dinheiro(v?: string | null): number | null {

@@ -190,6 +190,7 @@ const SINAL_LOTE = /(lance\s+(inicial|atual|m[ií]nimo)|aberto\s+para\s+lances|l
  * apontavam para um conector enquanto `platform` continuava null.
  */
 const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
+  'html-agenda': 'htmlagenda',
   soleon: 'soleon',
   'suporte-leiloes': 'suporteleiloes',
   superbid: 'superbid',
@@ -224,6 +225,14 @@ const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
   leilovia: 'leilovia',
   goadopt: null,
 };
+
+export function conectorDaPlataforma(
+  plataformaAtual: string | null | undefined,
+  plataformaDetectada: string | null | undefined,
+): string | null {
+  const plataforma = plataformaAtual ?? plataformaDetectada;
+  return plataforma ? CONECTOR_POR_PLATAFORMA[plataforma] ?? null : null;
+}
 
 async function pega(url: string, timeout = 12000) {
   const res = await request(url, {
@@ -297,7 +306,7 @@ export async function sondarSites(limite = 150, concorrencia = 12): Promise<Resu
         const alvo = fila.shift();
         if (!alvo) break;
         const r = await sondar(alvo.domain);
-        const det = r.platform ? CONECTOR_POR_PLATAFORMA[r.platform] : null;
+        const det = conectorDaPlataforma(antes.get(alvo.domain), r.platform);
         await query(
           `UPDATE discovered_sites
              SET http_status=$2,
@@ -340,7 +349,7 @@ export async function sondarDominios(dominios: string[], concorrencia = 6): Prom
         const domain = fila.shift();
         if (!domain) break;
         const r = await sondar(domain);
-        const det = r.platform ? CONECTOR_POR_PLATAFORMA[r.platform] : null;
+        const det = conectorDaPlataforma(antes.get(domain), r.platform);
         await query(
           `UPDATE discovered_sites
              SET http_status=$2,

@@ -5,6 +5,7 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 
 /**
  * LEILOAR — plataforma white-label (CakePHP), N leiloeiros por 1 conector.
@@ -35,10 +36,9 @@ function leiloeiroDoHost(host: string): string {
 async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leiloar' AND http_status=200 AND has_lots IS NOT FALSE
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC LIMIT $1`,
-    [limite],
+       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain);
+  return rotateTenants(rows.map((r) => r.domain), limite);
 }
 
 const baseConhecida = new Map<string, string>();

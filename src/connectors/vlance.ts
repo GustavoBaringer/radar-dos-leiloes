@@ -4,6 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { rotateTenants } from './tenant-rotation.js';
 
 /**
  * Plataforma **vlance**: o mesmo contrato `/core/api/get-lotes` roda em dezenas
@@ -217,11 +218,9 @@ async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'vlance' AND http_status = 200
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC
-      LIMIT $1`,
-    [limite],
+       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  const lista = rows.map((r) => r.domain);
+  const lista = rotateTenants(rows.map((r) => r.domain), limite);
   // MEDIDO: no Serrano a API mora em `api.`, não no host do site — `www` devolve
   // 404 e o domínio sem prefixo devolve 301. O catálogo tem só os tenants menores,
   // então o maior entra explicitamente.
