@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Alerta, Hit } from '@/lib/types';
+import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api } from '@/lib/api';
 import { LABEL_CANAL } from '@/lib/labels';
 import { dataCurta } from '@/lib/format';
 import { ativarPush, podePush } from '@/lib/push';
 import { LotCard } from '@/components/LotCard';
+import { Paginacao } from '@/components/Paginacao';
 
 interface Props {
   aoAbrirLote: (id: number) => void;
@@ -16,31 +18,42 @@ interface Props {
   aoContarNaoVistos: (n: number) => void;
   favoritos: Set<number>;
   aoFavoritar: (id: number) => void;
+  aoConhecerLotes: (lotes: Hit[], stamp?: FavoriteReadStamp) => void;
+  iniciarLeituraFavoritos: () => FavoriteReadStamp;
 }
 
 export function Alertas({
-  aoAbrirLote, toast, aoEditar, versao, aoContarNaoVistos, favoritos, aoFavoritar,
+  aoAbrirLote, toast, aoEditar, versao, aoContarNaoVistos, favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
 }: Props) {
-  const [alertas, setAlertas] = useState<Alerta[] | null>(null);
-  const [hits, setHits] = useState<Hit[]>([]);
+  const [alertas, setAlertas] = useState<{ items: Alerta[]; page: number; hasMore: boolean } | null>(null);
+  const [hits, setHits] = useState<{ items: Hit[]; page: number; hasMore: boolean } | null>(null);
+  const [alertPage, setAlertPage] = useState(1);
+  const [hitPage, setHitPage] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [apagando, setApagando] = useState<number | null>(null);
   const [permissao, setPermissao] = useState<NotificationPermission | 'indisponivel'>('indisponivel');
 
   async function carregar() {
+    const favoriteStamp = iniciarLeituraFavoritos();
+    setLoading(true);
     try {
-      const [a, h] = await Promise.all([api.alertas(), api.hits()]);
+      const [a, h] = await Promise.all([api.alertas(alertPage), api.hits(hitPage)]);
       setAlertas(a);
       setHits(h);
-      aoContarNaoVistos(h.filter((x) => !x.seen).length);
+      aoConhecerLotes(h.items, favoriteStamp);
       setErro(null);
     } catch (e) {
       setErro(String((e as Error)?.message ?? e));
-    }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => {
     void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versao, alertPage, hitPage]);
+
+  useEffect(() => {
     // Entrar na aba marca os hits como vistos — o sino zera ao ser lido.
     api.marcarHitsVistos().then(() => aoContarNaoVistos(0)).catch(() => {});
     if (typeof Notification !== 'undefined') setPermissao(Notification.permission);
@@ -103,11 +116,12 @@ export function Alertas({
         </div>
       ) : !alertas ? (
         <div className="empty">Carregando…</div>
-      ) : alertas.length === 0 ? (
+      ) : alertas.items.length === 0 ? (
         <div className="empty">Nenhum alerta ainda. Faça uma busca e clique em "Criar alerta".</div>
       ) : (
         <div className="lista-alertas">
-          {alertas.map((a) => (
+          <p className="page-sub">Exibindo {alertas.items.length} alertas nesta página.</p>
+          {alertas.items.map((a) => (
             <div className="alerta-item" key={a.id}>
               <div className="alerta-txt">
                 <b>{a.label}</b>
@@ -131,6 +145,7 @@ export function Alertas({
           ))}
         </div>
       )}
+      {alertas && <Paginacao label="Páginas de alertas" page={alertas.page} hasMore={alertas.hasMore} loading={loading} onPage={setAlertPage} />}
 
       <h2 className="sub-head">Lotes encontrados</h2>
       {/* Com a carga falhando, "Nada encontrado" afirmava um resultado que não existe. */}
@@ -138,7 +153,7 @@ export function Alertas({
         <div className="empty">Os lotes dos alertas também não carregaram.</div>
       ) : !alertas ? (
         <div className="empty">Carregando…</div>
-      ) : hits.length === 0 ? (
+      ) : !hits || hits.items.length === 0 ? (
         <div className="empty">
           Nada encontrado ainda. O alerta dispara quando um lote novo casar com a sua busca.
         </div>
@@ -146,13 +161,13 @@ export function Alertas({
         // Mesmo cartão da listagem, não uma segunda lista: manter dois
         // renderizadores era garantia de divergirem.
         <div className="grade">
-          {hits.map((h) => (
+          {hits.items.map((h) => (
             <LotCard
               key={`${h.id}-${h.hit_em}`}
               lot={h}
               aoAbrir={aoAbrirLote}
               destaque={!h.seen}
-              favoritado={favoritos.has(h.id)}
+              favoritado={typeof h.favorited === 'boolean' ? h.favorited : favoritos.has(h.id) ? true : undefined}
               aoFavoritar={aoFavoritar}
               rodape={
                 <div className="hit-alerta">
@@ -164,6 +179,7 @@ export function Alertas({
           ))}
         </div>
       )}
+      {hits && <Paginacao label="Páginas de lotes encontrados" page={hits.page} hasMore={hits.hasMore} loading={loading} onPage={setHitPage} />}
     </main>
   );
 }

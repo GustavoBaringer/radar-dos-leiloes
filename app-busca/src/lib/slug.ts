@@ -1,9 +1,8 @@
 import type { Lot } from './types';
 
 /**
- * URL amigável do lote. O id vai no FIM de propósito: o texto é enfeite e muda
- * quando a fonte corrige o título, mas o link antigo precisa continuar abrindo
- * o mesmo lote. Resolver por texto exigiria coluna de slug e histórico dela.
+ * URL amigável do lote. Aceitamos apenas o slug canônico atual; o ID identifica
+ * o lote, mas não é uma autorização para acessá-lo.
  */
 export function slugDoLote(lot: Pick<Lot, 'brand' | 'model' | 'year_model' | 'doc_type' | 'source_id' | 'title_display' | 'title_raw' | 'id'>): string {
   const base =
@@ -23,6 +22,8 @@ export function slugDoLote(lot: Pick<Lot, 'brand' | 'model' | 'year_model' | 'do
 }
 
 export function idDoSlug(slug: string): number | null {
-  const m = /-(\d+)$/.exec(String(slug ?? ''));
-  return m ? Number(m[1]) : null;
+  const m = /^[a-z0-9]+(?:-[a-z0-9]+)*-([1-9]\d*)$/.exec(String(slug ?? ''));
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }

@@ -7,6 +7,12 @@
 - Filtro global anti-colecionáveis fica em `src/core/normalize.ts` / `upsertLots()`.
 - Vault do Obsidian desta máquina: `C:/Users/gustavo.pereira01/ObsidianVault` (WSL: `/mnt/c/Users/gustavo.pereira01/ObsidianVault`).
 
+## Restrição de segurança desta máquina
+- Esta é uma máquina empresarial: **não instalar, iniciar ou conectar túneis de rede/publicação** (Cloudflare Tunnel/cloudflared, ngrok, SSH forwarding, VPN/túnel equivalente). O usuário determinou isso para evitar alertas do SOC da rede.
+- Não expor a aplicação local à internet nem automatizar conexão de túnel em scripts de desenvolvimento/teste.
+- Configuração de publicação pode ser preparada somente como documentação/template para uma VPS futura; **nunca ativá-la nesta máquina**.
+- Para testes novos, usar loopback (`127.0.0.1`/`localhost`) e preservar os processos existentes.
+
 ## Comandos úteis
 - Typecheck: `npm run typecheck`.
 - Coleta: `node --env-file=.env --import tsx scripts/collect.ts <connector> <limit>`.

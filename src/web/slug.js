@@ -1,7 +1,6 @@
 /**
- * URL amigável do lote. O id vai no fim de propósito: o texto do slug é enfeite
- * e muda quando a fonte corrige o título, mas o link antigo precisa continuar
- * abrindo o mesmo lote. Resolver por texto exigiria coluna de slug e histórico.
+ * URL amigável do lote. Aceitamos apenas o slug canônico atual; o ID identifica
+ * o lote, mas não é uma autorização para acessá-lo.
  */
 function slugDoLote(lot) {
   const base = [lot.brand, lot.model, lot.year_model, lot.doc_type, lot.source_id]
@@ -19,6 +18,8 @@ function slugDoLote(lot) {
 }
 
 const idDoSlug = (slug) => {
-  const m = /-(\d+)$/.exec(String(slug ?? ''));
-  return m ? Number(m[1]) : null;
+  const m = /^[a-z0-9]+(?:-[a-z0-9]+)*-([1-9]\d*)$/.exec(String(slug ?? ''));
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 };

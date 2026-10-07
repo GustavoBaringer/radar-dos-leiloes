@@ -1,7 +1,5 @@
 import Fastify from 'fastify';
-import { request as undiciRequest } from 'undici';
-import sharp from 'sharp';
-import { insecureDispatcher, HOSTS_TLS_INCOMPLETO } from './connectors/http.js';
+import { HOSTS_TLS_INCOMPLETO } from './connectors/http.js';
 import { Agent } from 'undici';
 
 /**
@@ -23,6 +21,7 @@ import { join, dirname } from 'node:path';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { searchLots, searchLotsMapa, getLot, getStats, ensureSources } from './core/repo.js';
+import { idDoSlug, slugDoLote } from './core/slug.js';
 import { VENCIDO } from './core/encerramento.js';
 import { contarCasaveis, avaliarAlertas } from './core/alerts.js';
 import { criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
@@ -33,6 +32,23 @@ import { documento, celularValido, emailValido } from './core/cadastro.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';
 import { connectors } from './connectors/index.js';
 import { collectQueue, makeRedis, CHANNEL_UPDATES } from './queue/queues.js';
+import { loadAntibotConfig } from './core/antibot/config.js';
+import { loadChallengeConfig, createChallengeService } from './core/antibot/challenge.js';
+import { createDefaultObserver } from './core/antibot/engine.js';
+import { loadProxyTrustConfig } from './core/antibot/proxy.js';
+import { composeOperationsObserver, createOperationsTelemetry } from './core/antibot/telemetry.js';
+import { registerAntibot } from './core/antibot/fastify.js';
+import { normalizeClientIp } from './core/antibot/ip.js';
+import { createResourcePool, tryAcquireImageJob, tryAcquireResource } from './core/antibot/resources.js';
+import { createImageService } from './core/antibot/images.js';
+import { createWsProtection } from './core/antibot/ws.js';
+import { admitWsUpgrade, attachWsUpgrade } from './core/antibot/ws-admission.js';
+import { createHttpResourceGuard, sendRateLimit, sendUnauthenticated } from './core/antibot/http-resources.js';
+import { parseSearchInput, safePositiveId, ValidateAlertInput, BoundedInputError, parsePagination, paginateRows } from './core/request-bounds.js';
+import { toPublicAlert, toPublicFavorite, toPublicHit, toPublicLot } from './core/public-dto.js';
+import { buildMePayload, createAccountContext, VISIBLE_FAVORITE_PREDICATE } from './core/account-context.js';
+import { ROUTE_POLICIES, registerChallengeHttp, registerOperationsMetricsRoute } from './core/antibot/routes.js';
+import { PAGINA_LOGIN } from './web/login-template.js';
 
 /**
  * HTTPS opcional, com certificado próprio.
@@ -44,31 +60,80 @@ import { collectQueue, makeRedis, CHANNEL_UPDATES } from './queue/queues.js';
 const certDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'certs');
 const temCert = existsSync(join(certDir, 'local.crt')) && existsSync(join(certDir, 'local.key'));
 
-const app = Fastify({ logger: false });
+const proxyTrustConfig = loadProxyTrustConfig(process.env);
+const antibotConfig = loadAntibotConfig(process.env);
+const challengeConfig = loadChallengeConfig(process.env);
+const telemetry = createOperationsTelemetry({
+  antibotMode: antibotConfig.mode,
+  challengeMode: challengeConfig.mode,
+  proxyTrustConfigured: proxyTrustConfig.trustedProxyCidrs.length > 0,
+});
+const app = Fastify({
+  logger: false,
+  trustProxy: proxyTrustConfig.trustedProxyCidrs.length ? [...proxyTrustConfig.trustedProxyCidrs] : false,
+  bodyLimit: 16 * 1024,
+});
 if (!oidcLigado()) {
   console.error('FATAL: OIDC desligado. Configure OIDC_ISSUER/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET no ambiente.');
   process.exit(1);
 }
 await app.register(formbody);
+await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+
+// Install IP checks before session authentication, and account checks after it.
+const antibot = await registerAntibot(app, {
+  config: antibotConfig,
+  observer: composeOperationsObserver(telemetry, createDefaultObserver()),
+});
+const challengeService = createChallengeService({ config: challengeConfig });
+const challengeObservedService = {
+  clientConfig: () => challengeService.clientConfig(),
+  async verify(action: Parameters<typeof challengeService.verify>[0], token: unknown) {
+    const startedAt = performance.now();
+    try {
+      const result = await challengeService.verify(action, token);
+      telemetry.observeChallenge(action, result.ok ? 'success' : result.kind, performance.now() - startedAt);
+      return result;
+    } catch (error) {
+      telemetry.observeChallenge(action, 'error', performance.now() - startedAt);
+      throw error;
+    }
+  },
+};
+registerChallengeHttp(app, challengeObservedService, (reply, file) => reply.sendFile(file));
+registerOperationsMetricsRoute(app, telemetry);
+const wsProtection = createWsProtection({
+  mode: antibotConfig.mode,
+  environment: antibotConfig.environment,
+  redisUrl: antibotConfig.mode === 'off' ? undefined : antibotConfig.redisUrl,
+  onEvent: (event, outcome) => telemetry.observeWs(event, outcome),
+});
+app.addHook('onClose', async () => wsProtection.close());
+const httpResources = createHttpResourceGuard({
+  tryAcquireResource,
+  acquireDegradedWork: () => antibot.acquireDegradedWork(),
+});
+const accountContext = createAccountContext(query);
+const withReadResources = (handler: (req: any, reply: any) => unknown | Promise<unknown>) =>
+  async (req: any, reply: any) => httpResources.run(reply, () => handler(req, reply));
+async function awaitQueries<T extends readonly unknown[]>(queries: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+  const settled = await Promise.allSettled(queries);
+  const failure = settled.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+  if (failure) throw failure.reason;
+  return settled.map((item) => (item as PromiseFulfilledResult<unknown>).value) as unknown as T;
+}
 
 /**
- * IP do cliente para rate-limit e prova de consentimento. Por padrão usa o IP
- * da CONEXÃO (não forjável). O código antigo confiava em `x-forwarded-for` cru,
- * que o cliente envia à vontade e zerava o freio de força bruta. Atrás de CDN,
- * defina IP_HEADER (ex.: cf-connecting-ip) E trave a origem para só aceitar o CDN.
+ * IP da conexão, sem aceitar cabeçalho encaminhado do cliente.
  */
-const IP_HEADER = process.env.IP_HEADER?.trim().toLowerCase();
-const ipDoCliente = (req: any): string => {
-  const h = IP_HEADER ? req.headers[IP_HEADER] : undefined;
-  return String((Array.isArray(h) ? h[0] : h) ?? req.ip ?? '').split(',')[0].trim() || 'desconhecido';
-};
+const ipDoCliente = (req: any): string => normalizeClientIp(String(req.ip ?? ''));
 
 /**
  * Portão de senha. Só liga quando APP_SENHA existe no ambiente, então o uso
  * local continua sem atrito. O service worker do push precisa passar livre:
  * o navegador o busca sem cookie de sessão e um 302 ali quebraria o push.
  */
-const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/login-hero.jpg']);
+const LIVRES = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/login-hero.jpg', '/api/security-config', '/challenge.js', '/challenge.css', '/landing-antibot.js', '/landing-antibot.html']);
 
 /**
  * Superfície pública.
@@ -88,11 +153,16 @@ const PUBLICAS = new Set([
   '/api/vitrine',
   '/api/espera',
   '/api/cadastro',
+  '/api/security-config',
   // O proxy de imagem é o que desenha as fotos da vitrine. Sem ele a landing
   // pública abre com oito placeholders.
   '/api/img',
   '/landing.css',
   '/landing.js',
+  '/challenge.js',
+  '/challenge.css',
+  '/landing-antibot.js',
+  '/landing-antibot.html',
   '/cartao.js',
   '/cartao.css',
   '/slug.js',
@@ -108,108 +178,7 @@ const PUBLICAS = new Set([
 const ehPublica = (caminho: string) =>
   PUBLICAS.has(caminho) || caminho.startsWith('/assets/');
 
-const PAGINA_LOGIN = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Radar de Leilões</title>
-<meta name="robots" content="noindex">
-<style>
-:root{color-scheme:dark;--brand:#2f6bff;--brand2:#5b8cff;--signal:#22d3ee;--ink:#eef3ff;--soft:#93a4c4;--line:#1e2941;--panel:#0b1120}
-*{box-sizing:border-box}
-body{margin:0;min-height:100svh;background:#05070f;color:var(--ink);
-     font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-.split{display:flex;min-height:100svh}
-.hero{position:relative;flex:1 1 75%;overflow:hidden;background:#05070f}
-.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:46% 55%}
-.hero::after{content:"";position:absolute;inset:0;
-     background:linear-gradient(90deg,rgba(5,7,15,.55),rgba(5,7,15,.1) 40%,rgba(5,7,15,.55)),
-     radial-gradient(60rem 40rem at 20% 10%,rgba(47,107,255,.25),transparent 60%)}
-.hero-txt{position:absolute;left:clamp(28px,5vw,72px);bottom:clamp(28px,6vw,72px);right:48px;z-index:1}
-.hero-txt h2{font-size:clamp(24px,2.6vw,40px);line-height:1.1;letter-spacing:-.02em;margin:0;max-width:18ch;text-wrap:balance}
-.hero-txt p{margin:14px 0 0;color:var(--soft);font-size:clamp(14px,1.1vw,17px);max-width:40ch}
-.hero-txt em{font-style:normal;background:linear-gradient(110deg,var(--brand2),var(--signal));-webkit-background-clip:text;background-clip:text;color:transparent}
-.painel{flex:0 0 clamp(360px,35%,560px);display:flex;flex-direction:column;justify-content:center;
-     padding:clamp(28px,4vw,56px);border-left:1px solid var(--line);background:rgba(8,12,24,.65);backdrop-filter:blur(8px)}
-.marca{display:flex;align-items:center;gap:10px;margin-bottom:28px}
-.marca .mk{position:relative;display:grid;place-items:center;width:34px;height:34px;overflow:hidden;border-radius:11px;
-     border:1px solid rgba(47,107,255,.4);background:linear-gradient(150deg,#13224a,#070c18)}
-.marca .mk i{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 10px 2px rgba(34,211,238,.8)}
-.marca b{font-size:16px;letter-spacing:-.2px}
-form{width:100%}
-h1{font-size:22px;letter-spacing:-.02em;margin:0 0 4px}
-.sub{margin:0 0 22px;color:var(--soft);font-size:13.5px}
-label{display:block;font-size:12px;color:var(--soft);margin:14px 0 6px;letter-spacing:.02em}
-input{width:100%;background:#05070f;border:1px solid var(--line);border-radius:10px;
-      padding:12px 13px;color:var(--ink);font-size:16px}
-input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
-button[type=submit]{width:100%;margin-top:22px;background:var(--brand);border:0;border-radius:10px;padding:13px;
-       color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
-button[type=submit]:hover{background:var(--brand2)}
-.erro{background:#3a1b1b;border:1px solid #7a3030;color:#ffb4b4;border-radius:9px;
-      padding:10px 12px;font-size:13px;margin-bottom:6px}
-.rodape{margin-top:20px;font-size:11.5px;color:#5f6b7a}
-.ou{display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:#5f6b7a;font-size:11px}
-.ou::before,.ou::after{content:"";flex:1;height:1px;background:var(--line)}
-.oidc{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;background:var(--brand);border:0;cursor:pointer;
-      border-radius:10px;padding:14px;color:#fff;font-size:15px;font-weight:700;transition:background .15s}
-.oidc:hover{background:var(--brand2)}
-/* Transição intro -> formulário: crossfade/slide. O item oculto sai do fluxo
-   (absolute) para o visível definir a altura — senão o rodapé ficava longe. */
-.auth{position:relative}
-.auth>.intro,.auth>.formlogin{transition:opacity .3s ease,transform .32s cubic-bezier(.22,.68,.3,1),visibility 0s linear .32s}
-.auth[data-aberto="0"]>.intro,.auth[data-aberto="1"]>.formlogin{opacity:1;visibility:visible;transform:none;transition:opacity .3s ease,transform .32s cubic-bezier(.22,.68,.3,1)}
-.auth[data-aberto="1"]>.intro,.auth[data-aberto="0"]>.formlogin{position:absolute;top:0;left:0;right:0;opacity:0;visibility:hidden}
-.auth[data-aberto="1"]>.intro{transform:translateX(-14px)}
-.auth[data-aberto="0"]>.formlogin{transform:translateX(14px)}
-.voltar{margin-top:14px;width:100%;background:transparent;border:0;color:var(--soft);font:inherit;font-size:13px;cursor:pointer;padding:6px}
-.voltar:hover{color:var(--ink)}
-@media (max-width:860px){
-  .split{flex-direction:column}
-  .hero{flex:0 0 34vh;min-height:200px}
-  .hero img{object-position:50% 42%}
-  .painel{flex:1 1 auto;border-left:0;border-top:1px solid var(--line)}
-}
-</style></head><body>
-<div class="split">
-  <aside class="hero" aria-hidden="true">
-    <img src="/login-hero.jpg" alt="">
-    <div class="hero-txt">
-      <h2>Imóveis e veículos em leilão. <em>Num só lugar</em></h2>
-      <p>Entre para buscar, salvar alertas e acompanhar seus lotes.</p>
-    </div>
-  </aside>
-  <main class="painel">
-    <div class="marca"><span class="mk"><i></i></span><b>Radar de Leilões</b></div>
-    <div class="auth" data-aberto="__ABERTO__" id="auth">
-      <div class="intro">
-        <h1>Entrar</h1>
-        <p class="sub">Acesse a sua conta do Radar.</p>
-        <button type="button" class="oidc" id="abrir">Entrar com conta Radar</button>
-      </div>
-      <form class="formlogin" method="POST" action="/api/login">
-        <h1>Entrar</h1>
-        <p class="sub">Use seu usuário e senha da conta Radar.</p>
-        <input type="hidden" name="de" value="__DE__">
-        __ERRO__
-        <label for="usuario">Usuário</label>
-        <input id="usuario" name="usuario" autocomplete="username" autocapitalize="none" required>
-        <label for="senha">Senha</label>
-        <input id="senha" name="senha" type="password" autocomplete="current-password" required>
-        <button type="submit">Entrar</button>
-        <button type="button" class="voltar" id="voltar">← Voltar</button>
-      </form>
-    </div>
-    <p class="rodape">Acesso restrito</p>
-  </main>
-</div>
-<script>
-(function(){
-  var auth=document.getElementById('auth');
-  var abre=function(v){auth.dataset.aberto=v?'1':'0';if(v){var u=document.getElementById('usuario');if(u)setTimeout(function(){u.focus()},320)}};
-  document.getElementById('abrir').addEventListener('click',function(){abre(true)});
-  document.getElementById('voltar').addEventListener('click',function(){abre(false)});
-  // Já aberto por erro do POST: foca o campo sem reanimar.
-  if(auth.dataset.aberto==='1'){var u=document.getElementById('usuario');if(u)u.focus()}
-})();
-</script></body></html>`;
+
 
 // Login e gate de acesso são exclusivamente pelo Keycloak (OIDC). Sem OIDC
 // configurado, o site roda aberto — modo de desenvolvimento local.
@@ -250,7 +219,10 @@ if (oidcLigado()) {
       const eu = sessao.sub ? await identidadePorSub(sessao.sub) : await usuarioDoPortao(sessao.papel);
       // Sessão assinada apontando para usuário que não existe mais (conta
       // apagada no provedor): melhor mandar para o login do que seguir sem dono.
-      if (!eu) return reply.code(302).header('location', '/login').send();
+      if (!eu) {
+        if (caminho.startsWith('/api/') || caminho === '/ws') return reply.code(401).header('Cache-Control', 'no-store').send({ error: 'unauthorized' });
+        return reply.code(302).header('location', '/login').send();
+      }
       (req as any).eu = eu;
       (req as any).papel = eu.papel;
       return;
@@ -282,7 +254,8 @@ if (oidcLigado()) {
     if (!v.startsWith('/') || v.startsWith('//')) return DESTINO_PADRAO;
     const caminho = v.split('?')[0];
     const permitido =
-      caminho === '/' || APP_ROTAS.includes(caminho) || /^\/lote\/(?:[a-z0-9]+-)?\d+$/i.test(caminho);
+      caminho === '/' || APP_ROTAS.includes(caminho) ||
+      (caminho.startsWith('/lote/') && idDoSlug(caminho.slice(6)) !== null);
     return permitido ? v : DESTINO_PADRAO;
   }
   const escapaAtributo = (v: string) =>
@@ -298,9 +271,9 @@ if (oidcLigado()) {
   /**
    * Login por provedor OIDC (Keycloak).
    *
-    * O `redirect_uri` é derivado do host da requisição, não de variável fixa,
-    * para funcionar em desenvolvimento e produção. O provedor só aceita URIs
-    * que estão na allowlist do client, então
+   * O `redirect_uri` é derivado do host da requisição, não de variável fixa,
+   * para funcionar em desenvolvimento e produção. O provedor só aceita URIs
+   * que estão na allowlist do client, então
    * derivar do host não abre redirecionamento arbitrário.
    */
   const uriDeCallback = (req: any) => {
@@ -387,8 +360,8 @@ if (oidcLigado()) {
    * Freio de força bruta no login.
    *
    * Medido antes disto: dez senhas erradas seguidas devolviam dez 401 sem
-    * atraso nenhum. Com uma senha só protegendo o índice inteiro, isso é o furo
-    * mais explorável que existia.
+   * atraso nenhum. Com uma senha só protegendo o índice inteiro, isso é o furo
+   * mais explorável que existia.
    *
    * O contador vive no Redis, não em memória: o processo reinicia a cada edição
    * de código, e um contador que zera no restart não é freio.
@@ -481,7 +454,6 @@ if (oidcLigado()) {
 }
 const here = dirname(fileURLToPath(import.meta.url));
 
-await app.register(websocket);
 await app.register(fastifyStatic, { root: join(here, 'web'), prefix: '/', index: false });
 
 /**
@@ -500,7 +472,7 @@ if (temAppNovo) {
     prefix: '/assets/',
     decorateReply: false,
     // Nome com hash do conteúdo: mudou o arquivo, mudou a URL. Pode cachear
-    // forte, e é o que tira a Cloudflare do caminho crítico do deploy.
+    // forte, sem depender do cache/CDN para servir a versão correta no deploy.
     maxAge: '1y',
     immutable: true,
   });
@@ -581,7 +553,7 @@ const enviaPagina = (arquivo: string) => async (_req: any, reply: any) =>
 // morta e foi removida em 17/09; quem chegava nela ia para a busca de qualquer
 // jeito, e mantê-la significava um terceiro renderizador de cartão para
 // divergir dos outros dois.
-app.get('/', enviaPagina('landing.html'));
+app.get('/', enviaPagina('landing-antibot.html'));
 /**
  * As rotas de navegação devolvem a casca do app React, que decide a tela pelo
  * caminho. Sem o build não há tela: é erro de implantação, e 503 com a causa
@@ -607,26 +579,33 @@ const dinheiroBR = (v: number | null) =>
  * resultado do fetch. Por isso o título, a descrição e o JSON-LD do lote são
  * injetados no servidor. O conteúdo visível continua sendo montado no cliente.
  */
-app.get('/lote/:slug', async (req, reply) => {
+app.get<{ Params: { slug: string } }>('/lote/:slug', withReadResources(async (req, reply) => {
   if (!temAppNovo) {
     return reply.code(503).type('text/plain; charset=utf-8').send('app-busca não construído');
   }
-  const id = Number(/(?:^|-)(\d+)$/.exec(String((req.params as any).slug ?? ''))?.[1]);
+  const slug = req.params.slug;
+  const id = idDoSlug(slug);
   // O SSR renderiza a gaveta inteira, então precisa do MESMO objeto que
   // /api/lot/:id entrega — o SELECT curto de antes só servia para montar meta,
   // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
   // divergir campo a campo.
-  const lot = Number.isSafeInteger(id) ? await getLot(id) : null;
+  const lot = id !== null ? await getLot(id) : null;
   // Nunca entrega a casca do SPA numa URL inválida: ela poderia montar a busca
   // mantendo `/lote/<id>` na barra. O destino canônico de rota/lote inexistente
   // é a busca.
   if (!lot) return reply.code(302).header('location', '/busca').header('cache-control', 'no-store').send();
+  // Não revelar o lote nem sua URL correta quando só o ID corresponde.
+  if (slug !== slugDoLote(lot)) {
+    return reply.code(404).header('cache-control', 'no-store').send({ erro: 'Lote não encontrado.' });
+  }
+  const eu = await donoDe(req);
+  const lotForRender = (await accountContext.decorateLots(eu.userId, [toPublicLot(lot)]))[0];
   const html = cascaDoApp();
 
-  const titulo = lot.title_display || lot.title_raw;
-  const local = [lot.city, lot.state].filter(Boolean).join('/');
-  const lance = dinheiroBR(lot.current_bid ?? lot.min_bid);
-  const bem = lot.asset_type === 'imovel' ? 'Imóvel' : 'Veículo';
+  const titulo = lotForRender.title_display || lotForRender.title_raw;
+  const local = [lotForRender.city, lotForRender.state].filter(Boolean).join('/');
+  const lance = dinheiroBR(lotForRender.current_bid ?? lotForRender.min_bid);
+  const bem = lotForRender.asset_type === 'imovel' ? 'Imóvel' : 'Veículo';
   const descricao = [
     `${bem} em leilão: ${titulo}.`,
     local ? `Local: ${local}.` : '',
@@ -634,7 +613,7 @@ app.get('/lote/:slug', async (req, reply) => {
     'Prazo e link direto para o site do leiloeiro no Radar de Leilões.',
   ].filter(Boolean).join(' ');
   const origem = origemDe(req);
-  const foto = lot.photos?.[0] ? `${origem}/api/img?u=${encodeURIComponent(lot.photos[0])}&w=1200` : '';
+  const foto = lotForRender.photos?.[0] ? `${origem}/api/img?u=${encodeURIComponent(lotForRender.photos[0])}&w=1200` : '';
 
   const jsonld = {
     '@context': 'https://schema.org',
@@ -642,23 +621,23 @@ app.get('/lote/:slug', async (req, reply) => {
     name: titulo,
     description: descricao,
     ...(foto ? { image: foto } : {}),
-    ...(lot.brand ? { brand: { '@type': 'Brand', name: lot.brand } } : {}),
+    ...(lotForRender.brand ? { brand: { '@type': 'Brand', name: lotForRender.brand } } : {}),
     offers: {
       '@type': 'Offer',
       priceCurrency: 'BRL',
       // O lance corrente é o preço que existe hoje; a avaliação não é preço de venda.
-      ...(lot.current_bid ?? lot.min_bid ? { price: String(lot.current_bid ?? lot.min_bid) } : {}),
+       ...(lotForRender.current_bid ?? lotForRender.min_bid ? { price: String(lotForRender.current_bid ?? lotForRender.min_bid) } : {}),
       availability: 'https://schema.org/InStock',
-      url: `${origem}/lote/${(req.params as any).slug}`,
-      ...(lot.auction_end_utc ? { priceValidUntil: new Date(lot.auction_end_utc).toISOString().slice(0, 10) } : {}),
-      ...(lot.auctioneer_name ? { seller: { '@type': 'Organization', name: lot.auctioneer_name } } : {}),
+      url: `${origem}/lote/${slug}`,
+       ...(lotForRender.auction_end_utc ? { priceValidUntil: new Date(lotForRender.auction_end_utc).toISOString().slice(0, 10) } : {}),
+       ...(lotForRender.auctioneer_name ? { seller: { '@type': 'Organization', name: lotForRender.auctioneer_name } } : {}),
     },
   };
 
   const cabeca = [
     `<title>${esc(titulo)}${local ? ` em ${esc(local)}` : ''} — leilão | Radar de Leilões</title>`,
     `<meta name="description" content="${esc(descricao)}">`,
-    `<link rel="canonical" href="${origem}/lote/${esc((req.params as any).slug)}">`,
+    `<link rel="canonical" href="${origem}/lote/${esc(slug)}">`,
     `<meta property="og:type" content="product">`,
     `<meta property="og:title" content="${esc(titulo)}">`,
     `<meta property="og:description" content="${esc(descricao)}">`,
@@ -694,8 +673,7 @@ app.get('/lote/:slug', async (req, reply) => {
   // O HTML vai para qualquer um (a página do lote é pública). O cliente não usa
   // `raw` nem os campos de verificação, então eles não vão no __LOTE__: `raw`
   // carrega nº de processo judicial de algumas fontes, e o resto é interno.
-  const loteSeguro: any = { ...lot };
-  for (const k of ['raw', 'search_text', 'verify_result', 'verify_fails', 'verified_at', 'closed_reason', 'closed_at']) delete loteSeguro[k];
+  const loteSeguro = lotForRender;
   const render = temAppNovo ? await carregarRender() : null;
   if (render) {
     try {
@@ -730,8 +708,8 @@ app.get('/lote/:slug', async (req, reply) => {
     }
   }
 
-  return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(corpo);
-});
+  return reply.type('text/html; charset=utf-8').header('cache-control', 'private, no-store').send(corpo);
+}));
 
 /**
  * Sem robots.txt e sitemap o buscador só acha o que estiver linkado na home —
@@ -794,8 +772,8 @@ const COLUNAS_CARTAO = `id, title_raw, title_display, source_id, asset_type, veh
             CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0
                  THEN ROUND((1 - COALESCE(current_bid,min_bid)/appraisal) * 100) ELSE NULL END AS discount_pct`;
 
-app.get('/api/home', async () => {
-  const [recentes, leiloeiros] = await Promise.all([
+app.get('/api/home', withReadResources(async (req) => {
+  const [recentes, leiloeiros] = await awaitQueries([
     query(
       `SELECT ${COLUNAS_CARTAO}
          FROM lots
@@ -811,7 +789,7 @@ app.get('/api/home', async () => {
         GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
     ),
   ]);
-  const [[{ fontes, total, totalLeiloeiros }], ufs] = await Promise.all([
+  const [[{ fontes, total, totalLeiloeiros }], ufs] = await awaitQueries([
     query<{ fontes: number; total: number; totalLeiloeiros: number }>(
       `SELECT count(DISTINCT source_id)::int AS fontes, count(*)::int AS total,
               (SELECT count(*)::int FROM auctioneers WHERE domain IS NOT NULL AND domain <> '') AS "totalLeiloeiros"
@@ -823,8 +801,10 @@ app.get('/api/home', async () => {
         GROUP BY 1 ORDER BY 2 DESC`,
     ),
   ]);
-  return { recentes, leiloeiros, fontes, total, totalLeiloeiros, ufs };
-});
+  const eu = await donoDe(req);
+  const recentesPublicos = await accountContext.decorateLots(eu.userId, recentes.map(toPublicLot));
+  return { recentes: recentesPublicos, leiloeiros, fontes, total, totalLeiloeiros, ufs };
+}));
 
 /**
  * Conteúdo da landing de venda numa chamada só.
@@ -843,7 +823,7 @@ app.get('/api/home', async () => {
  */
 const TETO_VITRINE = 8;
 
-app.get('/api/vitrine', async () => {
+app.get('/api/vitrine', withReadResources(async () => {
   const ABERTOS = `status IN ('aberto','agendado','sem_data')`;
   // As categorias são as do índice de verdade, com a mesma query que o filtro da
   // busca usa — assim o número do cartão e o resultado do clique não divergem.
@@ -856,7 +836,7 @@ app.get('/api/vitrine', async () => {
     { id: 'imovel', label: 'Imóveis', icone: 'casa', query: 'assetType=imovel', onde: `asset_type='imovel'` },
   ];
 
-  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora, fotosCat, heroes] = await Promise.all([
+  const [agregados, ufs, categorias, leiloeiros, recentes, encerrando, porHora, fotosCat, heroes] = await awaitQueries([
     query<any>(
       `SELECT count(DISTINCT source_id)::int AS fontes,
               count(*)::int AS total,
@@ -941,8 +921,8 @@ app.get('/api/vitrine', async () => {
     ...agregados[0],
     ufs,
     leiloeiros,
-    recentes,
-    heroes,
+    recentes: recentes.map(toPublicLot),
+    heroes: heroes.map(toPublicLot),
     categorias: CATEGORIAS.map(({ onde: _onde, ...rest }, i) => ({
       ...rest,
       total: c[`c${i}`] ?? 0,
@@ -951,14 +931,14 @@ app.get('/api/vitrine', async () => {
     encerrando: encerrando.map((l: any) => ({ ...l, quando: emQuanto(l.auction_end_utc) })),
     porHora: porHora.map((r: any) => r.total),
   };
-});
+}));
 
 /**
  * Lista de espera. O e-mail é de terceiro, então o registro guarda junto o texto
  * de consentimento que a pessoa leu — sem isso não há como demonstrar a base
  * legal depois, e o dado vira passivo em vez de ativo.
  */
-app.post('/api/espera', async (req, reply) => {
+app.post('/api/espera', withReadResources(async (req, reply) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const email = String(b.email ?? '').trim().slice(0, 160);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
@@ -978,7 +958,7 @@ app.post('/api/espera', async (req, reply) => {
   // lista. ON CONFLICT DO NOTHING cuida do reenvio sem duplicar.
   void linhas;
   return { ok: true };
-});
+}));
 
 /**
  * Cadastro de assinante. Cartão não passa por aqui: o pagamento é na fatura
@@ -1004,13 +984,13 @@ async function cadastroLimitado(ip: string): Promise<boolean> {
   }
 }
 
-app.post('/api/cadastro', async (req, reply) => {
+app.post('/api/cadastro', withReadResources(async (req, reply) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
   const falha = (campo: string, erro: string) => reply.code(400).send({ erro, campo });
 
   const ip = ipDoCliente(req);
-  if (await cadastroLimitado(ip)) {
+  if (antibotConfig.mode !== 'enforce' && await cadastroLimitado(ip)) {
     return reply.code(429).send({ erro: 'Muitas tentativas. Tente novamente em alguns minutos.' });
   }
 
@@ -1049,12 +1029,14 @@ app.post('/api/cadastro', async (req, reply) => {
     proximoPasso: 'pagamento',
     mensagem: 'Cadastro recebido. Em seguida você recebe o link para ativar a assinatura de R$ 69,90/mês.',
   });
-});
+}));
 
-app.get('/api/home/leiloeiro', async (req, reply) => {
-  const nome = String((req.query as any)?.nome ?? '').trim();
+app.get('/api/home/leiloeiro', withReadResources(async (req, reply) => {
+  const queryInput = req.query as Record<string, unknown>;
+  if (Array.isArray(queryInput.nome) || (queryInput.nome !== undefined && typeof queryInput.nome !== 'string')) return reply.code(400).send({ error: 'nome inválido' });
+  const nome = String(queryInput.nome ?? '').trim();
   if (!nome) return reply.code(400).send({ erro: 'informe o leiloeiro' });
-  return query(
+  const lots = await query(
     `SELECT ${COLUNAS_CARTAO}
        FROM lots
       WHERE auctioneer_name = $1 AND status IN ('aberto','agendado')
@@ -1062,79 +1044,40 @@ app.get('/api/home/leiloeiro', async (req, reply) => {
       LIMIT 24`,
     [nome],
   );
-});
+  const eu = await donoDe(req);
+  return accountContext.decorateLots(eu.userId, lots.map(toPublicLot));
+}));
 
-const num = (v: unknown) => (v === undefined || v === '' ? undefined : Number(v));
-
-app.get('/api/search', async (req) => {
-  const q = req.query as Record<string, string>;
-  return searchLots({
-    q: q.q,
-    // Os filtros de lista chegam como 'SP,RJ' da tela de seleção múltipla;
-    // o repositório já aceita CSV, array ou valor único.
-    uf: q.uf,
-    status: q.status,
-    sellerType: q.sellerType,
-    sourceId: q.sourceId,
-    auctioneer: q.auctioneer,
-    seller: q.seller,
-    assetType: q.assetType,
-    vehicleType: q.vehicleType,
-    propertyType: q.propertyType,
-    city: q.city,
-    priceMin: num(q.priceMin),
-    priceMax: num(q.priceMax),
-    yearMin: num(q.yearMin),
-    yearMax: num(q.yearMax),
-    place: q.place,
-    onlyWithDate: q.onlyWithDate === 'true',
-    onlyWithPhoto: q.onlyWithPhoto === 'true',
-    docType: q.docType,
-    endsWithin: q.endsWithin as any,
-    belowAppraisal: q.belowAppraisal === 'true',
-    includeEnded: q.includeEnded === 'true',
-    sort: (q.sort as any) ?? 'ending_soon',
-    page: num(q.page) ?? 1,
-    pageSize: num(q.pageSize) ?? 24,
-  });
-});
+app.get('/api/search', withReadResources(async (req) => {
+  const result = await searchLots(parseSearchInput(req.query));
+  const eu = await donoDe(req);
+  return { ...result, items: await accountContext.decorateLots(eu.userId, result.items) };
+}));
 
 /**
  * Malha territorial do IBGE, servida daqui porque o desenho do mapa não pode
  * depender de terceiro no caminho crítico. `uf` sempre; `municipio` só quando o
  * usuário aproxima, e são 2,3 MB — nunca no carregamento inicial.
  */
-app.get('/api/malha/:tipo', async (req, reply) => {
+app.get('/api/malha/:tipo', withReadResources(async (req, reply) => {
   const { tipo } = req.params as { tipo: string };
   if (tipo !== 'uf' && tipo !== 'municipio') return reply.code(404).send({ error: 'malha desconhecida' });
   const arq = join(here, '..', 'data', 'geo', `${tipo}.json`);
   if (!existsSync(arq)) return reply.code(404).send({ error: 'malha ausente' });
   return reply.header('cache-control', 'public, max-age=604800, immutable').type('application/json').send(readFileSync(arq));
-});
+}));
 
-app.get('/api/search/mapa', async (req) => {
-  const q = req.query as Record<string, string>;
-  return searchLotsMapa({
-    q: q.q, uf: q.uf, status: q.status, sellerType: q.sellerType, sourceId: q.sourceId,
-    auctioneer: q.auctioneer, seller: q.seller, assetType: q.assetType,
-    vehicleType: q.vehicleType, propertyType: q.propertyType, city: q.city,
-    priceMin: num(q.priceMin), priceMax: num(q.priceMax),
-    yearMin: num(q.yearMin), yearMax: num(q.yearMax),
-    onlyWithDate: q.onlyWithDate === 'true', onlyWithPhoto: q.onlyWithPhoto === 'true',
-    docType: q.docType, endsWithin: q.endsWithin as any, belowAppraisal: q.belowAppraisal === 'true',
-    includeEnded: q.includeEnded === 'true',
-  });
-});
+app.get('/api/search/mapa', withReadResources(async (req) => searchLotsMapa(parseSearchInput(req.query))));
 
-app.get('/api/lot/:id', async (req, reply) => {
+app.get('/api/lot/:id', withReadResources(async (req, reply) => {
   const { id } = req.params as { id: string };
-  // Sem isso o Postgres estourava 500 vazando código interno (22P02).
-  // isSafeInteger além do regex: id só-dígitos porém gigante estourava o bigint (22003).
-  if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id))) return reply.code(400).send({ error: 'id inválido' });
-  const lot = await getLot(Number(id));
+  const lotId = safePositiveId(id);
+  if (lotId === null) return reply.code(400).send({ error: 'id inválido' });
+  const lot = await getLot(lotId);
   if (!lot) return reply.code(404).send({ error: 'lote não encontrado' });
-  return lot;
-});
+  const eu = await donoDe(req);
+  return (await accountContext.decorateLots(eu.userId, [lot]))[0];
+}));
 
 /**
  * O dono da requisição. Sem portão de senha o modo local segue aberto e tudo
@@ -1147,20 +1090,24 @@ const donoDe = async (req: any): Promise<Identidade> =>
 const papelDe = (req: any): Papel => (oidcLigado() ? ((req.papel as Papel) ?? 'comum') : 'admin');
 
 /** O cliente não decide o próprio papel: ele pergunta, e a resposta vem do cookie assinado. */
-app.get('/api/me', async (req) => {
+app.get('/api/me', withReadResources(async (req) => {
   const eu = await donoDe(req);
   // `logado` é a verdade única para o cliente decidir menu/sessão. Com OIDC,
   // logado = tem conta (id>0). Sem OIDC (dev) todo visitante é admin, então o
   // "Sair" marca radar_saiu e o dev consegue ver o estado deslogado.
   const saiuEmDev = !oidcLigado() && /(?:^|;)\s*radar_saiu=1/.test(String(req.headers.cookie ?? ''));
   const logado = oidcLigado() ? eu.userId > 0 : !saiuEmDev;
-  return {
+  const identity = {
     papel: papelDe(req),
     oidc: oidcLigado(),
     logado,
-    conta: { id: logado ? eu.userId : 0, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null },
+    conta: {
+      id: logado ? eu.userId : 0, email: eu.email, nome: eu.nome, porProvedor: eu.sub != null,
+    },
   };
-});
+  const summary = logado ? await accountContext.summarize(eu.userId) : { favoriteCount: 0, unreadAlertCount: 0 };
+  return buildMePayload(identity, summary);
+}));
 
 /**
  * Esconder a aba no cliente não protege nada: basta abrir o DevTools e chamar a
@@ -1177,31 +1124,30 @@ app.get('/api/stats', async (req, reply) => (exigeAdmin(req, reply) ? undefined 
 
 /* ---------------- alertas ---------------- */
 
-app.get('/api/alerts', async (req) => {
+app.get('/api/alerts', withReadResources(async (req) => {
   const eu = await donoDe(req);
-  return query(
-    `SELECT a.*,
+  const { page, pageSize, offset } = parsePagination((req.query as any)?.page, (req.query as any)?.pageSize);
+  const [{ total }] = await query<{ total: number }>('SELECT count(*)::int AS total FROM alerts WHERE owner_id = $1', [eu.userId]);
+  const rows = await query(
+    `SELECT a.id, a.label, a.q, a.channels, a.email,
             (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id) AS total,
             (SELECT count(*)::int FROM alert_hits h WHERE h.alert_id = a.id AND NOT h.seen) AS nao_vistos
-       FROM alerts a WHERE a.owner_id = $1 ORDER BY a.created_at DESC`,
-    [eu.userId],
+       FROM alerts a WHERE a.owner_id = $1 ORDER BY a.created_at DESC, a.id DESC LIMIT $2 OFFSET $3`,
+    [eu.userId, pageSize + 1, offset],
   );
-});
+  const pageRows = paginateRows(rows, page, pageSize);
+  return { ...pageRows, items: pageRows.items.map(toPublicAlert), total };
+}));
 
-app.post('/api/alerts', async (req, reply) => {
-  const b = (req.body ?? {}) as any;
-  const q = String(b.q ?? '').trim();
+app.post('/api/alerts', withReadResources(async (req, reply) => {
+  const b = ValidateAlertInput(req.body);
+  const q = b.q?.trim() ?? '';
   const filters = b.filters ?? {};
-  if (!q && !Object.keys(filters).length) {
-    return reply.code(400).send({ erro: 'informe um termo de busca ou ao menos um filtro' });
-  }
-  const canais: string[] = Array.isArray(b.channels) && b.channels.length ? b.channels : ['sino'];
-  if (canais.includes('email') && !b.email) {
-    return reply.code(400).send({ erro: 'canal e-mail exige um endereço' });
-  }
+  const canais = b.channels ?? ['sino'];
   const [a] = await query<any>(
-    `INSERT INTO alerts (label, q, filters, channels, email, owner_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [String(b.label ?? q ?? 'Alerta').slice(0, 80), q || null, JSON.stringify(filters), canais, b.email ?? null, (await donoDe(req)).userId],
+    `INSERT INTO alerts (label, q, filters, channels, email, owner_id) VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING id, label, q, channels, email`,
+    [b.label ?? (q || 'Alerta'), q || null, JSON.stringify(filters), canais, b.email ?? null, (await donoDe(req)).userId],
   );
   /**
    * NÃO casa contra o passado.
@@ -1217,50 +1163,56 @@ app.post('/api/alerts', async (req, reply) => {
    * DEPOIS do alerta existir.
    */
   const casaveis = await contarCasaveis(a);
-  return { ...a, casados_agora: 0, no_indice_agora: casaveis };
-});
+  return { ...toPublicAlert({ ...a, total: 0, nao_vistos: 0 }), casados_agora: 0, no_indice_agora: casaveis };
+}));
 
-app.patch('/api/alerts/:id', async (req, reply) => {
+app.patch('/api/alerts/:id', withReadResources(async (req, reply) => {
   const { id } = req.params as { id: string };
-  if (!/^\d+$/.test(id)) return reply.code(400).send({ erro: 'id inválido' });
-  const b = (req.body ?? {}) as any;
-  const canais: string[] = Array.isArray(b.channels) && b.channels.length ? b.channels : ['sino'];
-  if (canais.includes('email') && !b.email) {
-    return reply.code(400).send({ erro: 'canal e-mail exige um endereço' });
-  }
+  const alertId = safePositiveId(id);
+  if (alertId === null) return reply.code(400).send({ erro: 'id inválido' });
+  const b = ValidateAlertInput(req.body, { edit: true });
+  const canais = b.channels ?? ['sino'];
   // owner_id no WHERE, igual ao DELETE: sem ele, qualquer um editava o alerta de outro.
   const dono = (await donoDe(req)).userId;
   const [a] = await query<any>(
-    `UPDATE alerts SET label = COALESCE($2, label), channels = $3, email = $4 WHERE id = $1 AND owner_id = $5 RETURNING *`,
-    [Number(id), b.label ? String(b.label).slice(0, 80) : null, canais, b.email ?? null, dono],
+    `UPDATE alerts SET label = COALESCE($2, label), channels = $3, email = $4 WHERE id = $1 AND owner_id = $5
+     RETURNING id, label, q, channels, email`,
+    [alertId, b.label ?? null, canais, b.email ?? null, dono],
   );
   if (!a) return reply.code(404).send({ erro: 'alerta não encontrado' });
-  return a;
-});
+  const [{ total = 0, nao_vistos = 0 } = {}] = await query<any>(`SELECT count(*)::int AS total, count(*) FILTER (WHERE NOT seen)::int AS nao_vistos FROM alert_hits WHERE alert_id = $1`, [alertId]);
+  return toPublicAlert({ ...a, total, nao_vistos });
+}));
 
-app.delete('/api/alerts/:id', async (req, reply) => {
+app.delete('/api/alerts/:id', withReadResources(async (req, reply) => {
   const { id } = req.params as { id: string };
-  if (!/^\d+$/.test(id)) return reply.code(400).send({ erro: 'id inválido' });
+  const alertId = safePositiveId(id);
+  if (alertId === null) return reply.code(400).send({ erro: 'id inválido' });
   // O dono entra no WHERE, não numa checagem antes: com a verificação separada
   // existe a janela entre ler e apagar, e um 404 honesto é melhor que um 403
   // que confirma a existência do alerta de outra pessoa.
   const apagados = await query<{ id: string }>(
     'DELETE FROM alerts WHERE id = $1 AND owner_id = $2 RETURNING id',
-    [Number(id), (await donoDe(req)).userId],
+    [alertId, (await donoDe(req)).userId],
   );
   if (!apagados.length) return reply.code(404).send({ erro: 'alerta não encontrado' });
   return { ok: true };
-});
+}));
 
-app.get('/api/alerts/hits', async (req) => {
-  const { naoVistos } = req.query as { naoVistos?: string };
+app.get('/api/alerts/hits', withReadResources(async (req) => {
+  const queryInput = req.query as Record<string, unknown>;
+  if (Object.keys(queryInput).some((key) => !['naoVistos', 'page', 'pageSize'].includes(key))) throw new BoundedInputError('Parâmetro de consulta inválido.');
+  if (Array.isArray(queryInput.naoVistos) || (queryInput.naoVistos !== undefined && !['true', 'false'].includes(String(queryInput.naoVistos)))) throw new BoundedInputError('Parâmetro naoVistos inválido.');
+  const { naoVistos } = queryInput as { naoVistos?: string };
+  const { page, pageSize, offset } = parsePagination(queryInput.page, queryInput.pageSize);
+  const ownerId = (await donoDe(req)).userId;
   // Agrupado por LOTE, não por disparo: cinco alertas parecidos apontando para
   // o mesmo carro viravam cinco linhas idênticas na tela.
   //
   // As colunas são as MESMAS da busca de propósito: a tela de alertas desenha
   // o lote com o mesmo componente de card da listagem, e um SELECT reduzido
   // aqui significaria um segundo card, com campos faltando, para manter.
-  return query(`
+  const base = `
     SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
            l.current_bid, l.min_bid, l.appraisal, l.bid_suspect, l.asset_type, l.vehicle_type,
@@ -1276,7 +1228,7 @@ app.get('/api/alerts/hits', async (req) => {
       FROM alert_hits h
       JOIN alerts a ON a.id = h.alert_id
       JOIN lots l ON l.id = h.lot_id
-     WHERE a.owner_id = $1 ${naoVistos === 'true' ? 'AND NOT h.seen' : ''}
+      WHERE a.owner_id = $1 ${naoVistos === 'true' ? 'AND NOT h.seen' : ''}
        -- Lote encerrado sai da aba: avisar sobre leilão que já passou é ruído.
        -- Filtra na LEITURA e não apaga o hit, porque lote reabre na 2ª praça
        -- com o mesmo id, e aí ele volta a aparecer sozinho.
@@ -1286,25 +1238,31 @@ app.get('/api/alerts/hits', async (req) => {
        -- uma segunda copia da regra para divergir. (Sem crase: isto esta
        -- dentro de um template literal e a crase fecharia a string.)
        AND NOT ${VENCIDO}
-     GROUP BY l.id
-     ORDER BY max(h.created_at) DESC LIMIT 60`, [(await donoDe(req)).userId]);
-});
+      GROUP BY l.id`;
+  const [{ total }] = await query<{ total: number }>(`SELECT count(*)::int AS total FROM (${base}) grouped`, [ownerId]);
+  const rows = await query(`${base} ORDER BY max(h.created_at) DESC, l.id DESC LIMIT $2 OFFSET $3`, [ownerId, pageSize + 1, offset]);
+  const pageRows = paginateRows(rows, page, pageSize);
+  const lots = pageRows.items.map(toPublicHit);
+  return { ...pageRows, items: await accountContext.decorateLots(ownerId, lots), total };
+}));
 
-app.post('/api/alerts/hits/seen', async (req) => {
+app.post('/api/alerts/hits/seen', withReadResources(async (req) => {
   await query(
     `UPDATE alert_hits SET seen = TRUE
       WHERE NOT seen AND alert_id IN (SELECT id FROM alerts WHERE owner_id = $1)`,
     [(await donoDe(req)).userId],
   );
   return { ok: true };
-});
+}));
 
 /* ---------------- favoritos ---------------- */
 
-app.get('/api/favorites', async (req) => {
+app.get('/api/favorites', withReadResources(async (req) => {
+  const { page, pageSize, offset } = parsePagination((req.query as any)?.page, (req.query as any)?.pageSize);
+  const ownerId = (await donoDe(req)).userId;
   // Mesma lista de colunas do card de alertas: um SELECT reduzido aqui
   // significaria um segundo card, com campos faltando, para manter.
-  return query(`
+  const base = `
     SELECT l.id, l.source_id, l.lot_url, l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
            l.current_bid, l.min_bid, l.appraisal, l.bid_suspect, l.asset_type, l.vehicle_type,
@@ -1316,31 +1274,37 @@ app.get('/api/favorites', async (req) => {
            f.created_at AS favorited_em
       FROM favorites f
       JOIN lots l ON l.id = f.lot_id
-     WHERE f.owner_id = $1
+      WHERE f.owner_id = $1
        -- Mesmo filtro do /api/alerts/hits: lote encerrado some da lista sem
        -- apagar a linha de favoritos, porque reabre com o mesmo id na 2ª praça.
        AND l.status NOT IN ('encerrado','vendido')
-       AND NOT ${VENCIDO}
-     ORDER BY f.created_at DESC`, [(await donoDe(req)).userId]);
-});
+        AND NOT ${VENCIDO}`;
+  const [{ total }] = await query<{ total: number }>(`SELECT count(*)::int AS total FROM favorites f JOIN lots l ON l.id = f.lot_id WHERE f.owner_id = $1 AND ${VISIBLE_FAVORITE_PREDICATE}`, [ownerId]);
+  const rows = await query(`${base} ORDER BY f.created_at DESC, l.id DESC LIMIT $2 OFFSET $3`, [ownerId, pageSize + 1, offset]);
+  const pageRows = paginateRows(rows, page, pageSize);
+  return { ...pageRows, items: pageRows.items.map((row) => ({ ...toPublicFavorite(row), favorited: true })), total };
+}));
 
-app.post('/api/favorites', async (req, reply) => {
-  const { lotId } = (req.body ?? {}) as { lotId?: number };
-  if (!Number.isInteger(lotId)) return reply.code(400).send({ erro: 'lotId inválido' });
+app.post('/api/favorites', withReadResources(async (req, reply) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || !('lotId' in body)) return reply.code(400).send({ erro: 'corpo inválido' });
+  const lotId = safePositiveId((body as any).lotId, { allowString: false });
+  if (lotId === null) return reply.code(400).send({ erro: 'lotId inválido' });
   const eu = await donoDe(req);
   await query(
     'INSERT INTO favorites (owner_id, lot_id) VALUES ($1,$2) ON CONFLICT (owner_id, lot_id) DO NOTHING',
     [eu.userId, lotId],
   );
   return { ok: true };
-});
+}));
 
-app.delete('/api/favorites/:lotId', async (req, reply) => {
+app.delete('/api/favorites/:lotId', withReadResources(async (req, reply) => {
   const { lotId } = req.params as { lotId: string };
-  if (!/^\d+$/.test(lotId)) return reply.code(400).send({ erro: 'lotId inválido' });
-  await query('DELETE FROM favorites WHERE owner_id = $1 AND lot_id = $2', [(await donoDe(req)).userId, Number(lotId)]);
+  const id = safePositiveId(lotId);
+  if (id === null) return reply.code(400).send({ erro: 'lotId inválido' });
+  await query('DELETE FROM favorites WHERE owner_id = $1 AND lot_id = $2', [(await donoDe(req)).userId, id]);
   return { ok: true };
-});
+}));
 
 /* ---------------- push ---------------- */
 
@@ -1361,19 +1325,26 @@ app.get('/ca.crt', async (_req, reply) => {
     .send(readFileSync(arq));
 });
 
-app.post('/api/push/subscribe', async (req, reply) => {
-  const b = (req.body ?? {}) as any;
-  if (!b?.endpoint || !b?.keys?.p256dh || !b?.keys?.auth) {
+app.post('/api/push/subscribe', withReadResources(async (req, reply) => {
+  const b = req.body as any;
+  if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => !['endpoint', 'keys'].includes(k))
+    || typeof b.endpoint !== 'string' || b.endpoint.length > 4096 || !b.keys || typeof b.keys !== 'object' || Array.isArray(b.keys)
+    || Object.keys(b.keys).some((k) => !['p256dh', 'auth'].includes(k))
+    || typeof b.keys.p256dh !== 'string' || b.keys.p256dh.length > 512 || !/^[A-Za-z0-9_+\/-]+=*$/.test(b.keys.p256dh)
+    || typeof b.keys.auth !== 'string' || b.keys.auth.length > 512 || !/^[A-Za-z0-9_+\/-]+=*$/.test(b.keys.auth)) {
     return reply.code(400).send({ erro: 'inscrição inválida' });
   }
+  let endpoint: URL;
+  try { endpoint = new URL(b.endpoint); } catch { return reply.code(400).send({ erro: 'inscrição inválida' }); }
+  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) return reply.code(400).send({ erro: 'inscrição inválida' });
   await query(
     `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent, owner_id) VALUES ($1,$2,$3,$4,$5)
      ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, failures=0,
                                           owner_id=EXCLUDED.owner_id`,
-    [b.endpoint, b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] ?? '').slice(0, 200), (await donoDe(req)).userId],
+    [endpoint.toString(), b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] ?? '').slice(0, 200), (await donoDe(req)).userId],
   );
   return { ok: true };
-});
+}));
 
 /**
  * Proxy de imagem. As fotos do Kuss respondem 200 no curl mas o navegador
@@ -1418,6 +1389,16 @@ function hostPermitido(host: string): boolean {
 const IMG_REFERER = new Map<string, string>([
   ['s3-sa-east-1.amazonaws.com', 'https://www.valland.com.br/'],
 ]);
+
+const imageService = createImageService({
+  safeHostChecker: (url) => url.protocol === 'https:' && hostPermitido(url.host),
+  refererForHost: (host) => IMG_REFERER.get(host) ?? `https://${host}/`,
+  dispatcherForHost: (host) => HOSTS_TLS_INCOMPLETO.has(host) ? insecureSemRedirect() : undefined,
+  tryAcquireResource,
+  tryAcquireImageJob,
+  acquireDegradedWork: () => antibot.acquireDegradedWork(),
+});
+app.addHook('onClose', async () => imageService.close());
 
 /**
  * A lista de hosts de imagem é DERIVADA dos dados, não escrita à mão.
@@ -1512,116 +1493,45 @@ function cachePut(key: string, type: string, buf: Buffer) {
 }
 
 app.get('/api/img', async (req, reply) => {
-  const { u, w } = req.query as { u?: string; w?: string };
-  // Math.max(120, ...) nunca devolve 0, então `|| null` jamais disparava e a
-  // requisição SEM largura acabava redimensionada para 120px. Só há largura
-  // quando o cliente pede uma largura.
-  // Arredonda para poucos degraus: 40 larguras distintas viravam 40 cache-miss,
-  // 40 fetches no leiloeiro e 40 re-encodes. Com degraus, repete o mesmo cache.
-  const DEGRAUS = [120, 240, 360, 480, 640, 800, 1000, 1200, 1600];
-  const pedido = Number(w);
-  const width = w && Number.isFinite(pedido) && pedido > 0 ? (DEGRAUS.find((d) => d >= pedido) ?? 1600) : null;
-  if (!u) return sendNopic(reply, 'sem-url');
-  let target: URL;
+  const query = req.query as Record<string, unknown>;
+  if (Array.isArray(query.u) || Array.isArray(query.w) || (query.u !== undefined && typeof query.u !== 'string')
+    || (query.w !== undefined && typeof query.w !== 'string')) {
+    return reply.code(400).header('Cache-Control', 'no-store').send({ error: 'invalid_image_request' });
+  }
+  const u = query.u as string | undefined;
+  const w = query.w as string | undefined;
+  if (u && u.length > 4096) return reply.code(400).header('Cache-Control', 'no-store').send({ error: 'invalid_image_request' });
+  if (w !== undefined && !/^\d+$/.test(w)) return reply.code(400).header('Cache-Control', 'no-store').send({ error: 'invalid_image_request' });
+  const controller = new AbortController();
+  const onAborted = () => controller.abort();
+  const onClose = () => { if (!reply.raw.writableFinished) controller.abort(); };
+  req.raw.once('aborted', onAborted);
+  reply.raw.once('close', onClose);
   try {
-    target = new URL(u);
-  } catch {
-    return sendNopic(reply, 'url-invalida');
-  }
-  if (target.protocol !== 'https:' || !IMG_HOSTS.has(target.host)) {
-    return sendNopic(reply, 'host-nao-permitido');
-  }
-  const key = `${target.href}|${width ?? 'full'}`;
-  const cached = cacheGet(key);
-  if (cached) {
-    return reply
-      .header('content-type', cached.type)
-      .header('cache-control', 'public, max-age=86400')
-      .header('x-cache', 'hit')
-      .send(cached.buf);
-  }
-
-  try {
-    // Redirect manual: muita foto só responde depois do 301 (vialeiloes.com.br
-    // manda para www, superbid idem). undiciRequest não segue e devolvia 301,
-    // que o filtro de baixo tratava como falha e devolvia nopic.
-    let alvo = target;
-    let res: Awaited<ReturnType<typeof undiciRequest>> | null = null;
-    for (let salto = 0; salto <= 3; salto++) {
-      res = await undiciRequest(alvo.href, {
-        headers: {
-          'user-agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
-          // Hotlink: alguns buckets (o cdnhp da Hasta Pública, por exemplo) só
-          // entregam a imagem quando o referer é o site que a publica; sem isso
-          // respondem 403. Mandamos o próprio site da fonte como referer.
-          referer: IMG_REFERER.get(alvo.host) ?? `${alvo.origin}/`,
-        },
-        headersTimeout: 15000,
-        bodyTimeout: 15000,
-        // Sem isto o undici segue o redirect sozinho e a allowlist de host não é
-        // conferida no salto; o laço abaixo faz o salto à mão para poder validar.
-        ...(HOSTS_TLS_INCOMPLETO.has(alvo.host) ? { dispatcher: insecureSemRedirect() } : {}),
-      });
-      const redireciona = res.statusCode >= 300 && res.statusCode < 400 && res.headers.location;
-      if (!redireciona) break;
-      res.body.dump();
-      const proximo = new URL(String(res.headers.location), alvo.href);
-      // Redirect para fora da allowlist (ou para http) não é seguido: sairia do
-      // contrato de "só buscamos hosts de imagem conhecidos".
-      if (proximo.protocol !== 'https:' || !hostPermitido(proximo.host)) {
-        return sendNopic(reply, 'redirect-fora-da-lista');
-      }
-      if (salto === 3) return sendNopic(reply, 'redirects-demais');
-      alvo = proximo;
-      res = null;
+    const outcome = await imageService.get(u, w === undefined ? null : Number(w), {
+      signal: controller.signal,
+      checkMiss: async () => {
+        const decision = await antibot.check('imageMiss', { type: 'ip', value: ipDoCliente(req) });
+        return { allowed: decision.allowed, retryAfterSeconds: decision.retryAfterSeconds };
+      },
+    });
+    if (outcome.kind === 'image') {
+      return reply.header('content-type', outcome.contentType).header('cache-control', 'public, max-age=86400')
+        .header('x-cache', outcome.cache).send(outcome.buffer);
     }
-    if (!res) return sendNopic(reply, 'redirect-sem-destino');
-    // Teto de tamanho: foto de leilão não passa de poucos MB; acima disso é abuso.
-    const MAX_IMG_BYTES = 20 * 1024 * 1024;
-    const declarado = String(res.headers['content-type'] ?? '');
-    if (res.statusCode !== 200) {
-      res.body.dump();
-      return sendNopic(reply, `origem-${res.statusCode}`);
+    if (outcome.kind === 'quota') {
+      return reply.code(429).header('Retry-After', String(outcome.retryAfterSeconds)).header('Cache-Control', 'no-store')
+        .send({ error: 'rate_limited', retryAfterSeconds: outcome.retryAfterSeconds });
     }
-    if (Number(res.headers['content-length']) > MAX_IMG_BYTES) {
-      res.body.dump();
-      return sendNopic(reply, 'imagem-grande-demais');
+    if (outcome.kind === 'overload') {
+      return reply.code(503).header('Retry-After', '1').header('Cache-Control', 'no-store')
+        .send({ error: 'overloaded', retryAfterSeconds: 1 });
     }
-    const original = Buffer.from(await res.body.arrayBuffer());
-    if (original.byteLength > MAX_IMG_BYTES) return sendNopic(reply, 'imagem-grande-demais');
-
-    // Tipo vem do cabeçalho quando ele é de imagem raster; senão, dos magic bytes.
-    // Alguns endures (lucianleiloes) respondem 200 sem content-type nenhum — o header
-    // sozinho rejeitaria JPEG válido e o cartão cairia no placeholder.
-    // SVG nunca entra: é imagem mas carrega script e sairia do nosso domínio como XSS.
-    let type = declarado.startsWith('image/') && !declarado.includes('svg') ? declarado : '';
-    if (!type) type = tipoPorMagicBytes(original);
-    if (!type) return sendNopic(reply, 'tipo-desconhecido');
-
-    let out = original;
-    let outType = type;
-    if (width) {
-      try {
-        // withoutEnlargement: foto pequena (o Leilo publica 460px) não é
-        // esticada — subir resolução só inventaria borrão e peso.
-        out = await sharp(original)
-          .resize({ width, withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toBuffer();
-        outType = 'image/webp';
-      } catch {
-        // Imagem que o sharp não decodifica chega truncada da origem (PNG sem IEND): repassada,
-        // o navegador desenha só a metade de cima e não dispara o fallback de erro do cartão.
-        return sendNopic(reply, 'imagem-corrompida');
-      }
-    }
-    cachePut(key, outType, out);
-    reply.header('content-type', outType).header('cache-control', 'public, max-age=86400').header('x-cache', 'miss');
-    return reply.send(out);
-  } catch (err: any) {
-    return sendNopic(reply, `erro-rede:${String(err?.code ?? err?.message ?? 'desconhecido').slice(0, 40)}`);
+    if (outcome.kind === 'source-failure') return reply.code(503).header('Cache-Control', 'no-store').send();
+    return sendNopic(reply, outcome.reason);
+  } finally {
+    req.raw.off('aborted', onAborted);
+    reply.raw.off('close', onClose);
   }
 });
 
@@ -1634,18 +1544,18 @@ app.get('/api/sources', async (req, reply) => {
   return rows;
 });
 
-app.get('/api/brands', async () => {
+app.get('/api/brands', withReadResources(async () => {
   const rows = await query<{ brand: string; count: number }>(
     'SELECT brand, COUNT(*)::int AS count FROM lots WHERE brand IS NOT NULL GROUP BY 1 ORDER BY 2 DESC',
   );
   return { known: BRAND_LIST, present: rows };
-});
+}));
 
 /** Espelha como a consulta foi interpretada — usado para depurar a busca. */
-app.get('/api/explain', async (req) => {
-  const { q } = req.query as { q?: string };
-  return parseQuery(q ?? '');
-});
+app.get('/api/explain', withReadResources(async (req) => {
+  const parsed = parseSearchInput(req.query);
+  return parseQuery(parsed.q ?? '');
+}));
 
 app.post('/api/collect', async (req, reply) => {
   if (exigeAdmin(req, reply)) return;
@@ -1673,6 +1583,7 @@ app.post('/api/collect', async (req, reply) => {
  */
 const clients = new Map<any, { papel: Papel; userId: number }>();
 const subscriber = makeRedis();
+app.addHook('onClose', async () => { try { await subscriber.quit(); } catch { subscriber.disconnect(); } });
 await subscriber.subscribe(CHANNEL_UPDATES);
 subscriber.on('message', (_channel, message) => {
   let dados: any;
@@ -1689,11 +1600,10 @@ subscriber.on('message', (_channel, message) => {
     for (const [socket, info] of clients) {
       const meus = oidcLigado() ? limpos.filter((_: any, i: number) => dados.disparos[i].ownerId === info.userId) : limpos;
       if (!meus.length) continue;
-      try {
-        socket.send(JSON.stringify({ type: 'alertas', disparos: meus }));
-      } catch {
-        clients.delete(socket);
-      }
+      if (!wsProtection.safeSend(socket, JSON.stringify({ type: 'alertas', disparos: meus.map((d: any) => ({
+        alertId: d.alertId, label: d.label, lotId: d.lotId, title: d.title,
+        lotUrl: d.lotUrl, bid: d.bid, source: d.source,
+      })) }))) clients.delete(socket);
     }
     return;
   }
@@ -1703,19 +1613,24 @@ subscriber.on('message', (_channel, message) => {
   const soAdmin = ['collect', 'encerrados'].includes(dados?.type);
   for (const [socket, info] of clients) {
     if (soAdmin && info.papel !== 'admin') continue;
-    try {
-      socket.send(message);
-    } catch {
-      clients.delete(socket);
-    }
+    if (!wsProtection.safeSend(socket, message)) clients.delete(socket);
   }
 });
 
-app.get('/ws', { websocket: true }, (socket, req) => {
+app.get('/ws', {
+  websocket: true,
+  preHandler: async (req, reply) => admitWsUpgrade(req as any, reply, {
+    protection: wsProtection,
+    checkAccount: (id) => antibot.check('wsAccount', { type: 'account', id }),
+    sendUnauthenticated,
+    sendRateLimit,
+  }),
+}, (socket, req) => {
   // O hook já validou o cookie antes do upgrade; guardamos papel e dono para
   // o filtro de alerta por usuário no envio.
+  if (!attachWsUpgrade(req as any, socket, wsProtection)) return;
   clients.set(socket, { papel: papelDe(req), userId: Number((req as any).eu?.userId) || 0 });
-  socket.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
+  wsProtection.safeSend(socket, JSON.stringify({ type: 'hello', ts: Date.now() }));
   socket.on('close', () => clients.delete(socket));
   socket.on('error', () => clients.delete(socket));
 });
@@ -1753,6 +1668,7 @@ app.setErrorHandler((err: any, req, reply) => {
 // script/style com 'unsafe-inline' porque há script inline (window.__LOTE__,
 // JSON-LD) e estilos inline; o ganho real fica em object-src/frame-ancestors/
 // connect-src, que barram clickjacking, plugin e exfiltração para fora do site.
+const challengeOrigins = challengeService.clientConfig().enabled ? ' https://challenges.cloudflare.com' : '';
 const CSP = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -1761,8 +1677,9 @@ const CSP = [
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "script-src 'self' 'unsafe-inline'",
-  "connect-src 'self' ws: wss:",
+  `script-src 'self' 'unsafe-inline'${challengeOrigins}`,
+  ...(challengeService.clientConfig().enabled ? ['frame-src https://challenges.cloudflare.com'] : []),
+  `connect-src 'self' ws: wss:${challengeOrigins}`,
 ].join('; ');
 app.addHook('onSend', async (req, reply, payload) => {
   reply.header('x-content-type-options', 'nosniff');
@@ -1770,14 +1687,19 @@ app.addHook('onSend', async (req, reply, payload) => {
   reply.header('referrer-policy', 'strict-origin-when-cross-origin');
   reply.header('content-security-policy', CSP);
   // Resposta com dado de conta não pode ficar em cache compartilhado.
-  if (req.url.startsWith('/api/me')) reply.header('cache-control', 'no-store');
+  const routeTemplate = req.routeOptions.url;
+  const policy = routeTemplate ? ROUTE_POLICIES[`${req.method.toUpperCase()} ${routeTemplate}`] : undefined;
+  if (req.url.startsWith('/api/me') || policy === 'search' || policy === 'detail' || policy === 'mapa') {
+    reply.header('cache-control', 'no-store');
+  }
   return payload;
 });
 
 await ensureSources();
 await carregarHostsDeFoto();
 const port = Number(process.env.PORT ?? 4500);
-await app.listen({ port, host: '0.0.0.0' });
+const host = process.env.BIND_HOST ?? '127.0.0.1';
+await app.listen({ port, host });
 console.log(`API e interface em http://localhost:${port}`);
 
 if (temCert) {
@@ -1851,7 +1773,7 @@ if (temCert) {
     up.end();
   });
 
-  tls.listen(portaTls, '0.0.0.0', () =>
+  tls.listen(portaTls, host, () =>
     console.log(`HTTPS (certificado próprio) em https://localhost:${portaTls}`),
   );
 }

@@ -395,6 +395,13 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
 
       <div className="mapa-escala mono">{carregando ? 'recalculando…' : status}</div>
 
+      {dados?.truncated && (
+        <div className="mapa-fora" role="status">
+          O mapa mostra até 1.000 pontos. Refine os filtros para ver uma região menor.
+          <span>{fmt.format(dados.omittedPoints)} pontos e {fmt.format(dados.omittedLots)} lotes ficaram fora do mapa.</span>
+        </div>
+      )}
+
       {dados && dados.semLocalizacao > 0 && (
         <div className="mapa-fora">
           <b className="mono">{fmt.format(dados.semLocalizacao)}</b> sem localização

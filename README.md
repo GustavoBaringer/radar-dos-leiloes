@@ -222,7 +222,7 @@ porque os dois são OIDC, e nada fora de `identidade.ts` e `oidc.ts` encosta nis
 
 | Modo | Liga com | Para quê |
 |---|---|---|
-| Portão de senha | `APP_SENHA` | uso local e a POC atrás do túnel; conta compartilhada |
+| Portão de senha | `APP_SENHA` | uso local; conta compartilhada |
 | OIDC (Keycloak) | `OIDC_ISSUER` | contas de verdade, com reset de senha, verificação e MFA do provedor |
 
 ```bash
@@ -268,9 +268,8 @@ sem informação.
 ### Freio de força bruta
 
 Medido antes de existir: dez senhas erradas seguidas davam dez `401`, sem atraso.
-Com uma senha só protegendo o índice e a POC exposta por túnel, era o furo mais
-explorável do sistema. O contador vive no Redis, não em memória — contador que
-zera no restart não é freio.
+Com uma senha só protegendo o índice, era o furo mais explorável do sistema. O
+contador vive no Redis, não em memória — contador que zera no restart não é freio.
 
 Efeito colateral que vale saber: todo teste que entra no sistema precisa zerar o
 contador antes (`scripts/_teste-comum.mjs`), senão o teste seguinte toma `429` e

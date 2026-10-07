@@ -1,0 +1,22 @@
+# TEMPLATE INERTE — não instalar nem habilitar nesta máquina.
+[Unit]
+Description=Radar de Leilões (VPS futura)
+After=network.target
+
+[Service]
+Type=simple
+User=radar
+Group=radar
+WorkingDirectory=/opt/radar-dos-leiloes
+EnvironmentFile=/etc/radar/production.env
+ExecStart=/usr/bin/node /opt/radar-dos-leiloes/dist/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/radar
+
+[Install]
+WantedBy=multi-user.target

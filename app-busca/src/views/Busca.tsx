@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { BellPlus, LayoutGrid, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import type { Facets, Lot, RespostaMapa, SearchResponse } from '@/lib/types';
+import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api, ApiError } from '@/lib/api';
 import { ORDENACOES } from '@/lib/labels';
 import { type EstadoBusca, contaFiltros, paramsDaBusca } from '@/lib/filtros';
@@ -25,6 +26,8 @@ interface Props {
   aoCarregar?: (r: SearchResponse) => void;
   favoritos: Set<number>;
   aoFavoritar: (id: number) => void;
+  aoConhecerLotes: (lotes: Lot[], stamp?: FavoriteReadStamp) => void;
+  iniciarLeituraFavoritos: () => FavoriteReadStamp;
 }
 
 /** Depois de quantos cartões entra a faixa de alerta: cedo o bastante para ser vista, tarde para não tapar o resultado. */
@@ -32,7 +35,7 @@ const POS_FAIXA = 6;
 
 export function Busca({
   estado, aoMudar, aoLimpar, aoAbrirLote, aoCriarAlerta, lancesAoVivo, piscando, aoCarregar,
-  favoritos, aoFavoritar,
+  favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
 }: Props) {
   const [dados, setDados] = useState<SearchResponse | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -89,6 +92,7 @@ export function Busca({
     setCarregando(true);
     setErro(null);
     const ac = new AbortController();
+    const favoriteStamp = iniciarLeituraFavoritos();
     api
       .buscar(qs, ac.signal)
       .then((r) => {
@@ -96,6 +100,7 @@ export function Busca({
         if (meu !== seq.current) return;
         setDados(r);
         setCarregando(false);
+        aoConhecerLotes(r.items, favoriteStamp);
         // Cidade manda rótulo próprio (grafia correta) junto da faceta; guardar
         // é o que permite o botão fechado mostrar "Curitiba" e não "CURITIBA".
         setRotulos((antes) => {
@@ -185,7 +190,7 @@ export function Busca({
   // a lista mistura veículo e imóvel, e dizer "veículos" mente.
   const rotuloTotal = ehImovel ? 'imóveis' : estado.assetType === 'veiculo' ? 'veículos' : 'lotes';
   const nFiltros = contaFiltros(estado);
-  const paginas = dados ? Math.max(1, Math.ceil(dados.total / dados.pageSize)) : 1;
+  const paginas = dados ? Math.min(100, Math.max(1, Math.ceil(dados.total / dados.pageSize))) : 1;
   const ativos = filtrosAtivos({ ...estado, q: qAdiado }, rotulosServidor);
   const resumo = ativos.map((a) => a.texto).join(' · ');
   const ehMapa = estado.vista === 'mapa';
@@ -233,7 +238,7 @@ export function Busca({
             aoAbrir={aoAbrirLote}
             lanceAoVivo={lancesAoVivo[lot.id]}
             piscando={piscando.has(lot.id)}
-            favoritado={favoritos.has(lot.id)}
+            favoritado={typeof lot.favorited === 'boolean' ? lot.favorited : favoritos.has(lot.id) ? true : undefined}
             aoFavoritar={aoFavoritar}
           />
         </Fragment>
@@ -484,7 +489,7 @@ export function Busca({
                 página {dados.page} de {paginas.toLocaleString('pt-BR')}
               </span>
               <button
-                disabled={estado.page >= paginas}
+                disabled={estado.page >= paginas || estado.page >= 100}
                 onClick={() => {
                   aoMudar({ page: estado.page + 1 });
                   rolarParaResultados();
@@ -493,6 +498,9 @@ export function Busca({
                 Próxima
               </button>
             </div>
+          )}
+          {!ehMapa && dados && dados.total > dados.pageSize * 100 && (
+            <p className="pageinfo" role="status">Há mais resultados além das 100 páginas disponíveis. Refine os filtros para reduzir a busca.</p>
           )}
         </section>
       </main>

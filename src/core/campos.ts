@@ -110,15 +110,14 @@ export function combustivel(v?: string | null): string | null {
  * própria; aqui, valor irreconhecível vira nulo em vez de virar rótulo na tela.
  */
 const DOCS: [RegExp, string][] = [
-  [/judicial/, 'judicial'],
+  [/(sucata|inservivel|irrecuper|baixa obrigat)/, 'sucata'],
   [/extrajudicial/, 'extrajudicial'],
   [/(recuperad|retomad).*(financ|banc)|financiament/, 'recuperado_financiamento'],
-  // Sucata antes de sinistrado: "IRRECUPERÁVEL / Grande Monta" também casa com "recuperavel" e "monta",
-  // e veículo irrecuperável (só peças, não volta a circular) virava sinistrado.
-  [/(sucata|inservivel|irrecuper|baixa obrigat)/, 'sucata'],
+  // Sucata precede proveniência/origem e sinistro: irrecuperável não é sinistrado.
   [/(seguradora|sinistr|colis|avariad|recuperavel|monta)/, 'sinistrado'],
   [/(frota|locadora|desmobiliz)/, 'frota'],
   [/(normal|conservad|nao aplicavel|integro)/, 'conservado'],
+  [/judicial/, 'judicial'],
 ];
 
 export function docType(v?: string | null): string | null {
@@ -126,6 +125,92 @@ export function docType(v?: string | null): string | null {
   if (!t) return null;
   for (const [re, d] of DOCS) if (re.test(t)) return d;
   return null;
+}
+
+export type CondicaoVlance = 'sucata' | 'conservado' | 'sinistrado' | 'recuperado_financiamento';
+
+const foldCondicao = (v: string) => v.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const negacaoOuBoilerplate = /\bnao\s+(?:e|eh|se trata de)\s+sucata\b|\bsem\s+baixa\s+obrigatoria\b|\bnao\s+(?:se aplica|aplicavel)\s+(?:a\s+)?(?:hipotese\s+de\s+)?sucata\b|\bhipotese\s+(?:de\s+)?sucata\b|\bconsidera(?:-se|se)\s+sucata\b|\bnos\s+termos\s+da\s+lei\b/;
+const valueCanonical: Record<CondicaoVlance, RegExp> = {
+  sucata: /^(?:sucata|sucata\s+inservivel|sucata\s+aproveitavel|sucata\s+servivel|inservivel|irrecuperavel|baixa\s+obrigatoria)$/,
+  conservado: /^(?:conservado|conservada|normal|integro|integra|nao\s+aplicavel)$/,
+  sinistrado: /^(?:sinistrado|sinistrada|sinistro|colisao|avariado|avariada|grande\s+monta|media\s+monta|pequena\s+monta)$/,
+  recuperado_financiamento: /^(?:recuperado\s+(?:de\s+)?financiamento|retomado\s+(?:de\s+)?financiamento|recuperado\s+bancario|retomado\s+bancario)$/,
+};
+
+function valorRotulado(value: string): CondicaoVlance | null {
+  const t = foldCondicao(value).replace(/_/g, ' ').replace(/[.:;,]+$/g, '').trim();
+  for (const [condicao, re] of Object.entries(valueCanonical) as [CondicaoVlance, RegExp][]) {
+    if (re.test(t)) return condicao;
+  }
+  return null;
+}
+
+function condicoesDoLote(value?: string | null): CondicaoVlance[] {
+  const t = foldCondicao(texto(value) ?? '');
+  if (!t || /\bnao\s+(?:e|eh|se trata de)\s+sucata\b|\bsem\s+baixa\s+obrigatoria\b|\bnao\s+(?:se aplica|aplicavel)\s+(?:a\s+)?(?:hipotese\s+de\s+)?sucata\b/.test(t)) return [];
+  const hits: CondicaoVlance[] = [];
+  if (/\b(sucata|inservivel|irrecuperavel|baixa obrigatoria)\b/.test(t)) hits.push('sucata');
+  if (/\b(conservad[oa]s?|integra?do?s?|sinistrad[oa]s?|sinistro|colisao|avariad[oa]s?|grande monta|media monta|pequena monta)\b/.test(t)) {
+    if (/\b(conservad[oa]s?|integra?do?s?)\b/.test(t)) hits.push('conservado');
+    if (/\b(sinistrad[oa]s?|sinistro|colisao|avariad[oa]s?|grande monta|media monta|pequena monta)\b/.test(t)) hits.push('sinistrado');
+  }
+  if (/\b(recuperado|retomado)\b.{0,30}\b(financiamento|banco|financeira)\b|\b(financiamento|banco|financeira)\b.{0,30}\b(recuperado|retomado)\b/.test(t)) hits.push('recuperado_financiamento');
+  return [...new Set(hits)];
+}
+
+/** Resolve condição V-Lance sem guardar texto livre (que pode conter dados pessoais). */
+export function resolverCondicaoVlance(input: {
+  descricao?: string | null;
+  assetType?: string | null;
+  titulo?: string | null;
+  categoria?: string | null;
+  edital?: string | null;
+  classificacao?: string | null;
+  classificacaoOrigem?: 'descricao' | 'classificacao' | 'lote' | 'edital' | null;
+}): { docType: CondicaoVlance | 'judicial' | null; classificacao: CondicaoVlance | null; origem: 'descricao' | 'classificacao' | 'lote' | 'edital' | null; ambiguo: boolean } {
+  const vazio = (ambiguo = false) => ({ docType: null, classificacao: null, origem: null, ambiguo });
+  // Imóveis nunca recebem condição própria de veículo, mesmo que a descrição/edital a mencione.
+  if (/^imovel$/i.test(input.categoria ?? '') || /^(3|imovel)$/i.test(input.assetType ?? '')) return vazio();
+
+  // Separar HTML e campos/blocos antes de interpretar: rótulo só aceita um valor curto e fechado.
+  const descricao = String(input.descricao ?? '').replace(/<br\s*\/?\s*>|<\/(?:p|div|li|tr)>/gi, '\n').replace(/<[^>]*>/g, ' ');
+  const labels = [...foldCondicao(descricao).matchAll(/\b(classificacao|condicao|estado\s+de\s+conservacao)\s*[:\-]?\s*([^\n|;.!]{1,60})/g)];
+  if (labels.length) {
+    const fullText = foldCondicao(descricao);
+    if (negacaoOuBoilerplate.test(fullText) && /\b(sucata|inservivel|irrecuperavel|baixa obrigatoria)\b/.test(fullText)) return vazio(true);
+    const found = labels.map((m) => valorRotulado(m[2]));
+    const unique = [...new Set(found.filter((x): x is CondicaoVlance => x != null))];
+    // Qualquer rótulo inválido/negado ou classes conflitantes bloqueia fallbacks mais fracos.
+    if (found.some((x) => x == null) || unique.length !== 1) return vazio(true);
+    return { docType: unique[0], classificacao: unique[0], origem: 'descricao', ambiguo: false };
+  }
+
+  // Valor persistido só é evidência individual se a origem não for o edital.
+  const origemClassificacao = input.classificacaoOrigem;
+  if (input.classificacao && origemClassificacao && origemClassificacao !== 'edital') {
+    const canonical = valorRotulado(input.classificacao);
+    if (canonical) return { docType: canonical, classificacao: canonical, origem: 'classificacao', ambiguo: false };
+  }
+
+  const categoriaFold = foldCondicao(texto(input.categoria) ?? '');
+  const especificaCategoria = input.categoria && !/^veicul\w*$/.test(categoriaFold) ? input.categoria : '';
+  const loteText = foldCondicao(`${input.titulo ?? ''} ${especificaCategoria}`);
+  if (negacaoOuBoilerplate.test(loteText) && /\b(sucata|inservivel|irrecuperavel|baixa obrigatoria)\b/.test(loteText)) return vazio(true);
+  const classesLote = condicoesDoLote(loteText);
+  if (classesLote.length > 1) return vazio(true);
+  if (classesLote.length === 1) return { docType: classesLote[0], classificacao: classesLote[0], origem: 'lote', ambiguo: false };
+
+  const edital = foldCondicao(texto(input.edital) ?? '');
+  if (negacaoOuBoilerplate.test(edital) && /\b(sucata|inservivel|irrecuperavel|baixa obrigatoria)\b/.test(edital)) return vazio(true);
+  // A presença simultânea de classes conflitantes no edital deixa condição indeterminada.
+  if (/\bconservad\w*\b/.test(edital) && /\b(sucata|inservivel|irrecuperavel)\b/.test(edital)) {
+    return vazio(true);
+  }
+  const classesEdital = condicoesDoLote(edital);
+  if (classesEdital.length > 1) return vazio(true);
+  if (classesEdital.length === 1) return { docType: classesEdital[0], classificacao: classesEdital[0], origem: 'edital', ambiguo: false };
+  return vazio();
 }
 
 export const DOC_LABEL: Record<string, string> = {

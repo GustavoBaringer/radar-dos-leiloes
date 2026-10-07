@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Alerta, Lot, WsMessage } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
+import { applyAccountSummary, beginFavoriteMutation, emptyFavoriteContext, mergeFavoriteResponse, settleFavoriteMutation, summaryIsCurrent, type FavoriteReadStamp } from '@/lib/favorite-context';
 import { type EstadoBusca, ESTADO_VAZIO, estadoDaUrl, urlDoEstado, CAMPOS_FILTRO, MULTI_IDS } from '@/lib/filtros';
 import { money } from '@/lib/format';
 import { registrarVisto } from '@/lib/vistos';
@@ -42,9 +43,16 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   );
   const [lote, setLote] = useState<Lot | null>(loteInicial);
   const [papel, setPapel] = useState<string>('comum');
-  const [naoVistos, setNaoVistos] = useState(0);
+  const [naoVistos, setNaoVistos] = useState<number | null>(null);
   const [versaoAlertas, setVersaoAlertas] = useState(0);
-  const [favoritos, setFavoritos] = useState<Set<number>>(new Set());
+  const [favoriteContext, setFavoriteContext] = useState(() => loteInicial?.favorited == null
+    ? emptyFavoriteContext()
+    : mergeFavoriteResponse(emptyFavoriteContext(), [loteInicial]));
+  const favoriteContextRef = useRef(favoriteContext);
+  const favoriteToken = useRef(0);
+  const accountKey = useRef<string | null>(null);
+  const ownerEpoch = useRef(0);
+  const summaryGeneration = useRef({ request: 0, identity: 0, mutation: 0 });
   const [versaoFavoritos, setVersaoFavoritos] = useState(0);
   const [alvoDialogo, setAlvoDialogo] = useState<AlvoDialogo | null>(null);
   const [lancesAoVivo, setLances] = useState<Record<number, number>>({});
@@ -54,15 +62,48 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   // devolvido ao topo da página a cada lote aberto.
   const focoAnterior = useRef<HTMLElement | null>(null);
 
-  /* ---------------- papel ---------------- */
+  const aceitarResumo = useCallback((r: Awaited<ReturnType<typeof api.eu>>, started: typeof summaryGeneration.current) => {
+    const responseIdentity = r.logado === false ? 'anon' : r.conta?.id == null ? null : String(r.conta.id);
+    const trocaDeConta = responseIdentity !== null && accountKey.current !== null && responseIdentity !== accountKey.current;
+    if (!summaryIsCurrent(started, summaryGeneration.current, trocaDeConta ? 0 : favoriteContextRef.current.pending.size)) return;
+    const result = applyAccountSummary(favoriteContextRef.current, r, accountKey.current);
+    if (!result.accepted) return;
+    if (result.changed) {
+      ownerEpoch.current += 1;
+      summaryGeneration.current.identity += 1;
+      favoriteToken.current += 1;
+      setNaoVistos(null);
+    }
+    accountKey.current = result.identity;
+    favoriteContextRef.current = result.state;
+    setFavoriteContext(result.state);
+    setNaoVistos(result.unreadAlertCount);
+    setPapel(r.papel ?? 'comum');
+  }, []);
+
+  const atualizarResumo = useCallback(() => {
+    const started = { ...summaryGeneration.current, request: summaryGeneration.current.request + 1 };
+    summaryGeneration.current = started;
+    void api.eu().then((r) => aceitarResumo(r, started)).catch(() => {});
+  }, [aceitarResumo]);
+
+  /* ---------------- papel e resumo global da conta ---------------- */
   useEffect(() => {
     if (publico) return; // sem sessão, /api/me devolve 401
-    // Esconder a aba é cortesia visual; quem barra de fato é o 403 das rotas.
-    api.eu().then((r) => setPapel(r.papel ?? 'comum')).catch(() => setPapel('comum'));
-    api.favoritos().then((f) => setFavoritos(new Set(f.map((x) => x.id)))).catch(() => {});
-    // Sem isto o selo de Alertas começava em zero a cada recarga, até chegar um disparo pelo WebSocket.
-    api.alertas().then((a) => setNaoVistos(a.reduce((t, x) => t + (Number(x.nao_vistos) || 0), 0))).catch(() => {});
-  }, [publico]);
+    atualizarResumo();
+  }, [publico, atualizarResumo]);
+
+  const iniciarLeituraFavoritos = useCallback((): FavoriteReadStamp => ({ ownerEpoch: ownerEpoch.current, owner: accountKey.current, revisions: new Map(favoriteContextRef.current.revisions) }), []);
+  const conhecerLotes = useCallback((lotes: Lot[], stamp?: FavoriteReadStamp) => {
+    const next = mergeFavoriteResponse(favoriteContextRef.current, lotes, stamp, ownerEpoch.current, accountKey.current);
+    favoriteContextRef.current = next;
+    setFavoriteContext(next);
+  }, []);
+  const favoritos = new Set([...favoriteContext.known].filter(([, value]) => value).map(([id]) => id));
+  const aoContarNaoVistos = useCallback((n: number) => {
+    setNaoVistos(n);
+    if (n === 0) atualizarResumo();
+  }, [atualizarResumo]);
 
   /**
    * Otimista: a estrela muda na hora, e desfaz sozinha se o servidor recusar.
@@ -70,32 +111,52 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
    * dentro de uma lista rolando, essa espera lê como "não funcionou".
    */
   const alternarFavorito = useCallback((id: number) => {
-    const jaEra = favoritos.has(id);
-    setFavoritos((antes) => {
-      const novo = new Set(antes);
-      jaEra ? novo.delete(id) : novo.add(id);
-      return novo;
-    });
+    const current = favoriteContextRef.current;
+    if (current.pending.has(id)) return;
+    const jaEra = current.known.get(id) === true;
+    const token = ++favoriteToken.current;
+    summaryGeneration.current.mutation += 1;
+    const otimista = beginFavoriteMutation(current, id, !jaEra, token);
+    favoriteContextRef.current = otimista;
+    setFavoriteContext(otimista);
     setVersaoFavoritos((v) => v + 1);
-    (jaEra ? api.desfavoritar(id) : api.favoritar(id)).catch(() => {
-      setFavoritos((antes) => {
-        const novo = new Set(antes);
-        jaEra ? novo.add(id) : novo.delete(id);
-        return novo;
-      });
+    const ownerAtStart = accountKey.current;
+    (jaEra ? api.desfavoritar(id) : api.favoritar(id)).then(() => {
+      if (ownerAtStart !== accountKey.current) return;
+      const next = settleFavoriteMutation(favoriteContextRef.current, id, token, true);
+      summaryGeneration.current.mutation += 1;
+      favoriteContextRef.current = next;
+      setFavoriteContext(next);
+      setVersaoFavoritos((v) => v + 1);
+      atualizarResumo();
+    }).catch(() => {
+      if (ownerAtStart !== accountKey.current) return;
+      const next = settleFavoriteMutation(favoriteContextRef.current, id, token, false);
+      summaryGeneration.current.mutation += 1;
+      favoriteContextRef.current = next;
+      setFavoriteContext(next);
+      setVersaoFavoritos((v) => v + 1);
       toast('Não foi possível salvar o favorito. Tente de novo.');
+      atualizarResumo();
     });
-  }, [favoritos, toast]);
+  }, [toast, atualizarResumo]);
 
   /* ---------------- rotas ---------------- */
 
-  const abrirLote = useCallback(async (id: number, empilhar = true) => {
+  const abrirLote = useCallback(async (id: number, empilhar = true, slugEsperado?: string) => {
+    const leituraFavorito = iniciarLeituraFavoritos();
     focoAnterior.current = document.activeElement as HTMLElement;
     // API lenta: sem retorno, o clique no card parecia ignorado.
     const lento = window.setTimeout(() => toast('Abrindo lote…'), 600);
     try {
       const l = await api.lote(id);
+      if (slugEsperado !== undefined && slugDoLote(l) !== slugEsperado) {
+        setLote(null);
+        toast('Lote não encontrado.');
+        return;
+      }
       setLote(l);
+      conhecerLotes([l], leituraFavorito);
       registrarVisto(l);
       // A URL do lote é compartilhável: quem recebe o link abre a gaveta direto.
       if (empilhar) history.pushState({ lote: l.id }, '', `/lote/${slugDoLote(l)}`);
@@ -104,7 +165,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     } finally {
       window.clearTimeout(lento);
     }
-  }, [toast]);
+  }, [toast, conhecerLotes, iniciarLeituraFavoritos]);
 
   const fecharGaveta = useCallback((voltarHistorico = true) => {
     setLote((atual) => {
@@ -122,9 +183,13 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     // Com SSR o lote já veio no HTML: refazer o fetch aqui seria uma requisição
     // a mais para pintar exatamente a mesma tela.
     if (!loteInicial && location.pathname.startsWith('/lote/')) {
-      const id = idDoSlug(location.pathname.slice(6));
-      if (id) void abrirLote(id, false);
-      else toast('Lote não encontrado.');
+      const slug = location.pathname.slice(6);
+      const id = idDoSlug(slug);
+      if (id) void abrirLote(id, false, slug);
+      else {
+        setLote(null);
+        toast('Lote não encontrado.');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -155,8 +220,13 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     function aoVoltar() {
       const p = location.pathname;
       if (p.startsWith('/lote/')) {
-        const id = idDoSlug(p.slice(6));
-        if (id) void abrirLote(id, false);
+        const slug = p.slice(6);
+        const id = idDoSlug(slug);
+        if (id) void abrirLote(id, false, slug);
+        else {
+          setLote(null);
+          toast('Lote não encontrado.');
+        }
         return;
       }
       setLote(null);
@@ -166,7 +236,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     }
     window.addEventListener('popstate', aoVoltar);
     return () => window.removeEventListener('popstate', aoVoltar);
-  }, [abrirLote]);
+  }, [abrirLote, toast]);
 
   /* ---------------- ao vivo ---------------- */
 
@@ -191,11 +261,12 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
       toast(`${n.toLocaleString('pt-BR')} lote${n === 1 ? '' : 's'} encerrado${n === 1 ? '' : 's'}`);
     }
     if (msg.type === 'alertas') {
-      setNaoVistos((n) => n + msg.disparos.length);
+      setNaoVistos((n) => n == null ? n : n + msg.disparos.length);
+      if (naoVistos == null) atualizarResumo();
       for (const d of msg.disparos.slice(0, 3)) toast(`Alerta "${d.label}": ${d.title.slice(0, 40)}`);
       if (aba === 'alertas') setVersaoAlertas((v) => v + 1);
     }
-  }, [papel, aba, toast]);
+  }, [papel, aba, toast, naoVistos, atualizarResumo]);
 
   // O /ws também exige sessão: conectar sem ela é 401 em laço de reconexão.
   const aoVivo = useWebSocket(publico ? null : aoReceber);
@@ -299,13 +370,14 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         aoTrocarAba={trocarAba}
         aoVivo={aoVivo}
         naoVistos={naoVistos}
-        nFavoritos={favoritos.size}
+        nFavoritos={favoriteContext.count ?? undefined}
         aoCriarAlerta={abrirDialogoCriar}
         mostraCobertura={papel === 'admin'}
       />
 
       {aba === 'busca' && (
         <Busca
+          key={`busca-${ownerEpoch.current}`}
           estado={estado}
           aoMudar={mudar}
           aoLimpar={limpar}
@@ -315,25 +387,33 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
           piscando={piscando}
           favoritos={favoritos}
           aoFavoritar={alternarFavorito}
+          aoConhecerLotes={conhecerLotes}
+          iniciarLeituraFavoritos={iniciarLeituraFavoritos}
         />
       )}
       {aba === 'alertas' && (
         <Alertas
+          key={`alertas-${ownerEpoch.current}`}
           aoAbrirLote={abrirLote}
           toast={toast}
           aoEditar={abrirDialogoEditar}
           versao={versaoAlertas}
-          aoContarNaoVistos={setNaoVistos}
+          aoContarNaoVistos={aoContarNaoVistos}
           favoritos={favoritos}
           aoFavoritar={alternarFavorito}
+          aoConhecerLotes={conhecerLotes}
+          iniciarLeituraFavoritos={iniciarLeituraFavoritos}
         />
       )}
       {aba === 'favoritos' && (
         <Favoritos
+          key={`favoritos-${ownerEpoch.current}`}
           aoAbrirLote={abrirLote}
           toast={toast}
           versao={versaoFavoritos}
           aoDesfavoritar={alternarFavorito}
+          aoConhecerLotes={conhecerLotes}
+          iniciarLeituraFavoritos={iniciarLeituraFavoritos}
         />
       )}
       {aba === 'cobertura' && papel === 'admin' && <Cobertura />}
@@ -342,7 +422,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
       <LotDrawer
         lot={lote}
         aoFechar={() => fecharGaveta()}
-        favoritado={lote ? favoritos.has(lote.id) : false}
+        favoritado={lote ? (favoriteContext.known.get(lote.id) ?? lote.favorited) : undefined}
         aoFavoritar={alternarFavorito}
       />
       <DialogoAlerta

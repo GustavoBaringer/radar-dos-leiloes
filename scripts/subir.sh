@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # Sobe o Radar inteiro e PROVA que subiu: containers, migração, build do front
-# quando está velho, API, worker, túnel público, e uma verificação ponta a ponta
-# pela URL pública.
+# quando está velho, API, worker, e uma verificação ponta a ponta local.
 #
 # O motivo de existir: `up.sh` dorme 4s e imprime o status do curl. Num boot
 # frio isso dá "HTTP 000" com o servidor perfeitamente no ar — uma mensagem que
 # assusta sem informar. Aqui nada é declarado sem resposta medida, e qualquer
 # etapa que falhe derruba o script com código de saída.
 #
-#   bash scripts/subir.sh              # tudo, com túnel
-#   bash scripts/subir.sh --sem-tunel  # só local (4500)
+#   bash scripts/subir.sh              # tudo, local (4500)
 #   bash scripts/subir.sh --build      # força rebuild do front
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -21,11 +19,9 @@ NODE="${NODE_BIN:-$(command -v node 2>/dev/null || ls -d "$HOME"/.nvm/versions/n
 [ -x "$NODE" ] || { echo "node não encontrado — instale via nvm ou exporte NODE_BIN" >&2; exit 1; }
 PORTA="${PORTA:-4500}"
 LOCAL="http://localhost:$PORTA"
-COM_TUNEL=1
 FORCAR_BUILD=0
 for arg in "$@"; do
   case "$arg" in
-    --sem-tunel) COM_TUNEL=0 ;;
     --build) FORCAR_BUILD=1 ;;
     *) echo "opção desconhecida: $arg" >&2; exit 2 ;;
   esac
@@ -84,58 +80,12 @@ grep -q "worker de coleta no ar" /tmp/leilao-worker.log 2>/dev/null && ok "worke
 LOTE=$(docker exec leilao-db psql -U leilao -d leilao -t -A -c \
   "select id from lots where status not in ('encerrado','vendido') limit 1" 2>/dev/null | tr -d '[:space:]')
 
-if [ "$COM_TUNEL" = 0 ]; then
-  passo "pronto (sem túnel)"
-  echo "  $LOCAL"
-  exit 0
-fi
-
-passo "túnel público"
-command -v cloudflared >/dev/null || { erro "cloudflared não está instalado"; exit 1; }
-# `pkill -f` casaria com a própria linha de comando de quem chama e mataria o
-# shell; e reaproveitar o log TRUNCANDO deixa o processo antigo escrevendo no
-# mesmo arquivo em outro offset, o que enche o log de buracos.
-pgrep -x cloudflared | xargs -r kill 2>/dev/null || true
-sleep 2
-LOG=/tmp/cloudflared-$PORTA-$(date +%H%M%S).log
-setsid cloudflared tunnel --no-autoupdate --url "$LOCAL" > "$LOG" 2>&1 < /dev/null &
-# Esperar a URL não basta: ela aparece antes de existir conexão registrada.
-for _ in $(seq 1 60); do
-  grep -aq "Registered tunnel connection" "$LOG" 2>/dev/null && break
-  sleep 1
-done
-URL=$(grep -aoE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" 2>/dev/null | head -1 || true)
-[ -z "${URL:-}" ] && { erro "o túnel não devolveu URL — veja $LOG"; tail -5 "$LOG"; exit 1; }
-grep -aq "Registered tunnel connection" "$LOG" || { erro "URL sorteada mas nenhuma conexão registrada — veja $LOG"; exit 1; }
-ok "túnel aberto e com conexão registrada"
-
-# O DNS corporativo desta rede NÃO resolve *.trycloudflare.com (o apex resolve).
-# Sem isto a verificação daria 000 em tudo e acusaria um túnel que está perfeito.
-HOST=${URL#https://}
-RESOLVE=()
-# Nome recém-sorteado leva alguns segundos para existir no DNS — e o DNS desta
-# rede às vezes não resolve *.trycloudflare.com de jeito nenhum (o apex resolve).
-# Sem estas duas coisas a verificação acusa 000 num túnel perfeito.
-for tentativa in $(seq 1 12); do
-  if getent hosts "$HOST" >/dev/null 2>&1; then RESOLVE=(); DNS_OK=local; break; fi
-  IP=$("$NODE" -e "const{Resolver}=require('dns');const r=new Resolver();r.setServers(['1.1.1.1','8.8.8.8']);r.resolve4(process.argv[1],(e,a)=>console.log(e?'':a[0]))" "$HOST" 2>/dev/null || true)
-  if [ -n "${IP:-}" ]; then RESOLVE=(--resolve "$HOST:443:$IP"); DNS_OK=publico; break; fi
-  sleep 3
-done
-case "${DNS_OK:-}" in
-  local) ok "DNS resolve o host" ;;
-  publico)
-    erro "o DNS desta rede não resolve $HOST — verificando via DNS público ($IP)"
-    echo "    (o túnel serve normalmente quem está fora; só este PC não abre a URL no navegador)" ;;
-  *) erro "o host não resolveu em 36s, nem local nem público — a verificação abaixo vai falhar" ;;
-esac
-
-passo "verificação pela URL pública"
+passo "verificação ponta a ponta local"
 falhou=0
 checa() { # rota, códigos aceitos, descrição
   local cod
   for _ in $(seq 1 12); do
-    cod=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "${RESOLVE[@]}" "$URL$1" 2>/dev/null) || cod=000
+    cod=$(curl -s -o /dev/null -w '%{http_code}' -m 25 "$LOCAL$1" 2>/dev/null) || cod=000
     [ "$cod" != "000" ] && break
     sleep 2
   done
@@ -144,26 +94,16 @@ checa() { # rota, códigos aceitos, descrição
 checa "/" "200" "landing"
 # 302 é o certo: a busca exige sessão e manda para o login.
 checa "/busca" "302 200" "busca (redireciona para o login)"
-checa "/api/stats" "401" "API exige sessão pelo túnel"
+checa "/api/vitrine" "200" "API de vitrine"
+checa "/api/stats" "200 401" "API de stats"
 [ -n "$LOTE" ] && checa "/lote/verificacao-$LOTE" "200" "página pública do lote $LOTE"
 
 echo
 if [ "$falhou" = 1 ]; then
-  erro "o túnel subiu mas alguma rota não respondeu como esperado"
-  echo "  $URL"
+  erro "alguma rota local não respondeu como esperado"
+  echo "  logs: /tmp/leilao-server.log /tmp/leilao-worker.log"
   exit 1
 fi
-echo "$URL" > /tmp/radar-url.txt
-if [ "${DNS_OK:-}" = "publico" ]; then
-  # Quem roda o script é quem MAIS tropeça nisto: o túnel responde, mas o
-  # navegador desta máquina não resolve o nome. Dizer só "no ar" é enganoso.
-  printf '\033[1m  neste PC:\033[0m  %s\n' "$LOCAL"
-  printf '\033[1m  celular / outra pessoa:\033[0m  %s\n' "$URL"
-  echo "  (a URL do túnel NÃO abre neste PC: o DNS daqui não resolve *.trycloudflare.com)"
-else
-  printf '\033[1m  %s\033[0m\n' "$URL"
-  echo "  local: $LOCAL"
-fi
+printf '\033[1m  %s\033[0m\n' "$LOCAL"
 echo
-echo "  logs: /tmp/leilao-server.log /tmp/leilao-worker.log $LOG"
-echo "  derrubar o túnel: pgrep -x cloudflared | xargs -r kill"
+echo "  logs: /tmp/leilao-server.log /tmp/leilao-worker.log"

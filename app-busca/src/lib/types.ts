@@ -11,8 +11,8 @@ export type Sort = 'ending_soon' | 'discount' | 'price_asc' | 'price_desc' | 're
 export interface Lot {
   id: number;
   source_id: string;
-  external_id: string;
   lot_url: string | null;
+  favorited?: boolean;
   title_raw: string;
   title_display: string | null;
   brand: string | null;
@@ -103,6 +103,21 @@ export interface Alerta {
   nao_vistos?: number;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export interface AccountSummary {
+  papel?: string;
+  logado?: boolean;
+  conta?: { id?: number; email?: string | null; nome?: string | null; porProvedor?: boolean };
+  favoriteCount?: number;
+  unreadAlertCount?: number;
+}
+
 export type Hit = Lot & { seen: boolean; hit_em: string; labels: string[] };
 
 export type Favorito = Lot & { favorited_em: string };
@@ -147,4 +162,7 @@ export interface RespostaMapa {
   semLocalizacao: number;
   soCidade: number;
   semNada: number;
+  truncated: boolean;
+  omittedPoints: number;
+  omittedLots: number;
 }

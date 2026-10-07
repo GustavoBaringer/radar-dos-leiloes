@@ -8,7 +8,7 @@ interface Props {
   aba: Aba;
   aoTrocarAba: (a: Aba) => void;
   aoVivo: boolean;
-  naoVistos: number;
+  naoVistos: number | null;
   nFavoritos?: number;
   mostraCobertura: boolean;
   aoCriarAlerta?: () => void;
@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function AppHeader({
-  aba, aoTrocarAba, aoVivo, naoVistos, nFavoritos = 0, mostraCobertura, aoCriarAlerta, publico = false, voltarPara,
+  aba, aoTrocarAba, aoVivo, naoVistos, nFavoritos, mostraCobertura, aoCriarAlerta, publico = false, voltarPara,
 }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
   const botaoMenu = useRef<HTMLButtonElement>(null);
@@ -50,7 +50,7 @@ export function AppHeader({
 
   const abas: Array<{ id: Aba; nome: string; n?: number; destaque?: boolean }> = [
     { id: 'busca', nome: 'Busca' },
-    { id: 'alertas', nome: 'Alertas', n: naoVistos, destaque: true },
+    { id: 'alertas', nome: 'Alertas', n: naoVistos ?? undefined, destaque: true },
     { id: 'favoritos', nome: 'Favoritos', n: nFavoritos },
     ...(mostraCobertura ? [{ id: 'cobertura' as const, nome: 'Cobertura' }] : []),
   ];

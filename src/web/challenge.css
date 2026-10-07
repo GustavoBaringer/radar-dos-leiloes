@@ -1,0 +1,8 @@
+.challenge-box{display:grid;justify-items:start;gap:8px;margin:14px 0 6px;color:var(--ink-soft,#93a4c4);font:13px/1.5 var(--fonte,system-ui,sans-serif)}
+.challenge-message{margin:0}
+.challenge-box [data-challenge-widget]{min-height:0;max-width:100%}
+.challenge-retry{border:1px solid var(--hairline,#1e2941);border-radius:8px;background:rgba(18,27,49,.72);color:var(--ink,#eef3ff);padding:8px 12px;cursor:pointer}
+.challenge-retry:hover{border-color:var(--brand,#2f6bff)}
+.challenge-retry:focus-visible{outline:2px solid var(--signal,#22d3ee);outline-offset:2px}
+.challenge-error{color:#ffb4b4}
+@media(max-width:420px){.challenge-box iframe{max-width:100%}}

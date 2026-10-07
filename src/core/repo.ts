@@ -4,6 +4,8 @@ import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
 import { connectors } from '../connectors/index.js';
+import { normalizeSearchParams, parsePagination } from './request-bounds.js';
+import { toPublicLot } from './public-dto.js';
 
 export async function ensureSources() {
   for (const c of connectors) {
@@ -277,7 +279,7 @@ export interface SearchResponse {
   page: number;
   pageSize: number;
   interpreted: { brand: string | null; model: string | null; freeTerms: string[] };
-  items: any[];
+  items: ReturnType<typeof toPublicLot>[];
   facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[]; docTypes: any[] };
 }
 
@@ -297,6 +299,7 @@ const lista = (v: Multi): string[] =>
  * Duplicar a montagem faria mapa e lista divergirem no primeiro filtro novo.
  */
 function montaFiltro(p: SearchParams) {
+  p = normalizeSearchParams(p);
   const parsed = parseQuery(p.q ?? '');
 
   // Cada filtro carrega a chave da faceta que ele representa. Isso permite
@@ -438,8 +441,18 @@ function montaFiltro(p: SearchParams) {
   return { parsed, build };
 }
 
-export async function searchLots(p: SearchParams): Promise<SearchResponse> {
+type QueryFunction = (sql: string, params?: any[]) => Promise<any[]>;
+
+async function awaitAllQueries<T>(pending: Promise<T>[]): Promise<T[]> {
+  const results = await Promise.allSettled(pending);
+  const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
+  return results.map((result) => (result as PromiseFulfilledResult<T>).value);
+}
+
+export async function searchLots(p: SearchParams, queryFn: QueryFunction = query): Promise<SearchResponse> {
   const { parsed, build } = montaFiltro(p);
+  p = normalizeSearchParams(p);
   const main = build();
   const whereSql = main.sql;
   const params = main.params;
@@ -476,14 +489,11 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
 
   // page/pageSize são interpolados no LIMIT/OFFSET: `abc` virava NaN e ia cru para
   // o SQL. inteiro válido, com piso/teto, antes de chegar perto da query.
-  const inteiro = (v: unknown, def: number) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : def);
-  const page = Math.max(1, inteiro(p.page, 1));
-  const pageSize = Math.min(100, Math.max(1, inteiro(p.pageSize, 24)));
-  const offset = (page - 1) * pageSize;
+  const { page, pageSize, offset } = parsePagination(p.page, p.pageSize);
 
-  const [{ count }] = await query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params);
-  const items = await query(
-    `SELECT id, source_id, external_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
+  const [{ count }] = await queryFn(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params) as { count: number }[];
+  const items = await queryFn(
+    `SELECT id, source_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
             km, doc_type, closing_model, auction_start_utc, auction_end_utc, source_tz, status,
             current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect, asset_type, vehicle_type, property_type,
             source_category, auctioneer_name, auctioneer_reg,
@@ -502,7 +512,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   async function facet(col: string, key: string, limit = 20) {
     const b = build(key);
     const w = b.sql ? `${b.sql} AND` : 'WHERE';
-    return query(
+    return queryFn(
       `SELECT ${col} AS value, COUNT(*)::int AS count FROM lots ${w} ${col} IS NOT NULL
        GROUP BY 1 ORDER BY 2 DESC LIMIT ${limit}`,
       b.params,
@@ -526,7 +536,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     // alfabética, onde "Cuiaba" vence "Cuiabá". Em UTF-8 a letra acentuada ocupa
     // 2 bytes e a simples 1, então a diferença em BYTES conta o acento.
     const semAcento = `translate(city,'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç','AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')`;
-    return query(
+    return queryFn(
       `SELECT city_key AS value, COUNT(*)::int AS count,
               (array_agg(city ORDER BY (city = upper(city)), (octet_length(city) - octet_length(${semAcento})) DESC, city))[1] AS label
          FROM lots ${w} city_key IS NOT NULL
@@ -535,7 +545,7 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
     );
   }
 
-  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await Promise.all([
+  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await awaitAllQueries([
     facet('state', 'states', 30),
     facetCidade(),
     facet('source_id', 'sources'),
@@ -557,24 +567,36 @@ export async function searchLots(p: SearchParams): Promise<SearchResponse> {
   ]);
 
   // Comitente pessoa física é mascarado no que aparece como texto (card).
-  for (const it of items as any[]) it.seller_name = vendedorPublico(it.seller_name);
+  const publicItems = (items as any[]).map(toPublicLot);
 
   return {
     total: count,
     page,
     pageSize,
     interpreted: { brand: parsed.brand, model: parsed.model, freeTerms: parsed.freeTerms },
-    items,
+    items: publicItems,
     facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet, docTypes },
   };
 }
 
-export async function getLot(id: number) {
-  const [lot] = await query<any>('SELECT * FROM lots WHERE id = $1', [id]);
+export async function getLot(id: number, queryFn: QueryFunction = query) {
+  const [lot] = await queryFn(
+    `SELECT id, source_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
+            km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
+            source_tz, status, current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect,
+            asset_type, vehicle_type, property_type, source_category, auctioneer_name, auctioneer_reg,
+            COALESCE((raw->>'areaPrivativa')::numeric, (raw->>'areaTotal')::numeric, (raw->>'areaTerreno')::numeric) AS area,
+            (raw->>'quartos')::int AS rooms,
+            seller_name, seller_type, yard, city, state, photos, photo_count, financeable, has_report,
+            collected_at, first_seen_at, first_seen_at > now() - interval '24 hours' AS is_novo,
+            CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END AS effective_status,
+            CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0
+                 THEN ROUND((1 - COALESCE(current_bid,min_bid)/appraisal) * 100) ELSE NULL END AS discount_pct
+       FROM lots WHERE id = $1`, [id],
+  );
   if (!lot) return null;
-  lot.seller_name = vendedorPublico(lot.seller_name);
-  const history = await query('SELECT bid, observed_at FROM bid_history WHERE lot_id=$1 ORDER BY observed_at DESC LIMIT 30', [id]);
-  return { ...lot, bid_history: history };
+  const history = await queryFn('SELECT bid, observed_at FROM bid_history WHERE lot_id=$1 ORDER BY observed_at DESC LIMIT 30', [id]);
+  return toPublicLot({ ...lot, bid_history: history });
 }
 
 export async function getStats() {
@@ -667,22 +689,25 @@ export interface PontoMapa {
 export interface RespostaMapa {
   pontos: PontoMapa[];
   total: number;
-  /** Lotes do filtro que não entram em ponto nenhum. A soma com os pontos fecha com `total`. */
+  /** Lotes do filtro sem localização; calculado no universo inteiro, mesmo se pontos forem truncados. */
   semLocalizacao: number;
   soCidade: number;
   semNada: number;
+  truncated: boolean;
+  omittedPoints: number;
+  omittedLots: number;
 }
 
 /**
  * Pontos agregados para o mapa, com o MESMO filtro da lista (montaFiltro).
  *
- * Devolve lugar, nunca lote cru: são ~1,5 mil pontos contra 25 mil lotes, e é o
- * que permite mandar o universo inteiro numa resposta só, sem paginar por
- * viewport. A âncora da cidade sai da média das coordenadas conhecidas NAQUELA
+ * Devolve lugar, nunca lote cru: pontos mais frequentes primeiro, com teto de
+ * 1000. As contagens permanecem sobre o universo inteiro. A âncora da cidade sai da média das coordenadas conhecidas NAQUELA
  * cidade e é calculada sobre a base toda, não sobre o filtro: mudar de filtro
  * não pode mover o ponto de lugar.
  */
-export async function searchLotsMapa(p: SearchParams): Promise<RespostaMapa> {
+export async function searchLotsMapa(p: SearchParams, queryFn: QueryFunction = query): Promise<RespostaMapa> {
+  p = normalizeSearchParams(p);
   const { build } = montaFiltro(p);
   const b = build();
   const w = b.sql;
@@ -691,47 +716,55 @@ export async function searchLotsMapa(p: SearchParams): Promise<RespostaMapa> {
   const CC = `cc AS (SELECT city_key AS ck, state AS cuf, avg(lat)::float AS la, avg(lon)::float AS lo
                        FROM lots WHERE lat IS NOT NULL GROUP BY 1, 2)`;
 
-  const pontos = await query<PontoMapa>(
-    `WITH ${CC}
-     SELECT round(lat::numeric,4)||','||round(lon::numeric,4) AS k,
-            round(lat::numeric,4)::float AS lat, round(lon::numeric,4)::float AS lon,
-            mode() WITHIN GROUP (ORDER BY city) AS cidade,
-            mode() WITHIN GROUP (ORDER BY state) AS uf,
-            'patio'::text AS camada, COUNT(*)::int AS n
-       FROM lots ${wAnd} lat IS NOT NULL
-      GROUP BY 1, 2, 3
-     UNION ALL
-     SELECT 'c:'||lots.city_key||'/'||lots.state,
-            round(cc.la::numeric,4)::float, round(cc.lo::numeric,4)::float,
-            mode() WITHIN GROUP (ORDER BY lots.city), lots.state,
-            'cidade'::text, COUNT(*)::int
-       FROM lots JOIN cc ON cc.ck = lots.city_key AND cc.cuf = lots.state
-      ${wAnd} lots.lat IS NULL
-      GROUP BY 1, 2, 3, lots.state
-      ORDER BY 7 DESC`,
-    // Uma consulta só tem uma lista de parâmetros: $1 nas duas metades do UNION
-    // é o MESMO valor. Repetir a lista estoura com 'bind message supplies 2'.
-    b.params,
-  );
-
-  const [c] = await query<{ total: number; so_cidade: number; sem_nada: number }>(
-    `WITH ${CC}
-     SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE lat IS NULL AND city IS NOT NULL
-              AND NOT EXISTS (SELECT 1 FROM cc WHERE cc.ck = lots.city_key AND cc.cuf = lots.state))::int AS so_cidade,
-            COUNT(*) FILTER (WHERE lat IS NULL AND city IS NULL)::int AS sem_nada
-       FROM lots ${w}`,
-    b.params,
-  );
-
-  // A conta fecha por construção: o que não virou ponto é o resto, não uma
-  // segunda contagem que pode divergir da primeira.
-  const emPontos = pontos.reduce((t, x) => t + x.n, 0);
+  const sql = `WITH ${CC},
+    geo_points AS (
+      SELECT round(lat::numeric,4)||','||round(lon::numeric,4) AS k,
+             round(lat::numeric,4)::float AS lat, round(lon::numeric,4)::float AS lon,
+             mode() WITHIN GROUP (ORDER BY city) AS cidade,
+             mode() WITHIN GROUP (ORDER BY state) AS uf,
+             'patio'::text AS camada, COUNT(*)::int AS n
+        FROM lots ${wAnd} lat IS NOT NULL
+       GROUP BY 1, 2, 3
+      UNION ALL
+      SELECT 'c:'||lots.city_key||'/'||lots.state,
+             round(cc.la::numeric,4)::float, round(cc.lo::numeric,4)::float,
+             mode() WITHIN GROUP (ORDER BY lots.city), lots.state,
+             'cidade'::text, COUNT(*)::int
+        FROM lots JOIN cc ON cc.ck = lots.city_key AND cc.cuf = lots.state
+       ${wAnd} lots.lat IS NULL
+       GROUP BY 1, 2, 3, lots.state
+    ), point_stats AS (
+      SELECT count(*)::int AS pontos_total, coalesce(sum(n),0)::int AS mapped_lots FROM geo_points
+    ), lot_stats AS (
+      SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE lat IS NULL AND city IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM cc WHERE cc.ck = lots.city_key AND cc.cuf = lots.state))::int AS so_cidade,
+             COUNT(*) FILTER (WHERE lat IS NULL AND city IS NULL)::int AS sem_nada
+        FROM lots ${w}
+    ), limited_points AS (
+      SELECT * FROM geo_points ORDER BY n DESC, k LIMIT 1000
+    )
+    SELECT lp.k, lp.lat, lp.lon, lp.cidade, lp.uf, lp.camada, lp.n,
+           ps.pontos_total, ps.mapped_lots, ls.total, ls.so_cidade, ls.sem_nada
+      FROM point_stats ps CROSS JOIN lot_stats ls
+      LEFT JOIN limited_points lp ON TRUE
+     ORDER BY lp.n DESC NULLS LAST, lp.k`;
+  const rows = await queryFn(sql, b.params);
+  const meta = rows[0] ?? { pontos_total: 0, mapped_lots: 0, total: 0, so_cidade: 0, sem_nada: 0 };
+  const pontos = rows.filter((r) => r.k != null).map((r) => ({
+    k: r.k, lat: Number(r.lat), lon: Number(r.lon), cidade: r.cidade, uf: r.uf,
+    camada: r.camada, n: Number(r.n),
+  } satisfies PontoMapa));
+  const omittedPoints = Math.max(0, Number(meta.pontos_total) - pontos.length);
+  const returnedLots = pontos.reduce((sum, point) => sum + point.n, 0);
   return {
     pontos,
-    total: c.total,
-    semLocalizacao: c.total - emPontos,
-    soCidade: c.so_cidade,
-    semNada: c.sem_nada,
+    total: Number(meta.total),
+    semLocalizacao: Number(meta.total) - Number(meta.mapped_lots),
+    soCidade: Number(meta.so_cidade),
+    semNada: Number(meta.sem_nada),
+    truncated: omittedPoints > 0,
+    omittedPoints,
+    omittedLots: Math.max(0, Number(meta.mapped_lots) - returnedLots),
   };
 }

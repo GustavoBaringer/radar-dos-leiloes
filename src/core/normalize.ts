@@ -317,6 +317,7 @@ const PART_MARKERS = [
   'jogo de', 'kit de', 'par de', 'lote de pecas', 'pecas diversas',
   'cambio do', 'motor do', 'caixa de cambio', 'diferencial do', 'turbina do',
   'mobilete', 'bomba injetora', 'cabine de', 'eixo de', 'eixos de',
+  'motor avulso', 'pecas kawasaki',
 ];
 
 /**
@@ -375,7 +376,8 @@ export function completaVeiculo(titleRaw: string, brand: string | null, vehicleT
 
 export function looksLikePart(title: string): boolean {
   const f = fold(title);
-  return PART_MARKERS.some((m) => f.includes(fold(m)));
+  return PART_MARKERS.some((m) => f.includes(fold(m))) ||
+    (/\bkawasaki\b.{0,30}\bpecas?\b|\bpecas?\b.{0,30}\bkawasaki\b/.test(f));
 }
 
 export function looksLikeCollectible(title: string): boolean {
@@ -772,7 +774,7 @@ import type { AssetType, PropertyType, VehicleType } from './types.js';
 const CATEGORIA_FONTE: Array<[RegExp, VehicleType]> = [
   // Máquina inteira antes de peça: "Tratores de Esteira e Pneus" casava com
   // 'pneu' e 37 tratores do Superbid entraram no índice como peça.
-  [/\b(trator(es)? de (esteira|pneu)|motoniveladora|retroescavadeira|escavadeira|colheitadeira|empilhadeira|carregadeira)/, 'maquina'],
+  [/\b(trator(es)? de (esteira|pneu)|motoniveladora|retroescavadeira|escavadeira|colheitadeira|empilhadeira|carregadeira|ensiladeiras?)/, 'maquina'],
   // Ordem importa: 'peca' antes do resto, senão "Partes & Peças Carros" vira carro.
   [/\b(pe[cç]a|pneu|roda|motores?\b|partes|cabe[cç]ote|bateria)/, 'peca'],
   // 'moto' precisa de fronteira à direita: sem ela "Motoniveladoras" virava moto.
@@ -784,8 +786,8 @@ const CATEGORIA_FONTE: Array<[RegExp, VehicleType]> = [
   [/\b(suv|utilitario esportivo|crossover)/, 'suv'],
   [/\b(utilitari|furg[oa]|vans?\b|minivan|ambulanc|kombi)/, 'utilitario'],
   [/\b(reboques?|semi ?reboques?|carretas?|trailer|implemento|prancha|dolly|granel|cacamba|ca[cç]amba|cana picada|bau\b|tanque)/, 'reboque'],
-  [/\b(trator|retro|escavadeira|empilhadeira|paleteira|colheitadeira|maquina|motoniveladora|carregadeira|plantadeira|pulverizador|agricola|pesada)/, 'maquina'],
-  [/\b(barco|lancha|jet ?ski|embarcac|nautic|iate|navio|aeronave)/, 'nautico'],
+  [/\b(trator|retro|escavadeira|empilhadeira|paleteira|colheitadeira|maquina|motoniveladora|carregadeira|plantadeira|pulverizador|ensiladeiras?|agricola|pesada)/, 'maquina'],
+  [/\b(barco|lancha|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcac|nautic|iate|navio|aeronave)/, 'nautico'],
   // "Pesados" sem nada no título é caminhão — nunca carro. O leilo usa essa
   // categoria para caminhão, reboque e implemento agrícola no MESMO saco, e o
   // padrão anterior jogava os 76 que o título não reconhecia no filtro de
@@ -808,14 +810,23 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // A ordem foi tirada do diff real, não do senso comum. Máquina agrícola vem
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
-  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
+  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
   // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
   // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
   // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
   // "semeadeira": a fonte escreve das duas formas e só a segunda estava aqui.
   // Sigla solta ficou de fora: "magnum" e "hitech" são trator E outras coisas.
   [/\b(plataforma (de )?(corte|milho|graos|cereais)|plataforma (draper|flexivel)|draper|terraflex|acabadora de asfalto|plaina|semeadora|escarificador|grade (aradoura|niveladora|nivelador)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira)\b/, 'maquina'],
-  [/\b(lancha|jet ?ski|embarcacao|iate|veleiro|balsa)\b/, 'nautico'],
+  [/\b(lancha|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao|iate|veleiro|balsa)\b/, 'nautico'],
+  [/\byamaha\b.{0,20}\b(mt ?0?9|mt ?03|ttr ?230|neo ?(?:at ?)?115|neo ?125|xt ?600 ?e?)\b/, 'moto'],
+  [/\bhonda\b.{0,20}\b(nrx ?160|elite ?125)\b/, 'moto'],
+  [/\bsuzuki\b.{0,20}\bgsr ?150i\b/, 'moto'],
+  [/\bkawasaki\b.{0,20}\bvulcan ?s\b/, 'moto'],
+  [/\bkenton\b.{0,20}\b(gl ?150|blitz ?110|dakar)\b/, 'moto'],
+  [/\bleopard\b.{0,20}\bhb ?110\b/, 'moto'],
+  [/\btaiga\b.{0,20}\b(tl ?(?:150|125)|110)\b/, 'moto'],
+  [/\bmotostar\b.{0,20}\bstar ?200\b/, 'moto'],
+  [/\bdax ?110\b/, 'moto'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
   [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|caio|o 4\d{2} (rs|rse))\b/, 'onibus'],
@@ -834,6 +845,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
   [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
+  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
   // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
   // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
   // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
@@ -883,6 +895,7 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
 export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | null): VehicleType | null {
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
+  if (ACESSORIO_SEADOO.test(`${titulo} ${cat}`)) return null;
   if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
   // Só no INÍCIO do título: "caminhão" solto no meio ("peças PARA caminhão",
   // "retirada DE caminhão", "APLI.: caminhão") descreve o que a peça serve,
@@ -922,6 +935,7 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
   [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
+  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
   [/\b(onibus|microonibus|marcopolo|comil|neobus|caio)\b/, 'onibus'],
   [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],
   [/\b(sprinter|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia)\b/, 'utilitario'],
@@ -929,9 +943,12 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   // 2008 e transformaram 30 lotes (inclusive uma retroescavadeira) em SUV.
   [/\b(peugeot[ /-]*[23]008|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|tucson|ix35|sw4|rav4|ecosport|asx|outlander|sportage|xc40|xc60|tiguan|taos|territory|commander|bronco|jimny|corolla cross)\b/, 'suv'],
   [/\b(reboque|semirreboque|semi ?reboque|carreta|randon|trailer)\b/, 'reboque'],
-  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|betoneira)\b/, 'maquina'],
-  [/\b(lancha|barco|jet ?ski|embarcacao)\b/, 'nautico'],
+  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|ensiladeiras?|motoniveladora|betoneira)\b/, 'maquina'],
+  [/\b(lancha|barco|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao)\b/, 'nautico'],
 ];
+
+// Peças e acessórios explicitamente ligados ao Sea-Doo não são a embarcação.
+const ACESSORIO_SEADOO = /\b(peca|pecas|acessorio|acessorios|kit)\b.{0,40}\b(sea ?doo|seadoo)\b|\b(sea ?doo|seadoo)\b.{0,40}\b(peca|pecas|acessorio|acessorios|kit)\b/;
 
 const MARCADORES_IMOVEL =
   /\b(apartamento|casa|terreno|lote urbano|sala comercial|imovel|imoveis|gleba|chacara|fazenda|sitio|galpao|loja|kitnet|sobrado|predio|vaga de garagem|area rural|matricula \d)\b/;
@@ -1017,6 +1034,10 @@ export function classifyAsset(
 ): { assetType: AssetType; vehicleType: VehicleType | null } {
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
+
+  if (ACESSORIO_SEADOO.test(`${titulo} ${cat}`)) {
+    return { assetType: 'outro', vehicleType: null };
+  }
 
   const tituloDeclaraVeiculo =
     /^(veiculo|automovel|moto|motocicleta|caminhao|onibus|trator|caminhonete|lancha|embarcacao)\b/.test(titulo) ||

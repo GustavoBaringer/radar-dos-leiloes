@@ -1,0 +1,17 @@
+# TEMPLATE INERTE — instância separada do Redis BullMQ (porta 6380 intocada).
+bind 127.0.0.1 ::1
+protected-mode yes
+port 6381
+daemonize no
+supervised no
+maxmemory 128mb
+maxmemory-policy noeviction
+appendonly yes
+appendfsync everysec
+dir /var/lib/redis-antibot
+dbfilename dump.rdb
+appendfilename "appendonly.aof"
+
+# Obrigatório: operador provisiona ACL/senha em arquivo privado, permissões
+# restritas e fora do repositório. O include não é fornecido; sem ele não iniciar.
+include /etc/redis-antibot/operator-private-acl.conf

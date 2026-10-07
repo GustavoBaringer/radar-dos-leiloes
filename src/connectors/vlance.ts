@@ -116,8 +116,10 @@ function minimoDaPracaVigente(primeira: number | null, segunda: number | null, a
   return null;
 }
 
-function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot | null {
-  const titulo = (l.nm_titulo_lote ?? '').trim() || texto(l.nm_descricao).slice(0, 140);
+export function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot | null {
+  // Não usar nm_descricao como título substituto: o campo inclui dados livres e
+  // pode conter dados pessoais que acabariam persistidos no índice.
+  const titulo = (l.nm_titulo_lote ?? '').trim();
   if (!titulo) return null;
   if (asset === 'veiculo' && looksLikePart(titulo)) return null;
   // Lote de simulação da própria plataforma.
@@ -128,6 +130,13 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
   if (fim && fim.getUTCFullYear() > new Date().getUTCFullYear() + 3) return null;
 
   const parsed = asset === 'veiculo' ? parseTitle(titulo) : { brand: null, model: null, version: null, yearMake: null, yearModel: null };
+  const condicao = campos.resolverCondicaoVlance({
+    assetType: asset,
+    descricao: l.nm_descricao,
+    titulo,
+    categoria: l.nm_categoria,
+    edital: l.nm_titulo_leilao,
+  });
   const fotos: string[] = Array.isArray(l.fotos)
     ? l.fotos
         .map((f: any) => {
@@ -152,13 +161,13 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
     lotUrl: urlDoLote(l, host),
     titleRaw: titulo,
     assetType: asset,
-    sourceCategory: asset === 'imovel' ? 'imovel' : null,
+    sourceCategory: asset === 'imovel' ? 'imovel' : (/^veicul\w*$/i.test(String(l.nm_categoria ?? '').normalize('NFD').replace(/\p{M}/gu, '').trim()) ? null : campos.texto(l.nm_categoria)),
     brand: parsed.brand,
     model: parsed.model,
     version: parsed.version,
     yearMake: parsed.yearMake,
     yearModel: parsed.yearModel,
-    docType: 'judicial',
+    docType: asset === 'imovel' ? 'judicial' : (condicao.ambiguo ? null : condicao.docType ?? 'judicial'),
     // A API dá o fechamento do lote, então há timer próprio.
     closingModel: 'timer_por_lote',
     auctionStartUtc: null,
@@ -191,6 +200,8 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
       tenant: host,
       leilaoId: l.leilao_id,
       leilao: l.nm_titulo_leilao,
+      classificacao: asset === 'imovel' ? null : condicao.classificacao,
+      classificacaoOrigem: asset === 'imovel' ? null : condicao.origem,
       lote: l.nu,
       lances: l.nu_qtdelances,
       segundaPraca: num(l.vl_lanceinicialsegundoleilao),

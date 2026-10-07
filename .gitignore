@@ -15,3 +15,6 @@ certs/
 # Saída de screenshot dos portões visuais
 shots/
 app-busca/shots*/
+
+# Estado local da orquestração
+.slim/deepwork/
