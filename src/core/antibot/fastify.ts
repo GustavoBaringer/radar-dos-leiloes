@@ -1,6 +1,6 @@
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { loadAntibotConfig } from './config.js';
 import { createAntibot, type Antibot } from './engine.js';
 import { normalizeClientIp } from './ip.js';
@@ -27,7 +27,11 @@ export interface RegisterAntibotOptions {
   env?: NodeJS.ProcessEnv;
   observer?: AntibotObserver;
   driver?: RateLimitDriver;
-  /** Optional module-owned client seam, chiefly for testing real connection states. */
+  /**
+   * Optional client seam, chiefly for testing real connection states.
+   * Ownership stays with the caller: registerAntibot never disconnects an injected client,
+   * the caller closes it (see the host's onClose block).
+   */
   redisClient?: Redis;
   clock?: () => number;
 }
@@ -85,6 +89,9 @@ export async function registerAntibot(
   let driver = options.driver;
   if (config.mode !== 'off' && !driver) {
     redis = options.redisClient ?? createRedis(config.redisUrl);
+    // Cliente injetado tem dono único: quem o cria é quem desconecta. O driver só
+    // assume o fechamento do cliente criado aqui dentro.
+    const ownsRedis = !options.redisClient;
     // One permanent listener prevents ioredis's unhandled-error logging; request
     // paths never add/remove listeners and the engine emits bounded safe signals.
     redis.on('error', () => {});
@@ -117,7 +124,7 @@ export async function registerAntibot(
         return { allowed, ttlMs: Math.max(0, result.ttl ?? 0) };
       },
       async ping() { requireRedisReady(redis!); await redis!.ping(); },
-      async close() { redis!.disconnect(); },
+      async close() { if (ownsRedis) redis!.disconnect(); },
     };
   }
 

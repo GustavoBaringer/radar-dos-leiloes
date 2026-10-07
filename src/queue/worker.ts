@@ -8,6 +8,8 @@ import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
+import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
+import type { TenantObserverContext } from '../core/tenant-attempts.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -17,7 +19,11 @@ const publisher = makeRedis();
 
 /** Freio ANTES da rede: sem isto, cada chamador teria que consultar por
  * conta própria e um deles esqueceria (ver [[freio]]). */
-async function runCollect(sourceId: string, limit: number) {
+async function runCollect(
+  sourceId: string,
+  limit: number,
+  metadata: Pick<TenantObserverContext, 'origin' | 'jobId' | 'scheduledAt'> = { origin: 'unknown' },
+) {
   const freio = await consultaFreio(sourceId);
   if (!freio.permite) {
     console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
@@ -32,7 +38,8 @@ async function runCollect(sourceId: string, limit: number) {
     throw new Error(`fonte desconhecida: ${sourceId}`);
   }
   try {
-    const result = await connector.collect({ limit });
+    const observer = observerForCollection({ runId, sourceId, ...metadata });
+    const result = await connector.collect({ limit, ...(observer ? { observer } : {}) });
     // Zero lote com HTTP fora de 2xx é bloqueio, não catálogo vazio. Sem este
     // portão, 7 execuções históricas (301, 302, 400) gravaram ok=true e a tela
     // de cobertura mostrou "última coleta" recente escondendo a fonte caída.
@@ -162,7 +169,7 @@ async function cicloAoVivo() {
 }
 if (AO_VIVO) setInterval(cicloAoVivo, 15_000).unref();
 
-async function runRefresh() {
+async function runRefresh(metadata: Pick<TenantObserverContext, 'origin' | 'jobId' | 'scheduledAt'> = { origin: 'refresh' }) {
   const quentes = new Map<string, number>();
 
   // Timer por lote: limite pequeno basta, porque o conector dessas fontes
@@ -213,7 +220,7 @@ async function runRefresh() {
   const hot = [...quentes];
   if (!hot.length) return { hot: 0 };
   for (const [sourceId, limite] of hot) {
-    await runCollect(sourceId, limite);
+    await runCollect(sourceId, limite, { ...metadata, origin: 'refresh' });
   }
   console.log(`[refresh] ${hot.map(([f, l]) => `${f}(${l})`).join(' ')}`);
   return { hot: hot.length };
@@ -314,11 +321,11 @@ await ensureSources();
 
 new Worker<CollectJob>(
   QUEUE_COLLECT,
-  async (job) => runCollect(job.data.sourceId, job.data.limit),
+  async (job) => runCollect(job.data.sourceId, job.data.limit, collectionJobContext(job, 'cron')),
   { connection: makeRedis(), concurrency: 2 },
 ).on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message));
 
-new Worker<RefreshJob>(QUEUE_REFRESH, async () => runRefresh(), { connection: makeRedis(), concurrency: 1 }).on(
+new Worker<RefreshJob>(QUEUE_REFRESH, async (job) => runRefresh(collectionJobContext(job, 'refresh')), { connection: makeRedis(), concurrency: 1 }).on(
   'failed',
   (_job, err) => console.error('[refresh] falhou:', err.message),
 );

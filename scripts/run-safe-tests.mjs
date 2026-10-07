@@ -20,6 +20,7 @@ const files = [
   'scripts/teste-tenant-rotation.ts',
   'scripts/teste-antibot-ws.ts',
   'scripts/teste-brands-contrato.ts',
+  'scripts/teste-host-contrato.mjs',
 ];
 
 const coverage = process.argv.includes('--coverage');

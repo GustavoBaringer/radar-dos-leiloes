@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { randomBytes } from 'node:crypto';
 
 export type WsMode = 'off' | 'shadow' | 'enforce';

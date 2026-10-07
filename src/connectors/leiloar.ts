@@ -5,7 +5,8 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
-import { rotateTenants } from './tenant-rotation.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
+import type { TenantAttempt } from '../core/tenant-attempts.js';
 
 /**
  * LEILOAR — plataforma white-label (CakePHP), N leiloeiros por 1 conector.
@@ -33,12 +34,16 @@ function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leiloar' AND http_status=200 AND has_lots IS NOT FALSE
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  return rotateTenants(rows.map((r) => r.domain), limite);
+  const escolhidos = await dueTenants({ sourceId: 'leiloar', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return escolhidos;
+  const apenas = filterTenantPopulation(escolhidos, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leiloar`);
+  return apenas;
 }
 
 const baseConhecida = new Map<string, string>();
@@ -49,7 +54,7 @@ const baseConhecida = new Map<string, string>();
  * `''` padrão mesmo quando a raiz dava 404 e o /externo respondia certo —
  * 12 dos 20 tenants ficavam de fora por isso (medido em 22/09).
  */
-async function base(host: string): Promise<string> {
+async function base(host: string, observer?: TenantAttempt): Promise<string> {
   const conhecida = baseConhecida.get(host);
   if (conhecida != null) return conhecida;
   for (const b of ['', '/externo']) {
@@ -60,11 +65,13 @@ async function base(host: string): Promise<string> {
         body: 'data[Bem][termo]=',
         gapMs: 1100,
       });
+      observer?.response(r.status);
       if (r.status === 200) {
         baseConhecida.set(host, b);
         return b;
       }
     } catch {
+      observer?.failure('network');
       /* tenta o próximo formato */
     }
   }
@@ -135,20 +142,26 @@ export const leiloar: Connector = {
     siteUrl: 'https://plataformaleiloar.com.br',
     notes: 'White-label multi-tenant (CakePHP). POST form-urlencoded em /bens/pesquisaAvancada (raiz ou /externo); paginação por /page:N no path da URL.',
   },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
 
-    const dominios = await tenants(Number(process.env.LEILOAR_TENANTS ?? 20));
+    const dominios = await tenants(Number(process.env.LEILOAR_TENANTS ?? 20), tenant);
     const cota = Math.max(POR_PAGINA, Math.ceil(limit / Math.max(1, dominios.length)));
 
     for (const host of dominios) {
-      const b = await base(host);
+      if (lots.length >= limit) break;
+      const attempt = await observer?.start(host);
+      const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
+      const b = await base(host, attempt);
       const baseUrl = `https://${host}${b}`;
       const antes = lots.length;
       let totalAnunciado: number | null = null;
+      let naturalEnd = false;
 
       for (let pagina = 1; lots.length - antes < cota && lots.length < limit; pagina++) {
         const url = pagina === 1 ? `${baseUrl}/bens/pesquisaAvancada` : `${baseUrl}/bens/pesquisaAvancada/page:${pagina}`;
@@ -161,15 +174,23 @@ export const leiloar: Connector = {
             gapMs: 1100,
           });
         } catch {
+          attempt?.failure('network');
           break;
         }
+        attempt?.response(r.status);
         httpStatus = r.status;
         if (r.status !== 200) break;
 
         totalAnunciado ??= Number(r.body.match(/Exibindo\s+\d+\s+de\s+(\d+)\s+resultados/i)?.[1]) || 0;
-        const $ = cheerio.load(r.body);
-        const cards = lerCards($, baseUrl);
-        if (!cards.length) break;
+        let cards: Card[];
+        try {
+          const $ = cheerio.load(r.body);
+          cards = lerCards($, baseUrl);
+        } catch (error) {
+          attempt?.failure('parser');
+          throw error;
+        }
+        if (!cards.length) { naturalEnd = true; break; }
         fetched += cards.length;
 
         for (const c of cards) {
@@ -218,8 +239,15 @@ export const leiloar: Connector = {
             raw: { tenant: host, totalAnunciado, badges: c.badges },
           });
         }
-        if (totalAnunciado != null && lots.length - antes >= totalAnunciado) break;
-        if (cards.length < POR_PAGINA) break;
+        if (totalAnunciado != null && lots.length - antes >= totalAnunciado) { naturalEnd = true; break; }
+        if (cards.length < POR_PAGINA) { naturalEnd = true; break; }
+      }
+      if (!naturalEnd && (lots.length >= limit || lots.length - antes >= cota)) truncated = true;
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
       if (lots.length >= limit) break;
     }

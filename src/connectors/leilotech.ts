@@ -4,7 +4,7 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
-import { rotateTenants } from './tenant-rotation.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 
 /**
  * LEILOTECH — 1 domínio só (topoleiloes.com.br), catálogo pequeno (~12 lotes
@@ -31,11 +31,15 @@ function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 ORDER BY domain`,
   );
-  return rotateTenants([...DOCX_LEILOTECH_TENANTS, ...rows.map((r) => r.domain)], limite);
+  const escolhidos = await dueTenants({ sourceId: 'leilotech', candidates: [...DOCX_LEILOTECH_TENANTS, ...rows.map((r) => r.domain)], limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return escolhidos;
+  const apenas = filterTenantPopulation(escolhidos, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leilotech`);
+  return apenas;
 }
 
 function statusDe(v: string): LotStatus {
@@ -69,21 +73,28 @@ export const leilotech: Connector = {
     siteUrl: 'https://topoleiloes.com.br',
     notes: '1 tenant conhecido, catálogo pequeno. Detalhe do lote (não a listagem) tem status/categoria/avaliação num <dl>. Sem campo de lance.',
   },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
 
-    const dominios = await tenants(Number(process.env.LEILOTECH_TENANTS ?? 5));
+    const dominios = await tenants(Number(process.env.LEILOTECH_TENANTS ?? 5), tenant);
 
     for (const host of dominios) {
+      if (lots.length >= limit) break;
+      const attempt = await observer?.start(host);
+      const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
       let r;
       try {
         r = await fetchText(`https://${host}/agenda`, { headers: { 'user-agent': UA }, gapMs: 1100 });
       } catch {
+        attempt?.failure('network');
         continue;
       }
+      attempt?.response(r.status);
       httpStatus = r.status;
       if (r.status !== 200) continue;
 
@@ -97,7 +108,7 @@ export const leilotech: Connector = {
       fetched += links.length;
 
       for (const l of links) {
-        if (lots.length >= limit) break;
+        if (lots.length >= limit) { truncated = true; break; }
         if (!l.titulo || looksLikePart(l.titulo)) {
           skipped++;
           continue;
@@ -106,9 +117,11 @@ export const leilotech: Connector = {
         try {
           dr = await fetchText(`https://${host}/lote/${l.id}/${l.slug}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
         } catch {
+          attempt?.failure('network');
           skipped++;
           continue;
         }
+        attempt?.response(dr.status);
         if (dr.status !== 200) {
           skipped++;
           continue;
@@ -155,7 +168,14 @@ export const leilotech: Connector = {
           raw: { tenant: host, dl },
         });
       }
+      if (lots.length >= limit) truncated = true;
       if (lots.length >= limit) break;
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
+      }
     }
     return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
   },

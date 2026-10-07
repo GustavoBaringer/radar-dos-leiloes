@@ -33,4 +33,8 @@ Source of truth: `src/server.ts`, global request hooks and route registrations; 
 
 Existing integration/opt-in lanes are intentionally separate and not run by the safe runner: `npm run test:antibot:integration`, `npm run test:antibot:challenge:integration`, `npm run test:antibot:redis`, and `npm run test:antibot:ws:redis`. Their environment/service preconditions must be explicit before use. No real `.env`, database or Redis is a test prerequisite in this pilot.
 
-The contract test characterizes route registration, SQL, response envelope, Fastify GET/HEAD behavior and resource lease cleanup. It does not exercise the production host's OIDC/IP/auth/global security hooks; that requires a later integration lane against the real host configuration.
+The pilot brands test characterizes SQL, response envelope, Fastify GET/HEAD behavior and guard lease cleanup. Phase-2 host tests additionally inject the extracted production host with real signed-session functions, strict OIDC/identity stubs, real route hooks and response handlers. They do not contact an OIDC provider, Redis or a production rate-limit policy; those remain integration-lane concerns.
+
+## Host bootstrap (phase 2)
+
+`src/server.ts` validates OIDC, composes production dependencies, explicitly initializes the host, listens, and owns the optional TLS terminator. `createLegacyHost({ env, paths, dependencies })` registers the unchanged legacy routes and hooks on one Fastify instance and returns `{ app, initializeResources }` synchronously. No host import starts a listener or resource; initialization is memoized, and `app.close()` cleans host-owned resources. `src/bootstrap/paths.ts` resolves source versus compiled assets relative to the module URL. Host contract coverage runs with source imports via `tsx` or `HOST_VARIANT=compiled` against `dist/src`.

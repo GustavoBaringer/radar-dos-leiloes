@@ -3,6 +3,7 @@ import { connectors, getConnector } from '../src/connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources } from '../src/core/repo.js';
 import { processarAposColeta } from '../src/core/pos-coleta.js';
 import { makeRedis, CHANNEL_UPDATES } from '../src/queue/queues.js';
+import { observerForCollection } from '../src/core/collection-observer.js';
 
 const only = process.argv[2];
 const limit = Number(process.argv[3] ?? 400);
@@ -14,7 +15,8 @@ for (const c of targets) {
   const t0 = Date.now();
   const runId = await startRun(c.def.id, 'collect:cli', limit);
   try {
-    const res = await c.collect({ limit });
+    const observer = observerForCollection({ runId, sourceId: c.def.id, origin: 'manual' });
+    const res = await c.collect({ limit, ...(observer ? { observer } : {}) });
     const { upserted, bidChanges, novos } = await upsertLots(res.lots);
     // Mesmo caminho de aviso do worker: coleta pela linha de comando também
     // dispara alerta. Antes só o worker avisava, e quem coletava por aqui

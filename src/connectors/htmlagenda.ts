@@ -3,7 +3,7 @@ import { fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { query } from '../core/db.js';
-import { rotateTenants } from './tenant-rotation.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller, looksLikePart, parseTitle } from '../core/normalize.js';
 import * as campos from '../core/campos.js';
 
@@ -11,14 +11,24 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/
 const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos/proximos', '/evento.php', '/leilao', '/lotes-encerrando', '/lotes', '/lotes/imoveis', '/lotes/veiculos'];
 const ESCOPO = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|sala|loja|fazenda|rural|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento|sucata/i;
 
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const explicitos = String(process.env.HTMLAGENDA_DOMAINS ?? '').trim();
-  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter(Boolean);
+  if (explicitos) {
+    const lista = explicitos.split(',').map((d) => d.trim()).filter(Boolean);
+    if (!tenant) return lista;
+    const apenas = filterTenantPopulation(lista, tenant);
+    if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população explícita de HTMLAGENDA_DOMAINS`);
+    return apenas;
+  }
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='html-agenda' AND http_status=200 AND has_lots IS NOT FALSE
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  return rotateTenants(rows.map((r) => r.domain), limite);
+  const escolhidos = await dueTenants({ sourceId: 'htmlagenda', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return escolhidos;
+  const apenas = filterTenantPopulation(escolhidos, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de htmlagenda`);
+  return apenas;
 }
 
 function texto(s?: string | null): string {
@@ -39,8 +49,15 @@ function dinheiro(v?: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-async function linksDePagina(base: string, path: string): Promise<{ status: number; links: string[] }> {
-  const r = await fetchText(`${base}${path}`, { headers: { 'user-agent': UA }, gapMs: 900 });
+async function linksDePagina(base: string, path: string, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<{ status: number; links: string[] }> {
+  let r;
+  try {
+    r = await fetchText(`${base}${path}`, { headers: { 'user-agent': UA }, gapMs: 900 });
+  } catch (error) {
+    observer?.failure('network');
+    throw error;
+  }
+  observer?.response(r.status);
   if (r.status !== 200) return { status: r.status, links: [] };
   const $ = cheerio.load(r.body);
   const links = new Set<string>();
@@ -53,12 +70,13 @@ async function linksDePagina(base: string, path: string): Promise<{ status: numb
   return { status: r.status, links: [...links] };
 }
 
-async function loteDeUrl(host: string, url: string): Promise<CanonicalLot | null> {
+async function loteDeUrl(host: string, url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<CanonicalLot | null> {
   let html = '';
   try {
     const r = await fetchText(url, { headers: { 'user-agent': UA }, gapMs: 900 });
+    observer?.response(r.status);
     if (r.status === 200) html = r.body;
-  } catch { /* usa slug */ }
+  } catch { observer?.failure('network'); /* usa slug */ }
   const $ = cheerio.load(html);
   const h1 = texto($('h1').first().text() || $('title').first().text());
   const titulo = h1 && !/^(início|home)$/i.test(h1) ? h1 : slugTitulo(url);
@@ -81,25 +99,37 @@ async function loteDeUrl(host: string, url: string): Promise<CanonicalLot | null
 
 export const htmlagenda: Connector = {
   def: { id: 'htmlagenda', name: 'HTML Agenda Genérico', platform: 'HTML Agenda', method: 'html', tier: 5, siteUrl: 'https://sites-de-leiloeiros', notes: 'Conector conservador para sites server-rendered com links /lote, /lotes, /leilao ou /eventos/leilao; só grava títulos de imóvel/veículo/máquina/equipamento.' },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0, skipped = 0, httpStatus = 0;
-    const dominios = await tenants(Number(process.env.HTMLAGENDA_TENANTS ?? 30));
+    const dominios = await tenants(Number(process.env.HTMLAGENDA_TENANTS ?? 30), tenant);
     for (const host of dominios) {
+      if (lots.length >= limit) break;
+      const attempt = await observer?.start(host);
+      const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
       const base = `https://${host}`;
       const urls = new Set<string>();
       for (const p of PAGINAS) {
-        if (lots.length >= limit) break;
+        if (lots.length >= limit) { truncated = true; break; }
         try {
-          const r = await linksDePagina(base, p); httpStatus = r.status || httpStatus;
+          const r = await linksDePagina(base, p, attempt); httpStatus = r.status || httpStatus;
           r.links.forEach((l) => urls.add(l));
-        } catch { /* próximo path */ }
+        } catch { /* falha de rede já registrada pela função */ }
       }
       for (const u of urls) {
-        if (lots.length >= limit) break;
+        if (lots.length >= limit) { truncated = true; break; }
         fetched++;
-        const lot = await loteDeUrl(host, u);
+        const lot = await loteDeUrl(host, u, attempt);
         if (lot) lots.push(lot); else skipped++;
+      }
+      if (lots.length >= limit) truncated = true;
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
     }
     return { lots, fetched, skipped, httpStatus };

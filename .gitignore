@@ -1,4 +1,6 @@
 node_modules/
+dist/
+coverage/
 
 # Segredos. O .env tem VAPID_PRIVATE, APP_SENHA e a URL do banco — o
 # .gitignore anterior só cobria .env.local e teria publicado os quatro.

@@ -4,7 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
-import { rotateTenants } from './tenant-rotation.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import * as campos from '../core/campos.js';
 
 /**
@@ -42,13 +42,17 @@ function dinheiro(v?: string | null): number | null {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
        WHERE platform = 'leilao-pro' AND http_status = 200 AND has_lots IS NOT FALSE
        ORDER BY auctioneers DESC, domain`,
   );
-  return rotateTenants(rows.map((r) => r.domain), limite);
+  const escolhidos = await dueTenants({ sourceId: 'leilaopro', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return escolhidos;
+  const apenas = filterTenantPopulation(escolhidos, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leilaopro`);
+  return apenas;
 }
 
 /**
@@ -57,7 +61,7 @@ async function tenants(limite: number): Promise<string[]> {
  * Cache por leilão: 589 lotes se agrupam em 199 eventos, então é ~1 requisição
  * a cada 3 lotes, não 1 por lote.
  */
-async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | null>): Promise<string | null> {
+async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | null>, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<string | null> {
   const slug = /\/leilao\/([^/]+)\/lote_id\//.exec(urlLote)?.[1];
   if (!slug) return null;
   const chave = `${new URL(urlLote).host}:${slug}`;
@@ -66,6 +70,7 @@ async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | nu
   let nome: string | null = null;
   try {
     const r = await fetchText(urlLote, { gapMs: 1100, timeoutMs: 30000 });
+    observer?.response(r.status);
     if (r.status === 200) {
       const $ = cheerio.load(r.body);
       for (const el of $('script[type="application/ld+json"]').toArray()) {
@@ -79,7 +84,7 @@ async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | nu
         if (nome) break;
       }
     }
-  } catch { /* detalhe fora do ar não derruba a coleta */ }
+  } catch { observer?.failure('network'); /* detalhe fora do ar não derruba a coleta */ }
   cache.set(chave, nome);
   return nome;
 }
@@ -94,30 +99,37 @@ export const leilaopro: Connector = {
     siteUrl: 'https://www.leilao.pro',
     notes: 'White-label multi-tenant. Rotas /leilao/lotes/{veiculos|maquinas|imoveis}. Data do pregão vem no card; lance atual só via JS.',
   },
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
+  async collect({ limit, assetTypes, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
 
-    const dominios = await tenants(Number(process.env.LEILAOPRO_TENANTS ?? 12));
+    const dominios = await tenants(Number(process.env.LEILAOPRO_TENANTS ?? 12), tenant);
     const cats = CATEGORIAS.filter((c) => !assetTypes || assetTypes.includes(c.asset));
     const cota = Math.max(20, Math.ceil(limit / Math.max(1, dominios.length)));
     const vistos = new Set<string>();
     const leiloeiros = new Map<string, string | null>();
 
     for (const host of dominios) {
+      if (lots.length >= limit || !cats.length) break;
+      const attempt = await observer?.start(host);
       const antes = lots.length;
-      for (const cat of cats) {
-        if (lots.length - antes >= cota || lots.length >= limit) break;
-        let res;
-        try {
-          res = await fetchText(`https://${host}/leilao/lotes/${cat.path}`, { gapMs: 1100 });
-        } catch {
-          continue;
-        }
-        httpStatus = res.status;
-        if (res.status !== 200) continue;
+      const fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
+        for (const cat of cats) {
+          if (lots.length - antes >= cota || lots.length >= limit) { truncated = true; break; }
+          let res;
+          try {
+            res = await fetchText(`https://${host}/leilao/lotes/${cat.path}`, { gapMs: 1100 });
+          } catch {
+            attempt?.failure('network');
+            continue;
+          }
+          attempt?.response(res.status);
+          httpStatus = res.status;
+          if (res.status !== 200) continue;
 
         const $ = cheerio.load(res.body);
         const cards = $('.card-vertical').toArray();
@@ -141,7 +153,7 @@ export const leilaopro: Connector = {
           }
 
           const urlLote = href.startsWith('http') ? href : `https://${host}${href}`;
-          const leiloeiro = await leiloeiroDoLeilao(urlLote, leiloeiros);
+          const leiloeiro = await leiloeiroDoLeilao(urlLote, leiloeiros, attempt);
           const inicio = dataDoCard($c.find('.info-meta').text().replace(/\s+/g, ' '));
           const rotulo = $c.find('.bid-label').first().text();
           const valor = dinheiro($c.find('.bid-value').first().text());
@@ -191,7 +203,14 @@ export const leilaopro: Connector = {
               categoria: cat.path,
             },
           });
+          }
         }
+        if (lots.length >= limit || lots.length - antes >= cota) truncated = true;
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
       if (lots.length >= limit) break;
     }
