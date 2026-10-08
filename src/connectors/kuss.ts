@@ -75,7 +75,7 @@ export const kuss: Connector = {
       const count = await fetchJson<any>(`${BASE}/json_edital.php`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: `leilaoID=${auction.id}&op=Q&pag=1&loteado=S&pesq=`,
+        body: `leilaoID=${auction.id}&op=Q&pag=1&loteado=N&pesq=`,
         gapMs: 900,
       });
       status = count.status;
@@ -86,7 +86,7 @@ export const kuss: Connector = {
         const { status: st, data } = await fetchJson<any[]>(`${BASE}/json_edital.php`, {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: `leilaoID=${auction.id}&op=P&pag=${page}&loteado=S&pesq=`,
+          body: `leilaoID=${auction.id}&op=P&pag=${page}&loteado=N&pesq=`,
           gapMs: 900,
         });
         status = st;
@@ -104,8 +104,11 @@ export const kuss: Connector = {
           const years = parseYearPair(it.ano);
           lots.push({
             sourceId: 'kuss',
+            // Com loteado=N, seq é o id do lote no site (le_id), estável. O número do lote
+            // não serve de link: antes do pregão o site o lê como posição noutra ordem e
+            // /lance/896/409 abria uma Shineray no lugar da BMW do lote 409.
             externalId: `${auction.id}-${it.seq}`,
-            lotUrl: `${BASE}/lance/${auction.id}/${it.seq}`,
+            lotUrl: `${BASE}/lance/${auction.id}/0/${it.seq}`,
             titleRaw: title,
             brand: parsed.brand,
             model: parsed.model,
@@ -127,8 +130,9 @@ export const kuss: Connector = {
             sellerName: null,
             city: 'Curitiba',
             state: 'PR',
-            photos: it.foto ? [String(it.foto)] : [],
-            raw: { lote: it.lote, seq: it.seq, leilaoId: auction.id, video: it.linkVideo ?? null },
+            // `fotos/indisp/_indisp.jpg` é o "imagem em breve" da fonte, não foto do lote.
+            photos: it.foto && !/\/indisp\//i.test(String(it.foto)) ? [String(it.foto)] : [],
+            raw: { leId: it.seq, lote: it.lote || null, leilaoId: auction.id, video: it.linkVideo ?? null },
           });
         }
       }

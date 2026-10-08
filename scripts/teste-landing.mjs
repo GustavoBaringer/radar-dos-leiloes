@@ -168,7 +168,7 @@ if (ruim.status !== 400) falhas.push(`lista de espera: e-mail inválido devolveu
     // origem da requisição é localhost, e refletir isso é o comportamento
     // correto. O que se afirma é que a origem do og:image ACOMPANHA por onde o
     // visitante entrou — era isso que estava quebrado, com a meta apontando
-    // para localhost enquanto o link circulava pelo domínio do túnel.
+    // para localhost enquanto o link circulava por outro domínio.
     const og = await p.locator('meta[property="og:image"]').getAttribute('content');
     ok2(Boolean(og) && og.startsWith(`${BASE}/api/img`), `og:image acompanha a origem da requisição (${String(og).slice(0, 46)}…)`);
     // E só um de cada: as metas do template não podem conviver com as do lote.

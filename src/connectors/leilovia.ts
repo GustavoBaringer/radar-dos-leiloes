@@ -3,6 +3,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { query } from '../core/db.js';
 
 /**
  * LEILOVIA — plataforma white-label ASP.NET, achada em 22/09 a partir de 3
@@ -26,8 +27,31 @@ import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js'
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const DOMINIOS = ['vialeiloes.com.br', 'reginaaudeleiloes.com.br', 'rpleiloes.com.br'];
+const DOMINIOS_BASE = ['vialeiloes.com.br', 'reginaaudeleiloes.com.br', 'rpleiloes.com.br'];
 const EVENTOS_POR_TENANT = 8;
+
+async function tenants(limite: number): Promise<string[]> {
+  const rows = await query<{ domain: string }>(
+    `SELECT domain FROM discovered_sites
+      WHERE (platform = 'leilovia' OR domain = ANY($2::text[]))
+        AND http_status = 200
+      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain
+      LIMIT $1`,
+    [limite, DOMINIOS_BASE],
+  );
+  return [...new Set([...DOMINIOS_BASE, ...rows.map((r) => r.domain)])];
+}
+
+function leiloeiroDoHost(host: string): string {
+  const mapa: Record<string, string> = {
+    'vialeiloes.com.br': 'Via Leilões',
+    'reginaaudeleiloes.com.br': 'Regina Aude Leilões',
+    'rpleiloes.com.br': 'RP Leilões',
+    'hcleiloes.com.br': 'HC Leilões',
+    'leiloesonlinems.com.br': 'Leilões Online MS',
+  };
+  return mapa[host] ?? host.replace(/^www\./, '').replace(/\.(com\.br|com)$/i, '').replace(/leiloes/gi, ' Leilões ').replace(/\s+/g, ' ').trim();
+}
 
 function statusDe(v: string): LotStatus {
   if (/em andamento|em leil[ãa]o/i.test(v)) return 'aberto';
@@ -114,7 +138,7 @@ export const leilovia: Connector = {
     method: 'html',
     tier: 3,
     siteUrl: 'https://www.leilovia.com.br',
-    notes: 'White-label ASP.NET, 3 domínios curados (não vem de discovered_sites — sonda genérica não reconhece). Data de encerramento é do leilão, não do lote.',
+    notes: 'White-label ASP.NET multi-tenant; catálogo em /leiloes.aspx e detalhe em /leilao/<slug>/<id>. Data de encerramento é do leilão, não do lote.',
   },
   async collect({ limit }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
@@ -122,7 +146,7 @@ export const leilovia: Connector = {
     let skipped = 0;
     let httpStatus = 0;
 
-    for (const host of DOMINIOS) {
+    for (const host of await tenants(Number(process.env.LEILOVIA_TENANTS ?? 80))) {
       if (lots.length >= limit) break;
       const baseUrl = `https://${host}`;
       let r;
@@ -168,6 +192,7 @@ export const leilovia: Connector = {
             sourceId: 'leilovia',
             externalId: `${host}:${c.id}`,
             lotUrl: c.url,
+            auctioneerName: leiloeiroDoHost(host),
             titleRaw: c.titulo,
             brand: parsed.brand,
             model: parsed.model,

@@ -4,6 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 
 /**
  * Plataforma **vlance**: o mesmo contrato `/core/api/get-lotes` roda em dezenas
@@ -41,6 +42,32 @@ const TAMANHO_FOTO = '640x480';
  */
 
 const TIPOS: Record<number, 'veiculo' | 'imovel'> = { 1: 'veiculo', 3: 'imovel' };
+
+/**
+ * Leiloeiros oficiais encontrados nos DOCX estaduais em Downloads (05/10/2026)
+ * e confirmados no contrato V-Lance real antes de entrar no conector:
+ *
+ * - LISTA DE LEILOEIROS DE GOIAS.docx traz `leiloesjudiciaisgo.com.br`, que
+ *   redireciona para `alvaroleiloes.com.br`. A API responde nos dois tipos:
+ *   tipo=1 => veículos, tipo=3 => imóveis.
+ * - O mesmo DOCX traz `leiloescentrooeste.com.br`; a API tem imóveis em tipo=3
+ *   e zero veículos hoje. Mesmo assim fica no tenant fixo para cobrir o
+ *   leiloeiro oficial e preencher `auctioneerName` por lote.
+ * - `marcelolimaleiloes.com.br` também está no DOCX de GO e responde imóveis.
+ * - Os DOCX de RR/AC/AM trazem `galvanileiloes.com.br` e
+ *   `deonizialeiloes.com.br`; ambos respondem veículos e imóveis.
+ *
+ * Eles entram ANTES do tenant agregado grande (`api.leiloesjudiciais.com.br`),
+ * porque o coletor para ao bater o `limit`; se o Serrano vier primeiro, estes
+ * oficiais menores nunca são alcançados numa coleta normal.
+ */
+const DOCX_VLANCE_TENANTS = [
+  'www.leiloescentrooeste.com.br',
+  'www.alvaroleiloes.com.br',
+  'www.marcelolimaleiloes.com.br',
+  'www.galvanileiloes.com.br',
+  'www.deonizialeiloes.com.br',
+];
 
 function texto(html?: string | null): string {
   return String(html ?? '')
@@ -90,8 +117,10 @@ function minimoDaPracaVigente(primeira: number | null, segunda: number | null, a
   return null;
 }
 
-function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot | null {
-  const titulo = (l.nm_titulo_lote ?? '').trim() || texto(l.nm_descricao).slice(0, 140);
+export function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot | null {
+  // Não usar nm_descricao como título substituto: o campo inclui dados livres e
+  // pode conter dados pessoais que acabariam persistidos no índice.
+  const titulo = (l.nm_titulo_lote ?? '').trim();
   if (!titulo) return null;
   if (asset === 'veiculo' && looksLikePart(titulo)) return null;
   // Lote de simulação da própria plataforma.
@@ -102,6 +131,13 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
   if (fim && fim.getUTCFullYear() > new Date().getUTCFullYear() + 3) return null;
 
   const parsed = asset === 'veiculo' ? parseTitle(titulo) : { brand: null, model: null, version: null, yearMake: null, yearModel: null };
+  const condicao = campos.resolverCondicaoVlance({
+    assetType: asset,
+    descricao: l.nm_descricao,
+    titulo,
+    categoria: l.nm_categoria,
+    edital: l.nm_titulo_leilao,
+  });
   const fotos: string[] = Array.isArray(l.fotos)
     ? l.fotos
         .map((f: any) => {
@@ -126,13 +162,13 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
     lotUrl: urlDoLote(l, host),
     titleRaw: titulo,
     assetType: asset,
-    sourceCategory: asset === 'imovel' ? 'imovel' : null,
+    sourceCategory: asset === 'imovel' ? 'imovel' : (/^veicul\w*$/i.test(String(l.nm_categoria ?? '').normalize('NFD').replace(/\p{M}/gu, '').trim()) ? null : campos.texto(l.nm_categoria)),
     brand: parsed.brand,
     model: parsed.model,
     version: parsed.version,
     yearMake: parsed.yearMake,
     yearModel: parsed.yearModel,
-    docType: 'judicial',
+    docType: asset === 'imovel' ? 'judicial' : (condicao.ambiguo ? null : condicao.docType ?? 'judicial'),
     // A API dá o fechamento do lote, então há timer próprio.
     closingModel: 'timer_por_lote',
     auctionStartUtc: null,
@@ -165,6 +201,8 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
       tenant: host,
       leilaoId: l.leilao_id,
       leilao: l.nm_titulo_leilao,
+      classificacao: asset === 'imovel' ? null : condicao.classificacao,
+      classificacaoOrigem: asset === 'imovel' ? null : condicao.origem,
       lote: l.nu,
       lances: l.nu_qtdelances,
       segundaPraca: num(l.vl_lanceinicialsegundoleilao),
@@ -176,20 +214,23 @@ function mapLot(l: any, asset: 'veiculo' | 'imovel', host: string): CanonicalLot
 }
 
 /** Tenants vlance, do catálogo de descoberta. O maior vem primeiro. */
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'vlance' AND http_status = 200
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC
-      LIMIT $1`,
-    [limite],
+       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  const lista = rows.map((r) => r.domain);
+  const lista = await dueTenants({ sourceId: 'vlance', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
   // MEDIDO: no Serrano a API mora em `api.`, não no host do site — `www` devolve
   // 404 e o domínio sem prefixo devolve 301. O catálogo tem só os tenants menores,
   // então o maior entra explicitamente.
-  if (!lista.includes('api.leiloesjudiciais.com.br')) lista.unshift('api.leiloesjudiciais.com.br');
-  return lista;
+  for (const host of [...DOCX_VLANCE_TENANTS, 'api.leiloesjudiciais.com.br'].reverse()) {
+    if (!lista.includes(host)) lista.unshift(host);
+  }
+  if (!tenant) return lista;
+  const apenas = filterTenantPopulation(lista, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de vlance`);
+  return apenas;
 }
 
 export const vlance: Connector = {
@@ -203,44 +244,59 @@ export const vlance: Connector = {
     notes:
       'White-label multi-tenant. POST /core/api/get-lotes com params na querystring; GET devolve 200 com recusa no corpo. Não seguir redirect: degrada POST para GET.',
   },
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
+  async collect({ limit, assetTypes, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let status = 0;
 
     const tipos = Object.entries(TIPOS).filter(([, a]) => !assetTypes || assetTypes.includes(a));
-    const dominios = await tenants(Number(process.env.VLANCE_TENANTS ?? 40));
+    if (!tipos.length) return { lots, fetched, skipped, httpStatus: status };
+    const dominios = await tenants(Number(process.env.VLANCE_TENANTS ?? 40), tenant);
 
     // Sem cota por tenant: esta API devolve o catálogo inteiro numa requisição,
     // então limitar por tenant só serve para cortar o maior deles (o Serrano
     // sozinho tem 3,5 mil lotes e sumia com cota de 150).
     for (const host of dominios) {
-      for (const [tipo, asset] of tipos) {
-        if (lots.length >= limit) break;
-        let resp;
-        try {
-          // A API IGNORA qualquer parâmetro de página (`pagina`, `page`, `offset`):
-          // `currentPage` volta 1 sempre e repete os mesmos itens. O que funciona
-          // é pedir tudo de uma vez com `qtd_por_pagina` alto.
-          resp = await fetchJson<any>(`${caminhoApi(host)}?tipo=${tipo}&qtd_por_pagina=5000`, {
-            method: 'POST',
-            gapMs: 900,
-            timeoutMs: 45000,
-          });
-        } catch {
-          break;
+      if (lots.length >= limit) break;
+      const attempt = await observer?.start(host);
+      const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
+        for (let i = 0; i < tipos.length; i++) {
+          if (lots.length >= limit) { truncated = i < tipos.length; break; }
+          const [tipo, asset] = tipos[i];
+          let resp;
+          try {
+            // A API IGNORA qualquer parâmetro de página (`pagina`, `page`, `offset`):
+            // `currentPage` volta 1 sempre e repete os mesmos itens. O que funciona
+            // é pedir tudo de uma vez com `qtd_por_pagina` alto.
+            resp = await fetchJson<any>(`${caminhoApi(host)}?tipo=${tipo}&qtd_por_pagina=5000`, {
+              method: 'POST',
+              gapMs: 900,
+              timeoutMs: 45000,
+            });
+          } catch {
+            attempt?.failure('network');
+            break;
+          }
+          attempt?.response(resp.status);
+          status = resp.status;
+          const itens: any[] = resp.data?.items ?? [];
+          if (!Array.isArray(itens)) { attempt?.failure('parser'); break; }
+          fetched += itens.length;
+          for (const it of itens) {
+            if (lots.length >= limit) { truncated = true; break; }
+            const m = mapLot(it, asset, host);
+            if (m) lots.push(m);
+            else skipped++;
+          }
         }
-        status = resp.status;
-        const itens: any[] = resp.data?.items ?? [];
-        if (!Array.isArray(itens)) break;
-        fetched += itens.length;
-        for (const it of itens) {
-          if (lots.length >= limit) break;
-          const m = mapLot(it, asset, host);
-          if (m) lots.push(m);
-          else skipped++;
-        }
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
       if (lots.length >= limit) break;
     }

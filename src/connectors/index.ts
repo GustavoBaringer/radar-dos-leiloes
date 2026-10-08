@@ -25,8 +25,30 @@ import { paulobotelho } from './paulobotelho.js';
 import { tableau } from './tableau.js';
 import { schulmann, karlapepe, leiloesbraga } from './labasoft.js';
 import { lucianleiloes } from './lucianleiloes.js';
+import { supraTenants } from './supra.js';
+import { hastapublica } from './hastapublica.js';
+import { flexleiloes } from './flexleiloes.js';
+import { alfaleiloes } from './alfaleiloes.js';
+import { casadeleiloes } from './casadeleiloes.js';
+import { grupocarvalho } from './grupocarvalho.js';
+import { simonleiloes } from './simonleiloes.js';
+import { globoleiloes } from './globoleiloes.js';
+import { leiloesfreire } from './leiloesfreire.js';
+import { rochaleiloes } from './rochaleiloes.js';
+import { docxhtml } from './docxhtml.js';
+import { maycosantos } from './maycosantos.js';
+import { htmlagenda } from './htmlagenda.js';
+import { rocketleiloes, savoyleiloes } from './supabaseleiloes.js';
+import { mcleilao } from './mcleilao.js';
 
-export const connectors: Connector[] = [superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor, leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes, benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes];
+export const connectors: Connector[] = [
+  superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor,
+  leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes,
+  benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes,
+  hastapublica, flexleiloes, alfaleiloes, casadeleiloes, grupocarvalho, simonleiloes, globoleiloes, leiloesfreire, rochaleiloes,
+  docxhtml, maycosantos, htmlagenda, rocketleiloes, savoyleiloes, mcleilao,
+  ...supraTenants,
+];
 
 export function getConnector(id: string): Connector | undefined {
   return connectors.find((c) => c.def.id === id);

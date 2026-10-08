@@ -56,6 +56,12 @@ function fotoDe(corte: string): string | null {
 }
 
 function tipoDeBem(url: string, titulo: string): AssetType {
+  // O site às vezes põe veículo sob /imoveis/ ("Veículo HYUNDAI/HR HDB" em
+  // grupolance.com.br/.../imoveis/casas/, 03/10). Título manda no começo do
+  // anúncio: se ele abre declarando o bem como veículo, é veículo.
+  if (/^\s*(ve[ií]culo|autom[óo]vel|moto|motocicleta|caminh[ãa]o|[ôo]nibus|trator|bens m[óo]veis)/i.test(titulo)) {
+    return 'veiculo';
+  }
   if (/\/imoveis\//i.test(url) || /apartamento|casa|terreno|im[óo]vel|sobrado|gleba|chac|s[íi]tio|fazenda|sala|loja|galp/i.test(titulo)) {
     return 'imovel';
   }
@@ -174,6 +180,7 @@ function conectorDaPlataforma(cfg: {
               sourceId: cfg.id,
               externalId: c.id,
               lotUrl: c.url,
+              auctioneerName: cfg.nome,
               titleRaw: c.titulo,
               brand: parsed?.brand ?? null,
               model: parsed?.model ?? null,

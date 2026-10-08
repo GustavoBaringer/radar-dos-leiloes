@@ -25,6 +25,9 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
   const [canalEmail, setCanalEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Erro DENTRO do diálogo: o toast fica atrás do backdrop do <dialog> modal.
+  const [erro, setErro] = useState<string | null>(null);
+  const campoEmail = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!alvo) {
@@ -37,6 +40,7 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
     setCanalEmail(canais.includes('email'));
     setEmail(alvo.alerta?.email ?? '');
     setSalvando(false);
+    setErro(null);
     if (!dlg.current?.open) dlg.current?.showModal();
   }, [alvo]);
 
@@ -61,7 +65,8 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
       }
       if (canalEmail) {
         if (!email.trim()) {
-          toast('Informe o e-mail ou desmarque o canal de e-mail.');
+          setErro('Informe o e-mail ou desmarque o canal de e-mail.');
+          campoEmail.current?.focus();
           setSalvando(false);
           return;
         }
@@ -91,7 +96,7 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
       aoFechar();
     } catch (err) {
       // Sem este catch, qualquer exceção deixava o diálogo aberto e mudo.
-      toast(`Não foi possível salvar: ${(err as Error)?.message ?? err}`);
+      setErro(`Não foi possível salvar: ${(err as Error)?.message ?? err}`);
     } finally {
       setSalvando(false);
     }
@@ -122,12 +127,14 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
           </label>
           {canalEmail && (
             <input
-              type="email" placeholder="seu@email.com" value={email}
-              onChange={(e) => setEmail(e.target.value)} aria-label="E-mail para o alerta"
+              ref={campoEmail} type="email" placeholder="seu@email.com" value={email}
+              onChange={(e) => { setEmail(e.target.value); setErro(null); }} aria-label="E-mail para o alerta"
+              aria-invalid={erro && !email.trim() ? true : undefined}
             />
           )}
         </fieldset>
 
+        {erro && <p className="dlg-erro" role="alert">{erro}</p>}
         <div className="dlg-acoes">
           <button type="button" className="btn-sec" onClick={aoFechar}>Cancelar</button>
           <button type="submit" className="btn-pri" disabled={salvando}>

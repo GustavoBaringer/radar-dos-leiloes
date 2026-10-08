@@ -18,6 +18,7 @@ import * as campos from '../core/campos.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 
@@ -238,6 +239,7 @@ export const bomvalor: Connector = {
   },
 
   async collect({ limit, assetTypes }): Promise<CollectResult> {
+    throwIfCancelled();
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
@@ -246,6 +248,7 @@ export const bomvalor: Connector = {
 
     for (const host of await tenants()) {
       if (lots.length >= limit) break;
+      throwIfCancelled();
       let r;
       try {
         // Uma requisição traz o catálogo inteiro do tenant. Medido: 3,9 a 5,0 MB
@@ -255,7 +258,8 @@ export const bomvalor: Connector = {
           gapMs: 1100,
           timeoutMs: 120000,
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof CollectionCancellationError) throw error;
         continue;
       }
       status = r.status;
@@ -266,6 +270,7 @@ export const bomvalor: Connector = {
 
       for (const it of itens) {
         if (lots.length >= limit) break;
+        throwIfCancelled();
         const slug = String(it?.nm_slug ?? '');
         const id = idDoSlug(slug);
         // O id é global: o mesmo lote aparece em várias fachadas e só a primeira conta.
@@ -287,8 +292,9 @@ export const bomvalor: Connector = {
             timeoutMs: 45000,
           });
           if (d.status === 200) detalhe = lerSharedData(d.body)?.lote ?? null;
-        } catch {
-          /* sem detalhe o lote ainda entra, com o que a listagem deu */
+        } catch (error) {
+          // cancelamento corta o laço; sem detalhe o lote ainda entra com o que a listagem deu
+          if (error instanceof CollectionCancellationError) throw error;
         }
 
         const m = mapLot(it, detalhe, host);

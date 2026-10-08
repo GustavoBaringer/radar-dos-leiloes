@@ -69,6 +69,7 @@ interface DadosDoLeilao {
   fim: Date | null;
   leiloeiro: string | null;
   codigo: string | null;
+  photos: string[];
 }
 
 /** O slug do leilão na URL do lote é a chave do evento: /eventos/leilao/{slug}/lote/{id}/... */
@@ -103,12 +104,41 @@ async function lerLeilao(urlDeUmLote: string): Promise<DadosDoLeilao | null> {
   const le = lote?.leilao;
   if (!le) return null;
   const praca = Number(le.praca ?? 1);
+  const photos: string[] = [];
+  try {
+    let arquivos = lote?.bem?.arquivos ?? lote?.item?.arquivos ?? lote?.bemItem?.arquivos;
+    if (!Array.isArray(arquivos)) {
+      // fallback: search in JSON recursively small
+      const str = JSON.stringify(lote);
+      const m = str.match(/"arquivos":(\[[^\]]*\])/g);
+      if (m) {
+        for (const g of m) {
+          try {
+            const arr = JSON.parse(g.slice(g.indexOf('[')));
+            arquivos = arquivos || [];
+            for (const x of arr) arquivos.push(x);
+          } catch {}
+        }
+      }
+    }
+    if (Array.isArray(arquivos)) {
+      for (const a of arquivos) {
+        const url = a?.url || a?.full?.url || a?.versions?.full?.url || a?.versions?.min?.url || a?.versions?.thumb?.url || a?.arquivo?.url;
+        if (url && /arquivos\//.test(String(url))) {
+          const u = String(url);
+          if (!photos.includes(u)) photos.push(u);
+          if (photos.length >= 20) break;
+        }
+      }
+    }
+  } catch {}
   return {
     fim: dataDoBloco(le[`data${praca >= 3 ? 3 : praca === 2 ? 2 : 1}`]) ?? dataDoBloco(le.data1),
     // A fonte publica "Leiloeiro Oficial Exemplo" em leilão de teste; nome
     // falso na faceta é pior que faceta vazia.
     leiloeiro: campos.nomeDeLeiloeiro(le.leiloeiro?.nome),
     codigo: le.codigo ? String(le.codigo) : null,
+    photos,
   };
 }
 
@@ -228,8 +258,8 @@ function mapCard(c: Card, asset: AssetType, host: string, ev: DadosDoLeilao | nu
     // Municipal de Verdelandia") — o aparador tira o rótulo e sobra a cidade.
     city: campos.apararCidade(c.city ?? '') || campos.localDeTexto(c.titulo)?.city || campos.localDeTexto(c.url)?.city || null,
     state: c.state ?? campos.localDeTexto(c.titulo)?.uf ?? campos.localDeTexto(c.url)?.uf ?? null,
-    photos: c.foto ? [c.foto] : [],
-    photoCount: c.foto ? 1 : 0,
+    photos: Array.from(new Set([...(c.foto ? [c.foto] : []), ...(ev?.photos ?? [])])),
+    photoCount: Array.from(new Set([...(c.foto ? [c.foto] : []), ...(ev?.photos ?? [])])).length,
     raw: { tenant: host, statusCard: c.statusBruto, leilao: ev?.codigo ?? null },
   } as CanonicalLot;
 }

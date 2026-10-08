@@ -42,19 +42,17 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4500/*##https://configure-specifies-anything-rewards.trycloudflare.com/*"
+        "post.logout.redirect.uris": "http://localhost:4500/*"
       },
       "redirectUris": [
-        "http://localhost:4500/auth/callback",
-        "https://configure-specifies-anything-rewards.trycloudflare.com/auth/callback"
+        "http://localhost:4500/auth/callback"
       ],
       "webOrigins": [
-        "http://localhost:4500",
-        "https://configure-specifies-anything-rewards.trycloudflare.com"
+        "http://localhost:4500"
       ],
       "fullScopeAllowed": true,
       "protocolMappers": [
@@ -75,5 +73,25 @@
       ]
     }
   ],
-  "waitIncrementSeconds": 60
+  "waitIncrementSeconds": 60,
+  "users": [
+    {
+      "username": "admin@radar.local",
+      "email": "admin@radar.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Admin",
+      "lastName": "Radar",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "radar-local-2026",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "radar-admin"
+      ]
+    }
+  ]
 }

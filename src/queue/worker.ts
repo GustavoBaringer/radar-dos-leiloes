@@ -1,12 +1,22 @@
-
-import { Worker, type Queue } from 'bullmq';
+import { pathToFileURL } from 'node:url';
+import { Worker, type Job, type Processor, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
-import { upsertLots, startRun, finishRun, ensureSources } from '../core/repo.js';
+import { upsertLots, startRun, finishRun, ensureSources, registrarLeituraAoVivo } from '../core/repo.js';
+import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../core/pos-coleta.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
+import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
+import { CollectionCancellationError } from '../core/collection-cancellation.js';
+import {
+  executeCollection,
+  type CollectionExecutionDependencies,
+  type CollectionExecutionOptions,
+  type CollectionExecutionResult,
+  type CollectionMetadata,
+} from '../core/collection-execution.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -14,61 +24,128 @@ import {
 
 const publisher = makeRedis();
 
+/**
+ * Deps reais do worker para o executor compartilhado (`executeCollection`) —
+ * mesmo mapa que a CLI monta em `scripts/collect.ts`. Os testes offline
+ * sobrescrevem só as partes de I/O; a montagem e os tipos são os de produção.
+ */
+export function createWorkerDeps(overrides: Partial<CollectionExecutionDependencies> = {}): CollectionExecutionDependencies {
+  return {
+    lookupConnector: getConnector,
+    startRun,
+    finishRun,
+    upsertLots,
+    observerForCollection,
+    processarAposColeta,
+    publishNotification: (payload) => publisher.publish(CHANNEL_UPDATES, JSON.stringify(payload)),
+    logError: (mensagem, erro) => console.error(mensagem, erro),
+    ...overrides,
+  };
+}
+
+export interface WorkerCollectOptions {
+  sourceId: string;
+  limit: number;
+  metadata?: CollectionMetadata;
+  /** Shutdown do worker ou perda de lock: o `kind` do motivo vira o do erro. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /** Job BullMQ em processamento; a posse do lock (`token`) autoriza o upsert. */
+  queueJob?: Pick<Job<CollectJob>, 'id' | 'name' | 'token'>;
+  publish?: CollectionExecutionOptions['publish'];
+  authorizePersistence?: CollectionExecutionOptions['authorizePersistence'];
+}
+
+/**
+ * Coleta do worker sobre o executor compartilhado. Diferenças para a CLI:
+ * run com `job: 'collect'` (o nome que o freio e a tela de cobertura leem),
+ * `checkEmptyHttpFailure` sempre ligado e eventos `bids`/`collect` no canal
+ * `lot-updates`. Sem job BullMQ (uso manual) a persistência segue normal; com
+ * job mas sem token de lock, o upsert é barrado antes de escrever — BullMQ só
+ * entrega `job.token` a quem processa o job, então na prática esse portão só
+ * fecha em posse perdida. Não existe `job.isOwnedBy`; o token é o sinal.
+ */
+export async function executeWorkerCollect(
+  options: WorkerCollectOptions,
+  deps: CollectionExecutionDependencies = createWorkerDeps(),
+): Promise<CollectionExecutionResult> {
+  const { queueJob, publish, authorizePersistence, ...resto } = options;
+  const autorizar = async () => {
+    if (queueJob && !queueJob.token) {
+      throw new CollectionCancellationError('lock_lost', `job ${queueJob.id ?? queueJob.name} sem token de lock`);
+    }
+    await authorizePersistence?.();
+  };
+  return executeCollection(
+    {
+      ...resto,
+      job: 'collect',
+      checkEmptyHttpFailure: true,
+      ...(queueJob || authorizePersistence ? { authorizePersistence: autorizar } : {}),
+      publish: publish ?? ((evento) => publisher.publish(CHANNEL_UPDATES, JSON.stringify(evento))),
+    },
+    deps,
+  );
+}
+
+/** Coletas em andamento, por job: shutdown e perda de lock derrubam só o que está rodando. */
+const emAndamento = new Map<string, AbortController>();
+
+function cancelarEmAndamento(kind: 'shutdown' | 'lock_lost', jobIds?: string[], message?: string) {
+  const alvos = jobIds ? jobIds.filter((id) => emAndamento.has(id)) : [...emAndamento.keys()];
+  for (const id of alvos) emAndamento.get(id)!.abort(new CollectionCancellationError(kind, message));
+}
+
 /** Freio ANTES da rede: sem isto, cada chamador teria que consultar por
  * conta própria e um deles esqueceria (ver [[freio]]). */
-async function runCollect(sourceId: string, limit: number) {
+async function runCollect(
+  sourceId: string,
+  limit: number,
+  metadata: CollectionMetadata = { origin: 'unknown' },
+  exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {},
+) {
   const freio = await consultaFreio(sourceId);
   if (!freio.permite) {
     console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
     return { fetched: 0, upserted: 0, skipped: 0, freado: true };
   }
-  // startRun ANTES de validar a fonte: com o throw primeiro, um sourceId
-  // errado não gerava linha nenhuma em collection_runs e sumia da tela.
-  const runId = await startRun(sourceId, 'collect', limit);
-  const connector = getConnector(sourceId);
-  if (!connector) {
-    await finishRun(runId, { ok: false, error: `fonte desconhecida: ${sourceId}` });
-    throw new Error(`fonte desconhecida: ${sourceId}`);
+  // startRun, validação da fonte, HTTP vazio, upsert e finishRun vivem no
+  // executor compartilhado (mesmo caminho da CLI, ver [[collection-execution]]).
+  const r = await executeWorkerCollect({ sourceId, limit, metadata, ...exec });
+  return { fetched: r.result.fetched, upserted: r.upserted, skipped: r.result.skipped };
+}
+
+/**
+ * Processador da fila collect: UMA tentativa por job.
+ *
+ * BullMQ padrão é `attempts=1` e o agendador não pede retry, então não há
+ * repetição às cegas: toda falha já gravou `finishRun(ok=false)` no executor e
+ * volta como `failed` para o BullMQ. Repetir de dentro daqui criaria um segundo
+ * run sem ninguém olhar o motivo (e `maxStartedAttempts` não existe em BullMQ).
+ */
+const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
+  const id = job.id ?? job.name;
+  const controller = new AbortController();
+  emAndamento.set(id, controller);
+  // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
+  const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
+  if (sinal) {
+    if (sinal.aborted) fechando();
+    else sinal.addEventListener('abort', fechando, { once: true });
   }
   try {
-    const result = await connector.collect({ limit });
-    // Zero lote com HTTP fora de 2xx é bloqueio, não catálogo vazio. Sem este
-    // portão, 7 execuções históricas (301, 302, 400) gravaram ok=true e a tela
-    // de cobertura mostrou "última coleta" recente escondendo a fonte caída.
-    if (result.fetched === 0 && result.httpStatus != null && (result.httpStatus < 200 || result.httpStatus >= 300)) {
-      const err: any = new Error(`${sourceId} devolveu HTTP ${result.httpStatus} sem nenhum lote`);
-      err.httpStatus = result.httpStatus;
-      throw err;
-    }
-    const { upserted, bidChanges, novos } = await upsertLots(result.lots);
-
-    // Alertas só olham o que é NOVO, e o caminho é o mesmo do script de coleta.
-    await processarAposColeta(novos, (payload) => publisher.publish(CHANNEL_UPDATES, JSON.stringify(payload)));
-    await finishRun(runId, {
-      ok: true,
-      fetched: result.fetched,
-      upserted,
-      skipped: result.skipped,
-      httpStatus: result.httpStatus,
+    return await runCollect(job.data.sourceId, job.data.limit, collectionJobContext(job, 'cron'), {
+      signal: controller.signal,
+      queueJob: job,
     });
-    if (bidChanges.length) {
-      await publisher.publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: bidChanges }));
-    }
-    await publisher.publish(
-      CHANNEL_UPDATES,
-      JSON.stringify({ type: 'collect', sourceId, fetched: result.fetched, upserted, skipped: result.skipped }),
-    );
-    return { fetched: result.fetched, upserted, skipped: result.skipped };
   } catch (err: any) {
-    // httpStatus no erro separa bloqueio (403/429) de falha de rede/DNS.
-    await finishRun(runId, {
-      ok: false,
-      error: String(err?.message ?? err),
-      httpStatus: Number(err?.httpStatus) || undefined,
-    });
+    console.error(`[collect] ${job.data.sourceId} falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
+  } finally {
+    sinal?.removeEventListener('abort', fechando);
+    emAndamento.delete(id);
   }
-}
+};
 
 /** Quanto tempo antes e depois da abertura um leilão de pregão fica "quente". */
 const ANTES_DA_ABERTURA_H = 2;
@@ -99,17 +176,89 @@ const DESCANSO_PREGAO_MIN = 5;
  */
 const FORA_DO_REFRESH = new Set(['superbid']);
 
-async function runRefresh() {
+/** Minutos entre recoletas do catálogo de uma fonte de timer, pelo lote que fecha primeiro. */
+function descansoRecoletaMin(fim: Date): number {
+  const falta = fim.getTime() - Date.now();
+  if (falta > 15 * 60_000) return 10;
+  if (falta > 5 * 60_000) return 4;
+  return 2;
+}
+
+/* ------------------------------------------------------------------ */
+/* Ao vivo                                                             */
+/* ------------------------------------------------------------------ */
+
+const AO_VIVO = process.env.AO_VIVO !== '0';
+const proximaLeitura = new Map<number, number>();
+/** Lote quente que o canal não conseguiu ler → fonte dele. Essas fontes voltam para o refresh. */
+const semCanalLotes = new Map<number, string>();
+const semCanal = { has: (fonte: string) => [...semCanalLotes.values()].includes(fonte) };
+let lendoAoVivo = false;
+
+async function cicloAoVivo() {
+  if (lendoAoVivo) return;
+  lendoAoVivo = true;
+  try {
+    const agora = Date.now();
+    const lotes = await lotesQuentes(Object.keys(LEITORES));
+    const vivos = new Set(lotes.map((l) => l.id));
+    for (const id of proximaLeitura.keys()) if (!vivos.has(id)) proximaLeitura.delete(id);
+    for (const id of semCanalLotes.keys()) if (!vivos.has(id)) semCanalLotes.delete(id);
+
+    const mudancas = [];
+    let lidos = 0;
+    for (const lote of lotes) {
+      const intervalo = intervaloMs(lote.fim, agora);
+      if (intervalo == null || (proximaLeitura.get(lote.id) ?? 0) > agora) continue;
+      // Jitter de até 20%: leitura sempre no mesmo segundo é assinatura de robô.
+      proximaLeitura.set(lote.id, agora + intervalo * (1 + Math.random() * 0.2));
+      let leitura = null;
+      try {
+        leitura = await LEITORES[lote.sourceId](lote);
+      } catch (e: any) {
+        console.error(`[aovivo] ${lote.sourceId} ${lote.externalId}:`, e.message);
+      }
+      lidos++;
+      if (!leitura) {
+        semCanalLotes.set(lote.id, lote.sourceId);
+        continue;
+      }
+      semCanalLotes.delete(lote.id);
+      const m = await registrarLeituraAoVivo(lote.id, leitura.lance, leitura.fim);
+      if (m) mudancas.push(m);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (mudancas.length) await publisher.publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: mudancas }));
+    if (lidos) console.log(`[aovivo] ${lidos} lidos · ${mudancas.length} lances novos · ${semCanalLotes.size} sem canal`);
+  } catch (e: any) {
+    console.error('[aovivo] falhou:', e.message);
+  } finally {
+    lendoAoVivo = false;
+  }
+}
+
+async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }) {
   const quentes = new Map<string, number>();
 
   // Timer por lote: limite pequeno basta, porque o conector dessas fontes
-  // entrega primeiro o que encerra antes.
-  for (const row of await query<{ source_id: string }>(`
-    SELECT DISTINCT source_id FROM lots
-     WHERE closing_model = 'timer_por_lote'
-       AND auction_end_utc IS NOT NULL
-       AND auction_end_utc BETWEEN now() AND now() + interval '1 hour'`)) {
-    if (!FORA_DO_REFRESH.has(row.source_id)) quentes.set(row.source_id, 120);
+  // entrega primeiro o que encerra antes. O descanso cresce com a distância do
+  // fechamento: recoletar o catálogo a cada 2 min por um lote que fecha daqui a
+  // 50 min era o que punha o vlance em 30 coletas por hora.
+  for (const row of await query<{ source_id: string; fim: Date; ultima: Date | null }>(`
+    SELECT l.source_id, min(l.auction_end_utc) AS fim,
+           (SELECT max(r.started_at) FROM collection_runs r WHERE r.source_id = l.source_id) AS ultima
+      FROM lots l
+     WHERE l.closing_model = 'timer_por_lote'
+       AND l.status IN ('aberto','agendado')
+       AND l.auction_end_utc BETWEEN now() AND now() + interval '1 hour'
+     GROUP BY l.source_id`)) {
+    if (FORA_DO_REFRESH.has(row.source_id)) continue;
+    // Fonte com canal ao vivo só recoleta pelo lote que o canal não alcançou.
+    const aoVivo = AO_VIVO && row.source_id in LEITORES;
+    if (aoVivo && !semCanal.has(row.source_id)) continue;
+    const descansoMin = aoVivo ? 15 : descansoRecoletaMin(new Date(row.fim));
+    if (row.ultima && Date.now() - new Date(row.ultima).getTime() < descansoMin * 60_000) continue;
+    quentes.set(row.source_id, 120);
   }
 
   /**
@@ -139,7 +288,7 @@ async function runRefresh() {
   const hot = [...quentes];
   if (!hot.length) return { hot: 0 };
   for (const [sourceId, limite] of hot) {
-    await runCollect(sourceId, limite);
+    await runCollect(sourceId, limite, { ...metadata, origin: 'refresh' });
   }
   console.log(`[refresh] ${hot.map(([f, l]) => `${f}(${l})`).join(' ')}`);
   return { hot: hot.length };
@@ -179,7 +328,6 @@ async function cicloDeEncerramento() {
     travado = false;
   }
 }
-setInterval(cicloDeEncerramento, 60_000).unref();
 
 /**
  * Verificação na origem, em ciclo próprio e mais lento.
@@ -213,11 +361,6 @@ async function cicloDeVerificacao() {
     verificando = false;
   }
 }
-setInterval(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000)).unref();
-void cicloDeVerificacao();
-// Roda na subida também: reiniciar o worker não deve deixar lote vencido
-// esperando o primeiro minuto.
-void cicloDeEncerramento();
 
 /**
  * Job repetido que não tem mais conector fica órfão no Redis e falha a cada
@@ -234,30 +377,6 @@ async function limparAgendamentosOrfaos() {
     }
   }
 }
-await limparAgendamentosOrfaos();
-
-await ensureSources();
-
-new Worker<CollectJob>(
-  QUEUE_COLLECT,
-  async (job) => runCollect(job.data.sourceId, job.data.limit),
-  { connection: makeRedis(), concurrency: 2 },
-).on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message));
-
-new Worker<RefreshJob>(QUEUE_REFRESH, async () => runRefresh(), { connection: makeRedis(), concurrency: 1 }).on(
-  'failed',
-  (_job, err) => console.error('[refresh] falhou:', err.message),
-);
-
-new Worker<DiscoverJob>(
-  QUEUE_DISCOVER,
-  async (job) => {
-    const r = await rodarDescoberta(job.data.qual, job.data.limite);
-    console.log(`[discover] ${job.data.qual}:`, r);
-    return r;
-  },
-  { connection: makeRedis(), concurrency: 1 },
-).on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message));
 
 /**
  * Registra a agenda de uma fila, substituindo o que já existe no Redis.
@@ -301,33 +420,147 @@ async function agendar(
   }
 }
 
-// Agenda: coleta completa 3x/dia por fonte, refresh de lote quente a cada 2 min.
-// MEDIDO em 22/09 (auction_start_utc, BRT): picos às 9h-10h, 14h e 17h-18h. Sem
-// o 3º horário, a lacuna 13h→07h (18h) carregava 49% do catálogo, incluindo 701
-// lotes `pregao_em_horario` — fecham na própria abertura, e um publicado depois
-// das 13h só apareceria às 07h já encerrado.
-await agendar(collectQueue, connectors.map((c) => ({
-  id: `collect-${c.def.id}`,
-  nome: `collect:${c.def.id}`,
-  pattern: '0 7,13,18 * * *',
-  // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
-  // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
-  // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
-  // caras por lote e continuam com teto menor.
-  data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
-  manter: 20,
-})));
+/** Reagenda as três filas (idempotente). Chamado só por `createWorkerHub().start()`. */
+async function agendarTudo() {
+  // Agenda: coleta completa 3x/dia por fonte, refresh de lote quente a cada 2 min.
+  // MEDIDO em 22/09 (auction_start_utc, BRT): picos às 9h-10h, 14h e 17h-18h. Sem
+  // o 3º horário, a lacuna 13h→07h (18h) carregava 49% do catálogo, incluindo 701
+  // lotes `pregao_em_horario` — fecham na própria abertura, e um publicado depois
+  // das 13h só apareceria às 07h já encerrado.
+  await agendar(collectQueue, connectors.map((c) => ({
+    id: `collect-${c.def.id}`,
+    nome: `collect:${c.def.id}`,
+    pattern: '0 7,13,18 * * *',
+    // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
+    // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
+    // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
+    // caras por lote e continuam com teto menor.
+    data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
+    manter: 20,
+  })));
 
-await agendar(refreshQueue, [
-  { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },
-]);
+  await agendar(refreshQueue, [
+    { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },
+  ]);
 
-// Descoberta é semanal porque cadastro de junta comercial muda devagar, e a
-// sonda vai em fatia diária: são 1.023 sites a 1 req/s por host, uns 17 min de
-// uma vez só. A fatia de 150 cobre o catálogo inteiro em uma semana.
-await agendar(discoverQueue, [
-  { id: 'discover-fenaju', nome: 'discover:fenaju', pattern: '23 4 * * 1', data: { qual: 'fenaju' }, manter: 10 },
-  { id: 'discover-sonda', nome: 'discover:sonda', pattern: '41 5 * * *', data: { qual: 'sonda', limite: 150 }, manter: 10 },
-]);
+  // Descoberta é semanal porque cadastro de junta comercial muda devagar, e a
+  // sonda vai em fatia diária: são 1.023 sites a 1 req/s por host, uns 17 min de
+  // uma vez só. A fatia de 150 cobre o catálogo inteiro em uma semana.
+  await agendar(discoverQueue, [
+    { id: 'discover-fenaju', nome: 'discover:fenaju', pattern: '23 4 * * 1', data: { qual: 'fenaju' }, manter: 10 },
+    { id: 'discover-sonda', nome: 'discover:sonda', pattern: '41 5 * * *', data: { qual: 'sonda', limite: 150 }, manter: 10 },
+  ]);
+}
 
-console.log('worker de coleta no ar (filas: collect, refresh, discover)');
+export interface WorkerHubDeps {
+  /** Processador da fila collect (default: freio + `executeWorkerCollect`). */
+  collect?: Processor<CollectJob>;
+  refresh?: Processor<RefreshJob>;
+  discover?: Processor<DiscoverJob>;
+}
+
+export interface WorkerHub {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+/**
+ * Worker completo (filas, agenda e ciclos internos) sem efeito no import: só
+ * `start()` toca Redis e banco. `stop()` cancela as coletas em andamento com
+ * kind `shutdown`, derruba os timers e fecha os workers — o job em voo grava
+ * `finishRun(ok=false)` e sai.
+ *
+ * As conexões continuam vindo de `makeRedis()` (o singleton de `queues.js`);
+ * nada aqui migra para construtores próprios porque as filas singletons já
+ * consomem a mesma fábrica.
+ */
+export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
+  const workers: Worker[] = [];
+  const timers: Array<ReturnType<typeof setInterval>> = [];
+  let ligado = false;
+
+  const periodico = (fn: () => void, ms: number) => {
+    const t = setInterval(fn, ms);
+    t.unref();
+    timers.push(t);
+  };
+
+  const aoPerderLock = (jobIds: string[]) => {
+    console.error(`[collect] lock não renovado em ${jobIds.join(' ')} — cancelando a coleta antes do próximo passo`);
+    cancelarEmAndamento('lock_lost', jobIds, 'lockRenewalFailed');
+  };
+
+  return {
+    async start() {
+      if (ligado) return;
+      ligado = true;
+      if (AO_VIVO) periodico(cicloAoVivo, 15_000);
+      periodico(cicloDeEncerramento, 60_000);
+      periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
+      // Roda na subida também: reiniciar o worker não deve deixar lote vencido
+      // esperando o primeiro minuto.
+      void cicloDeVerificacao();
+      void cicloDeEncerramento();
+
+      // ensureSources primeiro: banco fora do ar aborta aqui, antes de qualquer
+      // comando em Redis (limparAgendamentosOrfaos varre a fila).
+      await ensureSources();
+      await limparAgendamentosOrfaos();
+
+      workers.push(
+        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: 2 })
+          .on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message))
+          .on('error', (err) => console.error('[collect] worker:', err.message))
+          .on('lockRenewalFailed', aoPerderLock),
+        new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? ((job) => runRefresh(collectionJobContext(job, 'refresh'))), {
+          connection: makeRedis(),
+          concurrency: 1,
+        })
+          .on('failed', (_job, err) => console.error('[refresh] falhou:', err.message))
+          .on('error', (err) => console.error('[refresh] worker:', err.message))
+          .on('lockRenewalFailed', aoPerderLock),
+        new Worker<DiscoverJob>(
+          QUEUE_DISCOVER,
+          deps.discover ?? (async (job) => {
+            const r = await rodarDescoberta(job.data.qual, job.data.limite);
+            console.log(`[discover] ${job.data.qual}:`, r);
+            return r;
+          }),
+          { connection: makeRedis(), concurrency: 1 },
+        )
+          .on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message))
+          .on('error', (err) => console.error('[discover] worker:', err.message)),
+      );
+
+      await agendarTudo();
+      console.log('worker de coleta no ar (filas: collect, refresh, discover)');
+    },
+
+    async stop() {
+      if (!ligado) return;
+      ligado = false;
+      cancelarEmAndamento('shutdown', undefined, 'worker encerrando');
+      for (const t of timers.splice(0)) clearInterval(t);
+      await Promise.all(workers.splice(0).map((w) => w.close()));
+    },
+  };
+}
+
+/**
+ * Execução como processo (`npm run worker`): todo o comportamento — agenda,
+ * workers e ciclos — só sobe quando este arquivo é o argv[1]. Importar o módulo
+ * (teste offline) não toca Redis nem banco.
+ */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const hub = createWorkerHub();
+  let encerrando = false;
+  const encerrar = (codigo: number) => {
+    // Segundo sinal não espera: igual à CLI, quem aperta duas vezes quer sair.
+    if (encerrando) process.exit(codigo);
+    encerrando = true;
+    void hub.stop().finally(() => process.exit(codigo));
+  };
+  process.once('SIGINT', () => encerrar(130));
+  process.once('SIGTERM', () => encerrar(143));
+  await hub.start();
+}

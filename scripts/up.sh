@@ -4,7 +4,7 @@
 # que dispara o comando nesta máquina.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-NODE="${NODE_BIN:-$HOME/.nvm/versions/node/v24.19.0/bin/node}"
+NODE="${NODE_BIN:-$(command -v node 2>/dev/null || ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)}"
 docker compose up -d >/dev/null
 until docker exec leilao-db pg_isready -U leilao >/dev/null 2>&1; do sleep 1; done
 "$NODE" --env-file=.env node_modules/.bin/tsx scripts/migrate.ts

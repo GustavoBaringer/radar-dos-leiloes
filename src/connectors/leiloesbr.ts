@@ -26,6 +26,10 @@ import { query } from '../core/db.js';
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function leiloeiroDoHost(host: string): string {
+  return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
+}
 /** Eventos por tenant nesta passada — um catálogo grande (576+ itens) não pode
  * consumir a cota inteira de um `limit` pequeno sozinho. */
 const EVENTOS_POR_TENANT = 3;
@@ -149,6 +153,7 @@ export const leiloesbr: Connector = {
               sourceId: 'leiloesbr',
               externalId: `${host}:${it.id}`,
               lotUrl: `https://${host}/peca.asp?ID=${it.id}`,
+              auctioneerName: leiloeiroDoHost(host),
               titleRaw: it.titulo,
               docType: 'colecionismo',
               sourceGroup: 'arte e colecionismo',

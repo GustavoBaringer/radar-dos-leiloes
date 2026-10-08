@@ -14,6 +14,10 @@ export function fold(input: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    // O ²/³/¹ é dígito, não pontuação: "347m²" virava "347m" — nada — e o que
+    // vier depois colava nele. Virando "347m2" o termo "347m2" volta a casar e
+    // "M²ÁREA" deixa de fabricar o token "marea" (medido em 05/10/2026).
+    .replace(/[\u00b9\u00b2\u00b3]/g, (c) => (c === '\u00b2' ? '2' : c === '\u00b3' ? '3' : '1'))
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
@@ -33,7 +37,7 @@ interface BrandDef {
 const BRANDS: BrandDef[] = [
   {
     canonical: 'VOLKSWAGEN',
-    aliases: ['volkswagen', 'vw', 'volks', 'wolksvagen', 'volkswagem'],
+    aliases: ['volkswagen', 'vw', 'volks', 'wolksvagen', 'volkswagem', 'vokswagen'],
     models: {
       'T-CROSS': ['t cross', 'tcross', 't-cross'],
       NIVUS: ['nivus'],
@@ -56,7 +60,7 @@ const BRANDS: BrandDef[] = [
   },
   {
     canonical: 'CHEVROLET',
-    aliases: ['chevrolet', 'gm', 'chevy', 'general motors'],
+    aliases: ['chevrolet', 'gm', 'gmc', 'chev', 'chevy', 'general motors'],
     models: {
       ONIX: ['onix', 'onix plus'],
       PRISMA: ['prisma'],
@@ -220,7 +224,7 @@ const BRANDS: BrandDef[] = [
   },
   {
     canonical: 'MERCEDES-BENZ',
-    aliases: ['mercedes', 'mercedes benz', 'mercedes-benz', 'mb', 'merc'],
+    aliases: ['mercedes', 'mercedes benz', 'mercedes-benz', 'mb', 'merc', 'm benz', 'mbenz'],
     models: {
       // Classe B: "b 200" é a armadilha que o Leilo confunde com GLA 200.
       'CLASSE B': ['classe b', 'b 200', 'b200', 'b 180', 'b180', 'classe b 200'],
@@ -283,12 +287,22 @@ const BRANDS: BrandDef[] = [
   { canonical: 'SCANIA', aliases: ['scania'], models: { R440: ['r440'], P310: ['p310'], G420: ['g420'] } },
   { canonical: 'IVECO', aliases: ['iveco'], models: { DAILY: ['daily'], TECTOR: ['tector'] } },
   { canonical: 'SUZUKI', aliases: ['suzuki'], models: { JIMNY: ['jimny'], VITARA: ['vitara'] } },
-  { canonical: 'LAND ROVER', aliases: ['land rover', 'landrover'], models: { DISCOVERY: ['discovery'], EVOQUE: ['evoque'], DEFENDER: ['defender'] } },
+  { canonical: 'LAND ROVER', aliases: ['land rover', 'landrover'], models: { DISCOVERY: ['discovery'], EVOQUE: ['evoque'], DEFENDER: ['defender'], FREELANDER: ['freelander'], VELAR: ['velar'], 'RANGE ROVER': ['range rover'] } },
   { canonical: 'JAC', aliases: ['jac'], models: { T40: ['t40'], IEV: ['iev'] } },
   { canonical: 'TROLLER', aliases: ['troller'], models: { T4: ['t4'] } },
   { canonical: 'DAFRA', aliases: ['dafra'], models: { CITYCOM: ['citycom'] } },
   { canonical: 'SHINERAY', aliases: ['shineray'], models: {} },
   { canonical: 'HAOJUE', aliases: ['haojue'], models: {} },
+  { canonical: 'DODGE', aliases: ['dodge'], models: {} },
+  { canonical: 'CHRYSLER', aliases: ['chrysler'], models: {} },
+  { canonical: 'SSANGYONG', aliases: ['ssangyong', 'ssang yong'], models: {} },
+  { canonical: 'LIFAN', aliases: ['lifan'], models: {} },
+  { canonical: 'AGRALE', aliases: ['agrale'], models: {} },
+  { canonical: 'SUNDOWN', aliases: ['sundown'], models: {} },
+  { canonical: 'KENTON', aliases: ['kenton'], models: {} },
+  { canonical: 'KASINSKI', aliases: ['kasinski'], models: {} },
+  { canonical: 'KAWASAKI', aliases: ['kawasaki'], models: {} },
+  { canonical: 'PORSCHE', aliases: ['porsche'], models: {} },
 ];
 
 /**
@@ -303,6 +317,20 @@ const PART_MARKERS = [
   'jogo de', 'kit de', 'par de', 'lote de pecas', 'pecas diversas',
   'cambio do', 'motor do', 'caixa de cambio', 'diferencial do', 'turbina do',
   'mobilete', 'bomba injetora', 'cabine de', 'eixo de', 'eixos de',
+  'motor avulso', 'pecas kawasaki',
+];
+
+/**
+ * Termos que denunciam colecionável/brinquedo, não o bem real. Pegadinha real:
+ * `maycosantos.lel.br` (lista oficial de RR) publica Hot Wheels e figuras de
+ * ação. Títulos como "Volkswagen Golf MK2" parecem veículo para o parser, mas a
+ * descrição/categoria deixa claro que é miniatura 1:64 lacrada.
+ */
+const COLLECTIBLE_MARKERS = [
+  'hot wheels', 'miniatura', 'die cast', 'diecast', 'escala 1 64', 'escala 1 43',
+  'carrinho', 'carrinhos', 'brinquedo', 'colecionavel', 'colecionaveis',
+  'blister', 'lacrado na embalagem', 'figura de acao', 'boneco', 'cartas pokemon',
+  'estampas ilustradas', 'micro collection', 'toy story', 'pixar', 'mattel',
 ];
 
 const brandIndex = new Map<string, BrandDef>();
@@ -310,9 +338,51 @@ for (const b of BRANDS) {
   for (const a of [...b.aliases, b.canonical]) brandIndex.set(compact(a), b);
 }
 
+/**
+ * A marca que vai para a coluna. Fonte que manda a marca crua ("MERCEDES",
+ * "CHEV", "MERCEDES BENZ") ficava fora do filtro, que compara por igualdade com
+ * a canônica; e marca vazia num veículo é tirada do título. Marca fora do
+ * dicionário passa como veio: é melhor que nenhuma. Do título só para veículo
+ * de estrada: em implemento ("enxada rotativa para Agrale") a marca citada é a
+ * do trator onde ele encaixa, não a do lote.
+ */
+const DE_ESTRADA = new Set(['carro', 'moto', 'caminhao', 'onibus', 'picape', 'utilitario', 'suv']);
+const NAO_E_MARCA = new Set(['imp', 'i', 'naoinformado']);
+export function marcaCanonica(brand: string | null | undefined, titleRaw: string, vehicleType: string | null | undefined): string | null {
+  const b = (brand ?? '').trim();
+  if (b && !NAO_E_MARCA.has(compact(b))) {
+    // "VOLKSWAGEN / JOHNSTON": chassi / encarroçadora. A marca do veículo é a primeira.
+    return brandIndex.get(compact(b))?.canonical ?? brandIndex.get(compact(b.split('/')[0]))?.canonical ?? b;
+  }
+  return vehicleType && DE_ESTRADA.has(vehicleType) ? parseTitle(tituloDeVeiculoLimpo(titleRaw)).brand : null;
+}
+
+/**
+ * Modelo, versão e anos tirados do título, para veículo de estrada que chegou
+ * com marca e sem modelo. Sem modelo, o título exibido era o texto cru da fonte.
+ */
+export function completaVeiculo(titleRaw: string, brand: string | null, vehicleType: string | null | undefined) {
+  if (!brand || !vehicleType || !DE_ESTRADA.has(vehicleType)) return null;
+  const limpo = tituloDeVeiculoLimpo(titleRaw);
+  const p = parseTitle(limpo, brand);
+  const livre = p.model ? null : modeloLivre(limpo, brand);
+  return {
+    model: p.model ?? livre?.model ?? null,
+    version: p.model ? p.version : (livre?.version ?? null),
+    yearMake: p.yearMake,
+    yearModel: p.yearModel,
+  };
+}
+
 export function looksLikePart(title: string): boolean {
   const f = fold(title);
-  return PART_MARKERS.some((m) => f.includes(fold(m)));
+  return PART_MARKERS.some((m) => f.includes(fold(m))) ||
+    (/\bkawasaki\b.{0,30}\bpecas?\b|\bpecas?\b.{0,30}\bkawasaki\b/.test(f));
+}
+
+export function looksLikeCollectible(title: string): boolean {
+  const f = fold(title);
+  return COLLECTIBLE_MARKERS.some((m) => f.includes(fold(m)));
 }
 
 export interface ParsedVehicle {
@@ -321,6 +391,52 @@ export interface ParsedVehicle {
   version: string | null;
   yearMake: number | null;
   yearModel: number | null;
+}
+
+/**
+ * Título de veículo sem o ruído de descrição que algumas fontes mandam no lugar
+ * do título ("veículo placa J**-**85-DF, marca RENAULT/CLIO ...,") e sem o
+ * prefixo de importado. É o texto de onde sai modelo e versão.
+ */
+export function tituloDeVeiculoLimpo(t: string): string {
+  return String(t ?? '')
+    .replace(/^\s*ve[ií]culo\b[\s:,-]*/i, '')
+    .replace(/\bplaca\s*:?\s*[\w*]{2,4}-?[\w*]{2,5}(-[a-z]{2})?[,;\s]*/i, '')
+    .replace(/^\s*marca\s*:?\s*/i, '')
+    .replace(/^\s*(imp|i)\s*[/.]\s*|^\s*imp\s+/i, '')
+    .replace(/[,;\s]+$/, '')
+    .trim();
+}
+
+const TIPO_NO_TITULO =
+  /^(caminh[aã]o|ve[ií]culo|moto(cicleta)?|[oô]nibus|carro|autom[oó]vel|camioneta|caminhonete|semirreboque|reboque)\b[\s:,-]*/i;
+const escapaRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Modelo e versão quando a marca é conhecida mas o modelo não está no dicionário
+ * (Clio, Shadow, VW 8.140, MB L 1620): o que vem depois da marca, até o ano ou o
+ * traço. Sem isto o título exibido caía no texto cru da fonte.
+ */
+export function modeloLivre(texto: string, brand: string | null): { model: string | null; version: string | null } {
+  const def = brand ? brandIndex.get(compact(brand)) : undefined;
+  if (!def) return { model: null, version: null };
+  let t = tituloDeVeiculoLimpo(texto).replace(TIPO_NO_TITULO, '');
+  for (const a of [...def.aliases, def.canonical].sort((x, y) => y.length - x.length)) {
+    const re = new RegExp(`^\\s*${a.split(/[\s-]+/).map(escapaRe).join('[\\s.\\-/]*')}(?=[\\s/.\\-]|$)`, 'i');
+    if (re.test(t)) {
+      t = t.replace(re, '');
+      break;
+    }
+  }
+  t = (' ' + t.replace(/^[\s/.\-–]+/, '')).split(/\s[-–]\s|\s(?:19[5-9]\d|20[0-2]\d)\b|\s\d{2}\/\d{2}\b/)[0].trim();
+  const tokens = t.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return { model: null, version: null };
+  // Caminhão MB/Volvo: "L 1620", "FH 400" — a letra sozinha não é o modelo.
+  const nModelo = tokens.length > 1 && /^[a-z]{1,2}$/i.test(tokens[0]) && /^\d/.test(tokens[1]) ? 2 : 1;
+  return {
+    model: tokens.slice(0, nModelo).join(' ').toUpperCase(),
+    version: tokens.slice(nModelo).join(' ').toUpperCase() || null,
+  };
 }
 
 /** Extrai marca/modelo/ano do título livre que cada fonte escreve à sua maneira. */
@@ -434,13 +550,42 @@ export function parseTitle(titleRaw: string, hintBrand?: string | null, hintMode
 /**
  * Texto de busca gravado no lote. Guarda a forma com espaços E a compacta,
  * para que "t cross" e "tcross" caiam no mesmo índice trigram.
+ *
+ * A cola é feita SÓ DENTRO de uma palavra da fonte. Colar também de uma palavra
+ * para a outra fabricava palavra que não existe em nenhum anúncio do lote:
+ * "com área" virava `comarea`, "em área" virava `emarea` e "388 m² - Área
+ * integrada" virava `marea` (antes o `²` sumia no fold e sobrava um token `m`). Medido
+ * em 05/10/2026: `q=marea` devolvia 511 imóveis e 27 veículos, dos quais só 6
+ * eram Marea de verdade — o resto era imóvel colado.
  */
 export function buildSearchText(parts: Array<string | null | undefined>): string {
-  const folded = fold(parts.filter(Boolean).join(' '));
-  const tokens = folded.split(' ').filter(Boolean);
+  const tokens: string[] = [];
   const compacted = new Set<string>();
-  for (let i = 0; i < tokens.length - 1; i++) compacted.add(tokens[i] + tokens[i + 1]);
-  return [folded, ...compacted].join(' ').trim();
+  for (const palavra of parts.filter(Boolean).join(' ').split(/\s+/)) {
+    const ts = fold(palavra).split(' ').filter(Boolean);
+    tokens.push(...ts);
+    for (let i = 0; i < ts.length - 1; i++) compacted.add(ts[i] + ts[i + 1]);
+  }
+  return [tokens.join(' '), ...compacted].join(' ').trim();
+}
+
+const REGEX_ESPECIAL = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * Termo de busca ancorado no INÍCIO de uma palavra, para o predicado
+ * `search_text ~ ?`. `\y` é fronteira de palavra no Postgres.
+ *
+ * O `search_text` guarda também as palavras coladas ("T-CROSS" → `t cross`
+ * `tcross`), então `LIKE '%termo%'` entrava dentro delas e fabricava falso
+ * positivo em qualquer consulta: "taos" casava em "sertaosantana", "argo" em
+ * "cargo", "marea" em "comarea". Medido em 05/10/2026, `q=marea` devolvia 572
+ * lotes e só 6 eram Marea.
+ *
+ * Só a fronteira da ESQUERDA: sem isso "casa" parava de achar "casas" e "area"
+ * parava de achar "areas", que é onde a busca real mora.
+ */
+export function termoComoRegex(termo: string): string {
+  return `\\y${fold(termo).replace(REGEX_ESPECIAL, '\\$&')}`;
 }
 
 export interface ParsedQuery {
@@ -505,6 +650,30 @@ export function parseQuery(raw: string): ParsedQuery {
     .filter((t) => t && !used.has(t) && !(modelCompact && (modelCompact.includes(compact(t)) || compact(t) === modelCompact)));
 
   return { raw, brand, model, freeTerms, compactTerm: compact(raw) };
+}
+
+// Comitente pessoa física vem por extenso da fonte. Marca de empresa/órgão passa
+// inteiro; o que sobra (nome de PF) vira "Primeiro I." para não expor sobrenome.
+// Prefixos sem \b final de propósito: "seguro" tem de casar "seguros", "transport"
+// casar "transportes", "financ" casar "financeira" — o \b final não casava.
+const EMPRESA_PREFIXO =
+  /\b(ltda|eireli|epp|mei|cia|holding|financ|transport|logistic|agropecu|agro|pecuar|securit|segur|servic|leilo|credito|prefeitur|municipi|governo|fazenda|receita|tribunal|justic|energi|usina|miner|telecom|sistema|soluco|tecnolog|technolog|metalurg|maquin|agricol|industri|comerci|veicul|automov|motors|distribuidor|construtor|administrador|incorporad|empreendiment|participac|cooperativ|associac|fundac|imobiliari|locador|sucata|companhia|banco|bradesco|itau|santander|caixa|rodobens|localiza|movida|unidas|fidc|sicredi|sicoob|cresol|consorcio|previdenc|frota|remarcad|sinistr)/;
+const EMPRESA_EXATA = /\b(me|sa|s\/a|spe|uniao|estado|inss|detran|vara|igreja|instituto|condominio)\b/;
+export function vendedorPublico(nome?: string | null): string | null {
+  const n = (nome ?? '').trim();
+  const f = fold(n);
+  if (!n || EMPRESA_PREFIXO.test(f) || EMPRESA_EXATA.test(f)) return nome ?? null;
+  const partes = n.split(/\s+/).filter(Boolean);
+  // Só mascara o que parece PF: 2 a 4 palavras, nenhuma com dígito, e sem sigla
+  // ("S A", "S/A", "ME"). Empresa ("Glencane Bioenergia S A") passa inteira.
+  const semPontos = (p: string) => p.replace(/[.\-/]/g, '');
+  const ehNomePF =
+    partes.length >= 2 &&
+    partes.length <= 4 &&
+    partes.every((p) => !/\d/.test(p) && semPontos(p).length >= 2 && !/^[A-ZÀ-Ý]{2,3}$/.test(semPontos(p))) &&
+    /[A-Za-zÀ-ÿ]/.test(partes[0]);
+  if (!ehNomePF) return n;
+  return `${partes[0]} ${partes[partes.length - 1][0].toUpperCase()}.`;
 }
 
 export function classifySeller(name?: string | null): string {
@@ -605,7 +774,7 @@ import type { AssetType, PropertyType, VehicleType } from './types.js';
 const CATEGORIA_FONTE: Array<[RegExp, VehicleType]> = [
   // Máquina inteira antes de peça: "Tratores de Esteira e Pneus" casava com
   // 'pneu' e 37 tratores do Superbid entraram no índice como peça.
-  [/\b(trator(es)? de (esteira|pneu)|motoniveladora|retroescavadeira|escavadeira|colheitadeira|empilhadeira|carregadeira)/, 'maquina'],
+  [/\b(trator(es)? de (esteira|pneu)|motoniveladora|retroescavadeira|escavadeira|colheitadeira|empilhadeira|carregadeira|ensiladeiras?)/, 'maquina'],
   // Ordem importa: 'peca' antes do resto, senão "Partes & Peças Carros" vira carro.
   [/\b(pe[cç]a|pneu|roda|motores?\b|partes|cabe[cç]ote|bateria)/, 'peca'],
   // 'moto' precisa de fronteira à direita: sem ela "Motoniveladoras" virava moto.
@@ -617,8 +786,8 @@ const CATEGORIA_FONTE: Array<[RegExp, VehicleType]> = [
   [/\b(suv|utilitario esportivo|crossover)/, 'suv'],
   [/\b(utilitari|furg[oa]|vans?\b|minivan|ambulanc|kombi)/, 'utilitario'],
   [/\b(reboques?|semi ?reboques?|carretas?|trailer|implemento|prancha|dolly|granel|cacamba|ca[cç]amba|cana picada|bau\b|tanque)/, 'reboque'],
-  [/\b(trator|retro|escavadeira|empilhadeira|paleteira|colheitadeira|maquina|motoniveladora|carregadeira|plantadeira|pulverizador|agricola|pesada)/, 'maquina'],
-  [/\b(barco|lancha|jet ?ski|embarcac|nautic|iate|navio|aeronave)/, 'nautico'],
+  [/\b(trator|retro|escavadeira|empilhadeira|paleteira|colheitadeira|maquina|motoniveladora|carregadeira|plantadeira|pulverizador|ensiladeiras?|agricola|pesada)/, 'maquina'],
+  [/\b(barco|lancha|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcac|nautic|iate|navio|aeronave)/, 'nautico'],
   // "Pesados" sem nada no título é caminhão — nunca carro. O leilo usa essa
   // categoria para caminhão, reboque e implemento agrícola no MESMO saco, e o
   // padrão anterior jogava os 76 que o título não reconhecia no filtro de
@@ -641,17 +810,26 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // A ordem foi tirada do diff real, não do senso comum. Máquina agrícola vem
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
-  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
+  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
   // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
   // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
   // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
   // "semeadeira": a fonte escreve das duas formas e só a segunda estava aqui.
   // Sigla solta ficou de fora: "magnum" e "hitech" são trator E outras coisas.
   [/\b(plataforma (de )?(corte|milho|graos|cereais)|plataforma (draper|flexivel)|draper|terraflex|acabadora de asfalto|plaina|semeadora|escarificador|grade (aradoura|niveladora|nivelador)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira)\b/, 'maquina'],
-  [/\b(lancha|jet ?ski|embarcacao|iate|veleiro)\b/, 'nautico'],
+  [/\b(lancha|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao|iate|veleiro|balsa)\b/, 'nautico'],
+  [/\byamaha\b.{0,20}\b(mt ?0?9|mt ?03|ttr ?230|neo ?(?:at ?)?115|neo ?125|xt ?600 ?e?)\b/, 'moto'],
+  [/\bhonda\b.{0,20}\b(nrx ?160|elite ?125)\b/, 'moto'],
+  [/\bsuzuki\b.{0,20}\bgsr ?150i\b/, 'moto'],
+  [/\bkawasaki\b.{0,20}\bvulcan ?s\b/, 'moto'],
+  [/\bkenton\b.{0,20}\b(gl ?150|blitz ?110|dakar)\b/, 'moto'],
+  [/\bleopard\b.{0,20}\bhb ?110\b/, 'moto'],
+  [/\btaiga\b.{0,20}\b(tl ?(?:150|125)|110)\b/, 'moto'],
+  [/\bmotostar\b.{0,20}\bstar ?200\b/, 'moto'],
+  [/\bdax ?110\b/, 'moto'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
-  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|o 4\d{2} (rs|rse))\b/, 'onibus'],
+  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|caio|o 4\d{2} (rs|rse))\b/, 'onibus'],
   // Família que no Brasil só existe em caminhão. "AX0R" com zero no lugar do O
   // aparece cru no vlance. "Titan" ficou de fora: é VW 19.320 Titan e Honda CG
   // 125 Titan ao mesmo tempo — o CG já é pego pela regra de moto.
@@ -666,11 +844,12 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "Caminhão Mercedes Benz 1718 com baú da marca Facchini" virando reboque.
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem)\b/, 'caminhao'],
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
+  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
   // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
   // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
   // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
-  [/\bmercedes\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
+  [/\b(mercedes|m ?\.? ?benz|mb)\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
   // "VW/8.140" e "VW/8.150E" (prefixo de 1 dígito, série 140/Delivery) saíam
   // do "vw ?\d{2} ?\d{3}\b" de cima: exigia 2 dígitos, e o "\b" final falhava
   // quando o sufixo vem colado a letra ("150E"). Achado em 24/09 no bomvalor,
@@ -685,7 +864,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // acima falha sem espaço) ficavam carro. "CG" sozinho é ambíguo demais pra
   // valer sem a marca do lado — por isso não entra solto na lista de cima.
   [/\bhonda\b.{0,15}?\bcg\b/, 'moto'],
-  [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro)\b/, 'picape'],
+  [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro|caminhonete|pickup)\b/, 'picape'],
   [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[469]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
   [/\b(sprinter|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo)\b/, 'utilitario'],
 ];
@@ -716,6 +895,7 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
 export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | null): VehicleType | null {
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
+  if (ACESSORIO_SEADOO.test(`${titulo} ${cat}`)) return null;
   if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
   // Só no INÍCIO do título: "caminhão" solto no meio ("peças PARA caminhão",
   // "retirada DE caminhão", "APLI.: caminhão") descreve o que a peça serve,
@@ -754,17 +934,21 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
-  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico)\b/, 'caminhao'],
-  [/\b(onibus|microonibus|marcopolo|comil|neobus)\b/, 'onibus'],
-  [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier)\b/, 'picape'],
+  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
+  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
+  [/\b(onibus|microonibus|marcopolo|comil|neobus|caio)\b/, 'onibus'],
+  [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],
   [/\b(sprinter|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia)\b/, 'utilitario'],
   // "2008" e "3008" só valem colados à marca: sozinhos casavam com ANO/MODELO
   // 2008 e transformaram 30 lotes (inclusive uma retroescavadeira) em SUV.
   [/\b(peugeot[ /-]*[23]008|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|tucson|ix35|sw4|rav4|ecosport|asx|outlander|sportage|xc40|xc60|tiguan|taos|territory|commander|bronco|jimny|corolla cross)\b/, 'suv'],
   [/\b(reboque|semirreboque|semi ?reboque|carreta|randon|trailer)\b/, 'reboque'],
-  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/, 'maquina'],
-  [/\b(lancha|barco|jet ?ski|embarcacao)\b/, 'nautico'],
+  [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|ensiladeiras?|motoniveladora|betoneira)\b/, 'maquina'],
+  [/\b(lancha|barco|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao)\b/, 'nautico'],
 ];
+
+// Peças e acessórios explicitamente ligados ao Sea-Doo não são a embarcação.
+const ACESSORIO_SEADOO = /\b(peca|pecas|acessorio|acessorios|kit)\b.{0,40}\b(sea ?doo|seadoo)\b|\b(sea ?doo|seadoo)\b.{0,40}\b(peca|pecas|acessorio|acessorios|kit)\b/;
 
 const MARCADORES_IMOVEL =
   /\b(apartamento|casa|terreno|lote urbano|sala comercial|imovel|imoveis|gleba|chacara|fazenda|sitio|galpao|loja|kitnet|sobrado|predio|vaga de garagem|area rural|matricula \d)\b/;
@@ -812,13 +996,15 @@ const CATEGORIA_IMOVEL: [RegExp, PropertyType][] = [
   // "hectare" e "faz." apareceram em lote de fração ideal que não diz o tipo
   // em nenhum outro lugar ("Parte Ideal correspondente a 2,72 hectares").
   [/\b(fazenda|faz\.|sitio|chacara|gleba|rural|agricol|pastagem|haras|hectare)/, 'rural'],
-  // "BOX Nº 11 DO EDIFÍCIO" é vaga/depósito em edital; "box" sozinho não serve,
-  // porque aparece em descrição de banheiro.
-  [/\b(vaga|garagem|box\s*n[ºo°]?\.?\s*\d|box\s+\d)/, 'vaga'],
   [/\b(apart|apto|kitnet|kitinete|flat|studio|cobertura|duplex|triplex)/, 'apartamento'],
   [/\b(casa|sobrado|residencia|moradia|geminad)/, 'casa'],
   [/\b(terreno|lote|area de terra|data de terra|quadra)/, 'terreno'],
   [/\b(sala|loja|conjunto comercia|galp[ao]|predio|comercia|escritorio|industria|fabrica|barrac[ao]|pavilh[ao]|hotel|pousada|posto|clinica)/, 'comercial'],
+  // "vaga" por ÚLTIMO: "Apartamento 49 m² (01 vaga)", "Sala Comercial ... com 01
+  // vaga" e "Casa em Condomínio ... 01 vaga" têm a vaga como acessório do bem —
+  // antes dela decidia e o imóvel inteiro virava "vaga de garagem" (achado em
+  // 03/10: dezenas de apartamentos do megaleiloes classificados como vaga).
+  [/\b(vaga|garagem|box\s*n[ºo°]?\.?\s*\d|box\s+\d)/, 'vaga'],
 ];
 
 export function classifyProperty(
@@ -849,10 +1035,58 @@ export function classifyAsset(
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
 
+  if (ACESSORIO_SEADOO.test(`${titulo} ${cat}`)) {
+    return { assetType: 'outro', vehicleType: null };
+  }
+
+  const tituloDeclaraVeiculo =
+    /^(veiculo|automovel|moto|motocicleta|caminhao|onibus|trator|caminhonete|lancha|embarcacao)\b/.test(titulo) ||
+    /^bens moveis\b/.test(titulo) ||
+    /\b(caminhonete|caminhao|motocicleta|onibus|trator|betoneira|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/.test(titulo);
+
   if (cat) {
-    if (/\b(imove|apartament|casa|terreno|sala|loja|gleba|fazenda|sitio|chacara|galp[ao]|predio|sobrado|vaga|rural|comercia|residencia|industria)/.test(cat)) {
-      return { assetType: 'imovel', vehicleType: null };
+    if (/\b(imove|apartament|casa|terreno|sala|loja|gleba|fazenda|sitio|chacara|galp[ao]|predio|sobrado|vaga|rural|comercia|residencia|industria|box|sobreloja|laje|fracao|multipropriedade|deposito|posto)/.test(cat)) {
+      // A categoria da fonte às vezes erra: Superbid gravou "Terrenos Rurais"
+      // num lote cujo título é "VEICULO CAMINHONETE I/KIA UK2500 HD SC", e o
+      // grupolance enfiou sob /imoveis/ um "Veículo HYUNDAI/HR HDB" (03/10).
+      // Quando o título declara o bem como VEÍCULO e não declara imóvel, ele
+      // vence a categoria — senão o lote cairia no filtro de terreno/vaga.
+      if (tituloDeclaraVeiculo && !MARCADORES_IMOVEL.test(titulo)) {
+        // Segue o fluxo normal de veículo abaixo, sem confiar na categoria.
+      } else {
+        return { assetType: 'imovel', vehicleType: null };
+      }
     }
+  }
+
+  // Imóvel declarado no TÍTULO com categoria vazia ou-lixo da fonte: sem este
+  // guarda "Fazenda - Gleba D" (cat "Instalações") e "Conjunto Comercial"
+  // (cat null no megaleiloes) caíam no default 'veiculo/carro' — achado na
+  // auditoria de 03/10. O marcador é mais restrito que MARCADORES_IMOVEL:
+  // "casa"/"fazenda" ficam de fora porque poluem títulos de veículo no vlance
+  // ("Honda/NXR 150 - Fazenda Nova/GO" viraria imóvel).
+  // Também bate "casa"/"fazenda" quando NÃO é o padrão de município
+  // ("- Fazenda Nova/GO"): "Casa em Condomínio..." é imóvel; "Palio - Casa
+  // Nova/SP" é carro. Antes o default era "tudo que não conhece = carro";
+  // melhor reconhecer imóvel pelo título do que cair nele.
+  const marcadorImovelForte =
+    /\b(apartamento|sobrado|kitnet|kitinete|gleba|chacara|laje|sobreloja|agencia|posto|sala comercial|conjunto comercial|fracao|multipropriedade|area rural|matricula \d|terreno|imovel|imoveis)\b/.test(titulo) ||
+    /\barea (com|construida)\b/.test(titulo) ||
+    // "casa"/"fazenda" só valem quando NÃO são padrão de município
+    // ("- Fazenda Nova/GO"): "Casa em Condomínio..." é imóvel; "Palio - Casa
+    // Nova/SP" é carro.
+    (/\b(casa|fazenda)\b/.test(titulo) && !/\b(fazenda|casa)\s+[a-z]+\s+[a-z]{2}\b/.test(titulo));
+  if (!tituloDeclaraVeiculo && marcadorImovelForte) {
+    return { assetType: 'imovel', vehicleType: null };
+  }
+
+  // Categoria de bem que não é veículo decide antes do título: "CAIXA DE SOM PULSE"
+  // em Equipamentos virava Fiat Pulse, e monitor e Apple Watch viravam carro. Só
+  // máquina pesada nomeada no título escapa. `\b` evita casar "automoveis".
+  if (cat && /\b(equipament|eletron|eletrodomest|informatic|moveis|mobili|utensil|diversos|ferrament|joia|vestuari)/.test(cat)) {
+    return /\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/.test(titulo)
+      ? { assetType: 'veiculo', vehicleType: 'maquina' }
+      : { assetType: 'outro', vehicleType: null };
   }
 
   // O título corrige a categoria genérica — a regra inteira vive em tipoForteDoTitulo.
@@ -874,8 +1108,16 @@ export function classifyAsset(
     }
   }
 
-  if (!cat && MARCADORES_IMOVEL.test(titulo)) {
-    return { assetType: 'imovel', vehicleType: null };
+  // (o bloco de imóvel-por-título está acima; removido este antigo, que
+  // jogava "Fazenda Nova/GO" de moto no filtro de imóvel — achado em 03/10)
+  if (/^bens moveis\b/.test(titulo)) {
+    // Lote de massa falida com itens variados ("betoneira, gerador, portas,
+    // cadeiras"): não é nem imóvel (categoria da fonte dizia terreno) nem um
+    // veículo único — cai em 'outro' e sai do filtro de terreno e de carro.
+    return { assetType: 'outro', vehicleType: null };
+  }
+  if (looksLikeCollectible(titleRaw)) {
+    return { assetType: 'outro', vehicleType: null };
   }
   if (looksLikePart(titleRaw)) {
     return { assetType: 'outro', vehicleType: 'peca' };

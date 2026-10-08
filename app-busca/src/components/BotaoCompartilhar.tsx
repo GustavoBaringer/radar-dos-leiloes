@@ -24,9 +24,9 @@ export function BotaoCompartilhar({ titulo, descricao }: { titulo: string; descr
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const compartilhar = useCallback(async () => {
-    // `location.href` é a origem por onde o visitante REALMENTE chegou — o
-    // domínio do túnel, o de produção. Montar a URL de uma constante mandaria
-    // localhost para o WhatsApp de alguém.
+    // `location.href` é a origem por onde o visitante REALMENTE chegou —
+    // inclusive em produção. Montar a URL de uma constante mandaria localhost
+    // para o WhatsApp de alguém.
     const alvo = window.location.href;
 
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {

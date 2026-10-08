@@ -1,4 +1,6 @@
 import { request, Agent, interceptors, type Dispatcher } from 'undici';
+import { setTimeout as delay } from 'node:timers/promises';
+import { combinedSignal } from '../core/collection-cancellation.js';
 
 // Freitas entrega cadeia TLS incompleta (medido: UNABLE_TO_VERIFY_LEAF_SIGNATURE).
 // O undici v7 não aceita `connect` no request() direto; só via dispatcher Agent.
@@ -48,11 +50,22 @@ const UA =
 const lastHit = new Map<string, number>();
 const DEFAULT_GAP_MS = 1100;
 
-async function throttle(host: string, gapMs: number) {
+async function waitWithSignal(ms: number, signal?: AbortSignal) {
+  try {
+    await delay(ms, undefined, { signal });
+  } catch (err) {
+    if (signal?.aborted) throw signal.reason;
+    throw err;
+  }
+}
+
+async function throttle(host: string, gapMs: number, signal?: AbortSignal) {
+  if (signal?.aborted) throw signal.reason;
   const now = Date.now();
   const prev = lastHit.get(host) ?? 0;
   const wait = prev + gapMs - now;
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  if (wait > 0) await waitWithSignal(wait, signal);
+  if (signal?.aborted) throw signal.reason;
   lastHit.set(host, Date.now());
 }
 
@@ -71,6 +84,7 @@ export interface FetchOpts {
    * achando que estava endurecendo.
    */
   insecureTls?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface FetchResult {
@@ -82,10 +96,15 @@ export interface FetchResult {
 export async function fetchText(url: string, opts: FetchOpts = {}): Promise<FetchResult> {
   const host = new URL(url).host;
   const retries = opts.retries ?? 2;
+  // Chamador + sinal da coleta (ALS): cancelamento comum corta throttle, backoff
+  // e retry. O prazo por requisição fica separado, para não virar retry-forever.
+  const cancel = combinedSignal(opts.signal);
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    await throttle(host, opts.gapMs ?? DEFAULT_GAP_MS);
+    await throttle(host, opts.gapMs ?? DEFAULT_GAP_MS, cancel);
+    const prazo = AbortSignal.timeout(opts.timeoutMs ?? 20000);
+    const requestSignal = cancel ? AbortSignal.any([cancel, prazo]) : prazo;
     try {
       const res = await request(url, {
         method: opts.method ?? 'GET',
@@ -98,18 +117,20 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<Fetc
         body: opts.body,
         headersTimeout: opts.timeoutMs ?? 20000,
         bodyTimeout: opts.timeoutMs ?? 20000,
+        signal: requestSignal,
         dispatcher: opts.insecureTls ? agenteInseguroComRedirect() : agenteComRedirect(),
       });
       const body = await res.body.text();
       // 429/503 são transitórios e merecem backoff; 4xx restante é resposta final.
       if ((res.statusCode === 429 || res.statusCode >= 500) && attempt < retries) {
-        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        await waitWithSignal(2000 * (attempt + 1), cancel);
         continue;
       }
       return { status: res.statusCode, body, headers: res.headers as any };
     } catch (err) {
+      if (cancel?.aborted) throw cancel.reason;
       lastErr = err;
-      if (attempt < retries) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      if (attempt < retries) await waitWithSignal(1500 * (attempt + 1), cancel);
     }
   }
   throw lastErr ?? new Error(`falha ao buscar ${url}`);

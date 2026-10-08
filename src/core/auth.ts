@@ -16,7 +16,9 @@ const USUARIO_COMUM = process.env.APP_USUARIO_COMUM ?? '';
 const SENHA_COMUM = process.env.APP_SENHA_COMUM ?? '';
 
 export type Papel = 'admin' | 'comum';
-const SEGREDO = process.env.APP_SESSAO_SEGREDO ?? randomBytes(32).toString('hex');
+// `??` não cobre string vazia: com APP_SESSAO_SEGREDO= o segredo virava "" e o
+// HMAC da sessão ficava forjável. Vazio é tratado como ausente -> chave aleatória.
+const SEGREDO = process.env.APP_SESSAO_SEGREDO?.trim() || randomBytes(32).toString('hex');
 /**
  * Duas janelas, não uma.
  *

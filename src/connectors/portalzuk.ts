@@ -161,6 +161,7 @@ export const portalzuk: Connector = {
           sourceId: 'portalzuk',
           externalId: c.id,
           lotUrl: c.url,
+          auctioneerName: 'Portal Zuk',
           titleRaw: titulo,
           assetType: 'imovel',
           propertyType: PROP.find(([re]) => re.test(c.tipo))?.[1] ?? 'outro',

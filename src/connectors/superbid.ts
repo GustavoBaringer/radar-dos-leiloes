@@ -1,7 +1,7 @@
 import { comNavegador, getJsonViaNavegador } from './navegador.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, classifyAsset } from '../core/normalize.js';
 
 const BASE = 'https://offer-query.superbid.net/offers/';
 const HEADERS = { origin: 'https://www.superbid.net', referer: 'https://www.superbid.net/' };
@@ -65,16 +65,28 @@ function toUtc(brt?: string | null, epochMs?: number | null): Date | null {
 function mapOffer(o: any): CanonicalLot | null {
   const product = o.product ?? {};
   const pt = PRODUCT_TYPES[product?.productType?.id];
-  if (!pt) return null;
   const title = product.shortDesc ?? o.offerDescription ?? '';
-  if (!title) return null;
-  if (pt.asset === 'veiculo' && looksLikePart(title)) return null;
+  if (!pt || !title) return null;
+  // QUEM CLASSIFICA É A SUBCATEGORIA, não o productType. O productType é largo
+  // e a fonte o preenche torto: 229 lotes com subCategory "Terrenos Urbanos",
+  // "Apartamentos" ou "Casas" foram gravados como `veiculo` só porque o
+  // productType era de veículos — era o que fazia a busca de "marea" no filtro
+  // de veículos devolver 21 imóveis (medido em 05/10/2026).
+  // A subCategoria erra no sentido inverso também ("VEICULO CAMINHONETE I/KIA
+  // UK2500 HD SC" sob imóveis, 03/10) e quem concilia é o classifyAsset: ele
+  // só troca a categoria por imóvel/fazenda quando o título NÃO declara
+  // veículo. Melhor um alarme de veículo do que perder o bem num terreno.
+  const subCategoria =
+    product?.subCategory?.description ?? product?.subCategory?.category?.description ?? null;
+  const cls = classifyAsset(title, subCategoria ?? pt.hint, null);
+  const asset: 'imovel' | 'veiculo' | 'outro' = subCategoria ? cls.assetType : pt.asset;
+  if (asset === 'veiculo' && looksLikePart(title)) return null;
 
   const detail = o.offerDetail ?? {};
   // Parser de veículo NÃO roda em imóvel: "IMÓVEL RURAL EM MERCEDES-PR" virava
   // Mercedes-Benz e "Sobrado - City América" virava Honda City (10 em 1.000).
   const parsed =
-    pt.asset === 'veiculo'
+    asset === 'veiculo'
       ? parseTitle(title, product?.brand?.description, product?.model?.description)
       : { brand: null, model: null, version: null, yearMake: null, yearModel: null };
   const photos: string[] = Array.isArray(product.galleryJson)
@@ -94,9 +106,9 @@ function mapOffer(o: any): CanonicalLot | null {
     yearModel: parsed.yearModel,
     km: null,
     docType: product?.subCategory?.description ?? null,
-    sourceCategory: product?.subCategory?.description ?? product?.subCategory?.category?.description ?? pt.hint,
+    sourceCategory: subCategoria ?? pt.hint,
     sourceGroup: pt.hint,
-    assetType: pt.asset,
+    assetType: asset,
     closingModel: 'timer_por_lote',
     auctionStartUtc: toUtc(o.auction?.beginDate),
     auctionEndUtc: toUtc(o.endDate, o.endDateTime),

@@ -41,17 +41,21 @@ const total = () => page.textContent('.count b').then((t) => Number(String(t).re
 const nCartoes = () => page.locator('.card').count();
 const esperaBusca = () => page.waitForTimeout(1400);
 
-await page.goto(`${API}/login`, { waitUntil: 'load' });
-await page.fill('#usuario', process.env.APP_USUARIO);
-await page.fill('#senha', process.env.APP_SENHA);
-await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+// Com o portão desligado (uso local) não há /login: a sessão já é a conta administradora.
+const eu = await (await ctx.request.get(`${API}/api/me`)).json().catch(() => ({}));
+if (eu.authLigada !== false) {
+  await page.goto(`${API}/login`, { waitUntil: 'load' });
+  await page.fill('#usuario', process.env.APP_USUARIO);
+  await page.fill('#senha', process.env.APP_SENHA);
+  await Promise.all([page.waitForNavigation(), page.click('button[type=submit]')]);
+}
 
 /* 1 — busca por texto */
 await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
 await esperaBusca();
 const totalSemFiltro = await total();
 await page.fill('#q', 'onix');
-await page.click('.btn-buscar');
+await page.click('.pb-ir');
 await esperaBusca();
 const totalOnix = await total();
 if (totalOnix > 0 && totalOnix < totalSemFiltro) ok('1. busca por texto', `${totalSemFiltro} -> ${totalOnix} com "onix"`);
@@ -60,20 +64,19 @@ else falha('1. busca por texto', `sem filtro ${totalSemFiltro}, com "onix" ${tot
 /* 2 — facetas múltiplas, contadas ignorando o próprio predicado */
 await page.goto(`${API}/busca?assetType=veiculo`, { waitUntil: 'networkidle' });
 await esperaBusca();
-const botoes = await page.locator('.multi-botao').count();
+const botoes = await page.locator('.f-secao').count();
 // A prova da regra: escolher UM tipo de veículo tem de MANTER os outros tipos
 // visíveis na lista. Se a faceta fosse contada com o próprio filtro aplicado,
 // sobraria só o escolhido — foi o bug que zerava o filtro ao trocar de tipo.
-await page.locator('.f-group', { hasText: 'Tipo de veículo' }).locator('.multi-botao').click();
-await page.waitForTimeout(400);
-const opcoesAntes = await page.locator('.multi-lista label').count();
-await page.locator('.multi-lista label', { hasText: 'Moto' }).first().click();
+const tiposVeiculo = page.locator('.lateral-desktop .f-opcoes[aria-label="Tipo de veículo"] .f-op');
+const opcoesAntes = await tiposVeiculo.count();
+await tiposVeiculo.filter({ hasText: 'Moto' }).first().click();
 await esperaBusca();
 await page.waitForTimeout(600);
-const opcoesDepois = await page.locator('.multi-lista label').count();
+const opcoesDepois = await tiposVeiculo.count();
 const totalMoto = await total();
 if (botoes >= 6 && opcoesDepois >= opcoesAntes - 1 && opcoesDepois > 1) {
-  ok('2. facetas ignoram o próprio predicado', `${botoes} facetas; opções ${opcoesAntes} -> ${opcoesDepois} após escolher Moto (${totalMoto} lotes)`);
+  ok('2. facetas ignoram o próprio predicado', `${botoes} seções; opções ${opcoesAntes} -> ${opcoesDepois} após escolher Moto (${totalMoto} lotes)`);
 } else {
   falha('2. facetas ignoram o próprio predicado', `facetas=${botoes} opções ${opcoesAntes} -> ${opcoesDepois}`);
 }
@@ -97,7 +100,7 @@ else falha('3b. só com foto', `${comFoto}`);
 
 await page.goto(`${API}/busca?assetType=veiculo&sort=price_asc`, { waitUntil: 'networkidle' });
 await esperaBusca();
-const precos = await page.$$eval('.card .bid .v', (els) => els.map((e) => Number(e.textContent.replace(/\D/g, ''))));
+const precos = await page.$$eval('.card .lc-v', (els) => els.map((e) => Number(e.textContent.replace(/\D/g, ''))));
 const crescente = precos.every((v, i) => i === 0 || v >= precos[i - 1]);
 if (precos.length > 2 && crescente) ok('3c. ordenação por menor lance', `${precos.length} cartões em ordem`);
 else falha('3c. ordenação por menor lance', `${precos.slice(0, 5).join(', ')}`);
@@ -105,10 +108,10 @@ else falha('3c. ordenação por menor lance', `${precos.slice(0, 5).join(', ')}`
 /* 4 — paginação */
 await page.goto(`${API}/busca?assetType=veiculo`, { waitUntil: 'networkidle' });
 await esperaBusca();
-const primeiroP1 = await page.textContent('.card .title');
+const primeiroP1 = await page.textContent('.card .lc-titulo');
 await page.click('.pager button:last-child');
 await esperaBusca();
-const primeiroP2 = await page.textContent('.card .title');
+const primeiroP2 = await page.textContent('.card .lc-titulo');
 if (primeiroP1 !== primeiroP2 && page.url().includes('page=2')) ok('4. paginação', `p1 "${primeiroP1?.slice(0, 28)}" != p2 "${primeiroP2?.slice(0, 28)}"`);
 else falha('4. paginação', `url=${page.url()}`);
 
@@ -254,6 +257,42 @@ if (espera.ok() && semConsent.status() === 400) {
 } else {
   falha('14. lista de espera', `com=${espera.status()} sem=${semConsent.status()}`);
 }
+
+/* 15 — filtros novos do redesign, pela tela e com efeito no total */
+async function efeitoDe(nome, acao, naUrl) {
+  await page.goto(`${API}/busca?assetType=veiculo`, { waitUntil: 'networkidle' });
+  await esperaBusca();
+  const antes = await total();
+  await acao();
+  await esperaBusca();
+  const depois = await total();
+  if (depois > 0 && depois < antes && page.url().includes(naUrl)) ok(nome, `${antes} -> ${depois}, URL com ${naUrl}`);
+  else falha(nome, `${antes} -> ${depois}, url=${page.url()}`);
+}
+await efeitoDe('15a. situação do bem', () => page.locator('.lateral-desktop .f-opcoes[aria-label="Situação do bem"] .f-op', { hasText: 'Sinistrado' }).click(), 'docType=sinistrado');
+await efeitoDe('15b. encerra hoje', () => page.locator('.lateral-desktop .f-op', { hasText: 'Encerra hoje' }).click(), 'prazo=hoje');
+await efeitoDe('15c. abaixo da avaliação', () => page.locator('.lateral-desktop .f-sw', { hasText: 'Abaixo da avaliação' }).click(), 'abaixo=1');
+{
+  // A categoria mora na landing e leva à busca já filtrada.
+  await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
+  await esperaBusca();
+  const antes = await total();
+  await page.goto(`${API}/`, { waitUntil: 'networkidle' });
+  await Promise.all([page.waitForURL((u) => u.pathname === '/busca'), page.locator('.tipo', { hasText: 'Motos' }).click()]);
+  await page.waitForLoadState('networkidle');
+  await esperaBusca();
+  const depois = await total();
+  if (depois > 0 && depois < antes && page.url().includes('vehicleType=moto')) ok('15d. categoria na landing leva à busca filtrada', `${antes} -> ${depois}`);
+  else falha('15d. categoria na landing leva à busca filtrada', `${antes} -> ${depois}, url=${page.url()}`);
+}
+
+await page.goto(`${API}/busca?assetType=veiculo`, { waitUntil: 'networkidle' });
+await esperaBusca();
+await page.click('.seg-vista button[aria-label="Lista"]');
+await page.waitForTimeout(500);
+const emLista = await page.locator('.grade.lista .card').count();
+if (emLista > 0 && page.url().includes('vista=lista')) ok('15e. vista em lista', `${emLista} cartões em lista`);
+else falha('15e. vista em lista', `cartões=${emLista} url=${page.url()}`);
 
 /* console */
 if (errosConsole.length === 0) ok('console limpo', 'nenhum erro durante a bateria');

@@ -1,6 +1,6 @@
 import { query } from './db.js';
 import { VENCIDO } from './encerramento.js';
-import { parseQuery, fold } from './normalize.js';
+import { parseQuery, termoComoRegex } from './normalize.js';
 
 /**
  * Casamento de alertas.
@@ -63,7 +63,7 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   // `\y` é fronteira de palavra no Postgres. LIKE '%taos%' casava dentro de
   // "sertaosantana" — o search_text guarda pares de palavras COLADOS (para
   // "t cross" achar "tcross"), e isso fabrica substring que não existe no texto.
-  const porPalavra = (termo: string) => `search_text ~ ${ph(`\\y${fold(termo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\y`)}`;
+  const porPalavra = (termo: string) => `search_text ~ ${ph(termoComoRegex(termo))}`;
 
   if (p.brand && p.model) {
     sql.push(`((brand = ${ph(p.brand)} AND model = ${ph(p.model)}) OR (${porPalavra(p.brand)} AND ${porPalavra(p.model)}))`);
@@ -72,9 +72,11 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   } else if (p.model) {
     sql.push(`(model = ${ph(p.model)} OR ${porPalavra(p.model)})`);
   }
-  for (const t of p.freeTerms) sql.push(`search_text LIKE ${ph(`%${t}%`)}`);
+  // Termo livre também por fronteira de palavra: com LIKE, "marea" casava
+  // dentro de "comarea" (de "com área") e o alerta disparava para imóvel.
+  for (const t of p.freeTerms) sql.push(porPalavra(t));
   if (!p.brand && !p.model && !p.freeTerms.length && p.compactTerm) {
-    sql.push(`search_text LIKE ${ph(`%${p.compactTerm}%`)}`);
+    sql.push(porPalavra(p.compactTerm));
   }
 
   const f = a.filters ?? {};
@@ -108,6 +110,8 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   if (f.yearMin != null) sql.push(`year_model >= ${ph(Number(f.yearMin))}`);
   if (f.yearMax != null) sql.push(`year_model <= ${ph(Number(f.yearMax))}`);
   if (f.onlyWithPhoto) sql.push('photo_count > 0');
+  emLista('doc_type', f.docType);
+  if (f.belowAppraisal) sql.push('appraisal > COALESCE(current_bid, min_bid) AND COALESCE(current_bid, min_bid) > 0 AND NOT bid_suspect');
 
   // Lote fora do escopo (peça, lote misto) nunca dispara alerta.
   sql.push(`asset_type <> 'outro'`);

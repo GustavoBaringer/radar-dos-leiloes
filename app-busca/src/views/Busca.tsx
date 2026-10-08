@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { BellPlus, LayoutGrid, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { BellPlus, LayoutGrid, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import type { Facets, Lot, RespostaMapa, SearchResponse } from '@/lib/types';
+import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api, ApiError } from '@/lib/api';
 import { ORDENACOES } from '@/lib/labels';
 import { type EstadoBusca, contaFiltros, paramsDaBusca } from '@/lib/filtros';
@@ -8,6 +9,10 @@ import { FilterSidebar } from '@/components/FilterSidebar';
 import { LotCard } from '@/components/LotCard';
 import { MapaLotes } from '@/components/MapaLotes';
 import { FolhaMapa } from '@/components/FolhaMapa';
+import { PainelBusca } from '@/components/PainelBusca';
+import { FiltrosAtivos, filtrosAtivos } from '@/components/FiltrosAtivos';
+import { VistosRecentes } from '@/components/VistosRecentes';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 interface Props {
   estado: EstadoBusca;
@@ -21,41 +26,73 @@ interface Props {
   aoCarregar?: (r: SearchResponse) => void;
   favoritos: Set<number>;
   aoFavoritar: (id: number) => void;
+  aoConhecerLotes: (lotes: Lot[], stamp?: FavoriteReadStamp) => void;
+  iniciarLeituraFavoritos: () => FavoriteReadStamp;
 }
+
+/** Depois de quantos cartões entra a faixa de alerta: cedo o bastante para ser vista, tarde para não tapar o resultado. */
+const POS_FAIXA = 6;
 
 export function Busca({
   estado, aoMudar, aoLimpar, aoAbrirLote, aoCriarAlerta, lancesAoVivo, piscando, aoCarregar,
-  favoritos, aoFavoritar,
+  favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
 }: Props) {
   const [dados, setDados] = useState<SearchResponse | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [gavetaFiltros, setGavetaFiltros] = useState(false);
+  // A gaveta continua montada durante a animação de saída e entra um quadro depois
+  // de montar: renderizada só quando aberta, não havia como animar nem abrir nem fechar.
+  const [gavetaVisivel, setGavetaVisivel] = useState(false);
+  const [gavetaMontada, setGavetaMontada] = useState(false);
+  useEffect(() => {
+    if (gavetaFiltros) {
+      setGavetaMontada(true);
+      const q = requestAnimationFrame(() => requestAnimationFrame(() => setGavetaVisivel(true)));
+      return () => cancelAnimationFrame(q);
+    }
+    setGavetaVisivel(false);
+    const t = window.setTimeout(() => setGavetaMontada(false), 320);
+    return () => window.clearTimeout(t);
+  }, [gavetaFiltros]);
+  useEffect(() => {
+    if (!gavetaFiltros) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setGavetaFiltros(false);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [gavetaFiltros]);
   const [rotulosServidor, setRotulos] = useState<Record<string, Record<string, string>>>({});
   const [mapa, setMapa] = useState<RespostaMapa | null>(null);
   const [ehCelular, setEhCelular] = useState(false);
   const [mapaCarregando, setMapaCarregando] = useState(false);
+  const [erroMapa, setErroMapa] = useState(false);
+  const [tentativaMapa, setTentativaMapa] = useState(0);
   const seq = useRef(0);
   const seqMapa = useRef(0);
+  const resultadosRef = useRef<HTMLElement>(null);
   // O texto espera 1s; filtro, ordenação e página continuam imediatos. Sem isto
   // cada tecla virava uma requisição — "onix" disparava quatro buscas.
   const [qAdiado, setQAdiado] = useState(estado.q);
   useEffect(() => {
     if (estado.q === qAdiado) return;
-    // Limpar o campo e apertar Buscar (que zera a página) não esperam.
-    if (!estado.q || estado.page === 1) {
-      const t = setTimeout(() => setQAdiado(estado.q), estado.q ? 1000 : 0);
-      return () => clearTimeout(t);
-    }
-    setQAdiado(estado.q);
-  }, [estado.q, estado.page, qAdiado]);
+    // A página só volta para 1 junto com o termo: zerar na tecla muda a chave da
+    // busca e dispara uma requisição com o termo antigo.
+    const t = setTimeout(() => {
+      setQAdiado(estado.q);
+      if (estado.page !== 1) aoMudar({ page: 1 });
+    }, estado.q ? 1000 : 0);
+    return () => clearTimeout(t);
+  }, [estado.q, estado.page, qAdiado, aoMudar]);
   const qs = useMemo(() => paramsDaBusca({ ...estado, q: qAdiado }), [estado, qAdiado]);
+  // "Tentar de novo" com a mesma URL não muda `qs`: sem este contador o efeito não refazia a busca.
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     const meu = ++seq.current;
     setCarregando(true);
     setErro(null);
     const ac = new AbortController();
+    const favoriteStamp = iniciarLeituraFavoritos();
     api
       .buscar(qs, ac.signal)
       .then((r) => {
@@ -63,11 +100,12 @@ export function Busca({
         if (meu !== seq.current) return;
         setDados(r);
         setCarregando(false);
+        aoConhecerLotes(r.items, favoriteStamp);
         // Cidade manda rótulo próprio (grafia correta) junto da faceta; guardar
         // é o que permite o botão fechado mostrar "Curitiba" e não "CURITIBA".
         setRotulos((antes) => {
           const novo = { ...antes, city: { ...(antes.city ?? {}) } };
-          for (const c of r.facets.cities) if (c.label) novo.city[String(c.value)] = c.label;
+          for (const c of r.facets?.cities ?? []) if (c.label) novo.city[String(c.value)] = c.label;
           return novo;
         });
         aoCarregar?.(r);
@@ -81,7 +119,7 @@ export function Busca({
       });
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  }, [qs, tentativa]);
 
   // O mapa usa os MESMOS filtros da lista, menos página, ordenação e o ponto
   // escolhido: um ponto selecionado não pode apagar os outros do mapa.
@@ -95,13 +133,18 @@ export function Busca({
     if (estado.vista !== 'mapa') return;
     const meu = ++seqMapa.current;
     setMapaCarregando(true);
+    setErroMapa(false);
     const ac = new AbortController();
     api
       .mapa(qsMapa, ac.signal)
       .then((r) => { if (meu === seqMapa.current) { setMapa(r); setMapaCarregando(false); } })
-      .catch(() => { if (meu === seqMapa.current) setMapaCarregando(false); });
+      .catch(() => {
+        if (ac.signal.aborted || meu !== seqMapa.current) return;
+        setMapaCarregando(false);
+        setErroMapa(true);
+      });
     return () => ac.abort();
-  }, [qsMapa, estado.vista]);
+  }, [qsMapa, estado.vista, tentativaMapa]);
 
   const barraRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -110,10 +153,16 @@ export function Busca({
       const b = barraRef.current?.getBoundingClientRect().bottom ?? 0;
       document.documentElement.style.setProperty('--topo-mapa', `${Math.max(0, Math.round(b))}px`);
     };
+    // Entrando no mapa sem rolar, a barra ficava em y≈748 de 844: o mapa fixo
+    // abaixo dela tinha 96px e a página travada não deixava subir.
+    const barra = barraRef.current;
+    if (barra) {
+      const topo = document.querySelector('header.topo')?.getBoundingClientRect().height ?? 0;
+      window.scrollTo({ top: window.scrollY + barra.getBoundingClientRect().top - topo - 8, behavior: 'instant' });
+    }
     medir();
     // A barra CRESCE quando chegam os chips de "interpretado como": só resize e
-    // scroll deixavam --topo-mapa velho, e o mapa subia por cima dela (medido:
-    // barra terminando em 309px com o mapa começando em 246px).
+    // scroll deixavam --topo-mapa velho, e o mapa subia por cima dela.
     const obs = new ResizeObserver(medir);
     if (barraRef.current) obs.observe(barraRef.current);
     window.addEventListener('resize', medir);
@@ -141,26 +190,60 @@ export function Busca({
   // a lista mistura veículo e imóvel, e dizer "veículos" mente.
   const rotuloTotal = ehImovel ? 'imóveis' : estado.assetType === 'veiculo' ? 'veículos' : 'lotes';
   const nFiltros = contaFiltros(estado);
-  const paginas = dados ? Math.max(1, Math.ceil(dados.total / dados.pageSize)) : 1;
+  const paginas = dados ? Math.min(100, Math.max(1, Math.ceil(dados.total / dados.pageSize))) : 1;
+  const ativos = filtrosAtivos({ ...estado, q: qAdiado }, rotulosServidor);
+  const resumo = ativos.map((a) => a.texto).join(' · ');
+  const ehMapa = estado.vista === 'mapa';
 
   const itens: Lot[] = dados?.items ?? [];
   // Esqueleto só na primeira carga: trocar a grade inteira a cada filtro faz a
   // página pular. Com resultado na tela, o sinal é a barra e a opacidade.
   const primeiraCarga = carregando && !dados;
 
+  function rolarParaResultados() {
+    resultadosRef.current?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+
+  function enviar() {
+    setQAdiado(estado.q);
+    if (estado.page !== 1) aoMudar({ page: 1 });
+    (document.activeElement as HTMLElement | null)?.blur();
+    rolarParaResultados();
+  }
+
+  const faixaAlerta = (
+    <div className="faixa-alerta" key="faixa-alerta">
+      <div className="fa-txt">
+        <span className="fa-ico"><BellPlus aria-hidden /></span>
+        <div>
+          <h3>{resumo ? 'Avise-me quando entrar lote novo' : 'Não perca o próximo lote'}</h3>
+          <p>{resumo || 'Filtre por modelo, tipo ou região e salve a busca como alerta.'}</p>
+        </div>
+      </div>
+      {resumo ? (
+        <button type="button" className="btn-cta" onClick={aoCriarAlerta}>Criar alerta para esta busca</button>
+      ) : (
+        <button type="button" className="btn-fantasma" onClick={() => document.getElementById('q')?.focus()}>Começar uma busca</button>
+      )}
+    </div>
+  );
+
   const grade = (
-    <div className={`grade${carregando ? ' carregando' : ''}`}>
-      {itens.map((lot) => (
-        <LotCard
-          key={lot.id}
-          lot={lot}
-          aoAbrir={aoAbrirLote}
-          lanceAoVivo={lancesAoVivo[lot.id]}
-          piscando={piscando.has(lot.id)}
-          favoritado={favoritos.has(lot.id)}
-          aoFavoritar={aoFavoritar}
-        />
+    <div className={`grade${estado.vista === 'lista' ? ' lista' : ''}${carregando ? ' carregando' : ''}`}>
+      {itens.map((lot, i) => (
+        <Fragment key={lot.id}>
+          {i === Math.min(POS_FAIXA, itens.length) && !ehMapa && faixaAlerta}
+          <LotCard
+            lot={lot}
+            aoAbrir={aoAbrirLote}
+            lanceAoVivo={lancesAoVivo[lot.id]}
+            piscando={piscando.has(lot.id)}
+            favoritado={typeof lot.favorited === 'boolean' ? lot.favorited : favoritos.has(lot.id) ? true : undefined}
+            aoFavoritar={aoFavoritar}
+          />
+        </Fragment>
       ))}
+      {itens.length > 0 && itens.length <= POS_FAIXA && !ehMapa && faixaAlerta}
     </div>
   );
 
@@ -175,20 +258,30 @@ export function Busca({
   const conteudo = erro ? (
     <div className="empty">
       Não foi possível carregar os resultados ({erro}).
-      <button className="btn-clear tentar" onClick={() => aoMudar({})}>
+      <button className="btn-clear tentar" onClick={() => setTentativa((n) => n + 1)}>
         Tentar de novo
       </button>
     </div>
   ) : primeiraCarga ? (
     <div className="grade">
-      {Array.from({ length: 8 }, (_, i) => (
+      {Array.from({ length: 6 }, (_, i) => (
         <div className="skeleton" key={i} />
       ))}
     </div>
-  ) : itens.length === 0 ? (
+  ) : itens.length === 0 && (dados?.total ?? 0) > 0 ? (
+    // Página além do fim (link antigo, ?page=999999): há lotes, só não nesta página.
     <div className="empty">
-      Nenhum {ehImovel ? 'imóvel' : estado.assetType === 'veiculo' ? 'veículo' : 'lote'} encontrado
-      com esses filtros.
+      Esta página não existe mais nesta busca.
+      <button className="btn-clear tentar" onClick={() => aoMudar({ page: 1 })}>Ir para a primeira página</button>
+    </div>
+  ) : itens.length === 0 ? (
+    <div className="empty vazio-rico">
+      <h3>Nenhum {ehImovel ? 'imóvel' : estado.assetType === 'veiculo' ? 'veículo' : 'lote'} com esses filtros</h3>
+      <p>{resumo ? 'Crie um alerta e o Radar avisa quando entrar um lote que combine.' : 'Tente outro termo de busca.'}</p>
+      <div className="vazio-acoes">
+        {resumo && <button type="button" className="btn-cta" onClick={aoCriarAlerta}>Criar alerta para esta busca</button>}
+        {nFiltros > 0 && <button type="button" className="btn-fantasma" onClick={aoLimpar}>Limpar filtros</button>}
+      </div>
     </div>
   ) : (
     grade
@@ -238,155 +331,182 @@ export function Busca({
     return bits;
   }, [dados]);
 
+  const vistas: Array<[EstadoBusca['vista'], string, typeof LayoutGrid]> = [
+    ['grade', 'Grade', LayoutGrid], ['lista', 'Lista', List], ['mapa', 'Mapa', MapIcon],
+  ];
+
   return (
-    <main className={`faixa layout${estado.vista === 'mapa' ? ' vista-mapa' : ''}`}>
-      <button
-        type="button"
-        className="filtros-toggle"
-        aria-expanded={gavetaFiltros}
-        onClick={() => setGavetaFiltros((v) => !v)}
-      >
-        <SlidersHorizontal size={16} aria-hidden />
-        <span>Filtros</span>
-        {nFiltros > 0 && <span className="ativos mono">{nFiltros}</span>}
-      </button>
+    <>
+      <div className="faixa pb-wrap">
+        <PainelBusca
+          estado={estado}
+          facetas={facetas}
+          total={dados?.total ?? null}
+          esperando={!!estado.q && estado.q !== qAdiado}
+          aoMudar={aoMudar}
+          aoEnviar={enviar}
+        />
+      </div>
 
-      {/* Desktop: coluna fixa. Celular: gaveta por baixo, com o mesmo componente. */}
-      <div className="lateral-desktop">{lateral}</div>
-      {gavetaFiltros && (
-        <div className="gaveta-filtros" role="dialog" aria-modal="true" aria-label="Filtros">
-          <div className="scrim" onClick={() => setGavetaFiltros(false)} />
-          <div className="gaveta-painel">
-            {lateral}
-            <button type="button" className="btn-pri gaveta-ver" onClick={() => setGavetaFiltros(false)}>
-              Ver {dados ? dados.total.toLocaleString('pt-BR') : ''} resultados
-            </button>
-          </div>
-        </div>
-      )}
-
-      <section className="resultados">
-        {/* A faixa só quebra em duas quando há chips de interpretação: eles têm
-            largura imprevisível e esmagavam o seletor. Sem eles, os três
-            controles cabem numa linha só e a dobra fica 36px mais curta. */}
-        <div className={`resultbar${interpretado.length ? ' tem-interpretacao' : ''}`} ref={barraRef}>
-          <div>
-            <div className="count">
-              <b className="mono">{dados ? dados.total.toLocaleString('pt-BR') : '—'}</b>{' '}
-              <span>{rotuloTotal}</span>
+      <main ref={resultadosRef} id="resultados" className={`faixa layout${ehMapa ? ' vista-mapa' : ''}`}>
+        {/* Desktop: coluna fixa. Celular: gaveta por baixo, com o mesmo componente. */}
+        <div className="lateral-desktop">{lateral}</div>
+        {gavetaMontada && (
+          <div className="gaveta-filtros" role="dialog" aria-modal="true" aria-label="Filtros" data-aberto={gavetaVisivel ? '1' : '0'} inert={!gavetaFiltros}>
+            <div className="scrim" onClick={() => setGavetaFiltros(false)} />
+            <div className="gaveta-painel">
+              {lateral}
+              <button type="button" className="btn-cta gaveta-ver" onClick={() => setGavetaFiltros(false)}>
+                Ver {dados ? dados.total.toLocaleString('pt-BR') : ''} {rotuloTotal}
+              </button>
             </div>
-            {interpretado.length > 0 && (
-              <div className="interpreted">
-                interpretado como{' '}
-                {interpretado.map((b) => (
-                  <span key={b.k} className={`pill ${b.cls}`}>
-                    {b.txt}
-                  </span>
+          </div>
+        )}
+
+        <section className="resultados">
+          <h1 className="sr-only">Busca de lotes em leilão</h1>
+          <div className="resultbar" ref={barraRef}>
+            <div className="rb-titulo">
+              <h2 className="count">
+                <b className="mono">{dados ? dados.total.toLocaleString('pt-BR') : '—'}</b> {rotuloTotal}
+              </h2>
+              {interpretado.length > 0 && (
+                <div className="interpreted">
+                  interpretado como{' '}
+                  {interpretado.map((b) => (
+                    <span key={b.k} className={`pill ${b.cls}`}>
+                      {b.txt}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rb-ctl">
+              <button
+                type="button"
+                className="filtros-toggle"
+                aria-expanded={gavetaFiltros}
+                onClick={() => setGavetaFiltros((v) => !v)}
+              >
+                <SlidersHorizontal size={16} aria-hidden />
+                <span>Filtros</span>
+                {nFiltros > 0 && <span className="ativos mono">{nFiltros}</span>}
+              </button>
+              <button
+                type="button"
+                className="btn-alerta"
+                onClick={aoCriarAlerta}
+                aria-label="Salvar esta busca como alerta"
+                title="Avisar quando surgir um lote novo para esta busca"
+              >
+                <BellPlus size={16} aria-hidden />
+                <span className="btn-alerta-txt">Salvar busca</span>
+              </button>
+              <div className="ordena">
+                <label htmlFor="sort" className="sr-only">
+                  Ordenar resultados
+                </label>
+                <select id="sort" value={estado.sort} onChange={(e) => aoMudar({ sort: e.target.value, page: 1 })}>
+                  {ORDENACOES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="seg-vista" role="group" aria-label="Visualização">
+                {vistas.map(([v, nome, Ico]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={estado.vista === v}
+                    aria-label={nome}
+                    title={nome}
+                    onClick={() => aoMudar({ vista: v, page: 1 })}
+                    className={v === 'mapa' ? 'com-rotulo' : undefined}
+                  >
+                    <Ico size={16} aria-hidden />
+                    {v === 'mapa' && <span>Mapa</span>}
+                  </button>
                 ))}
               </div>
-            )}
+            </div>
           </div>
-          <button
-            type="button"
-            className="btn-alerta"
-            onClick={aoCriarAlerta}
-            aria-label="Criar alerta para esta busca"
-            title="Avisar quando surgir um lote novo para esta busca"
-          >
-            <BellPlus size={15} aria-hidden />
-            <span className="btn-alerta-txt">Criar alerta</span>
-          </button>
-          <div className="seg-vista" role="group" aria-label="Visualização">
-            <button
-              type="button"
-              aria-pressed={estado.vista === 'grade'}
-              onClick={() => aoMudar({ vista: 'grade', page: 1 })}
-            >
-              <LayoutGrid size={14} aria-hidden />
-              <span>Grade</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={estado.vista === 'mapa'}
-              onClick={() => aoMudar({ vista: 'mapa', page: 1 })}
-            >
-              <MapIcon size={14} aria-hidden />
-              <span>Mapa</span>
-            </button>
-          </div>
-          <div className="f-group ordena">
-            <label htmlFor="sort" className="sr-only">
-              Ordenar resultados
-            </label>
-            <select id="sort" value={estado.sort} onChange={(e) => aoMudar({ sort: e.target.value, page: 1 })}>
-              {ORDENACOES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        <div className={`barra-carga${carregando ? ' on' : ''}`} aria-hidden>
-          <i />
-        </div>
+          <FiltrosAtivos ativos={ativos} estado={estado} aoMudar={aoMudar} aoLimpar={aoLimpar} />
 
-        {/* Mapa e grade nunca juntos: são duas formas de ver a MESMA busca, e
-            mostrar as duas ao mesmo tempo dobra a rolagem sem dobrar a resposta. */}
-        {estado.vista === 'mapa' ? (
-          <div className={`mapa-area${ehCelular ? ' mapa-cheio' : ''}`}>
-            <MapaLotes
-              dados={mapa}
-              carregando={mapaCarregando}
-              local={estado.local}
-              ufAtiva={estado.multi.uf.length === 1 ? estado.multi.uf[0] : undefined}
-              aoEscolherLocal={(k) => aoMudar({ local: k, page: 1 })}
-            />
-            {/* No celular a lista vive SOBRE o mapa, na folha. No desktop o mapa é a
-                única vista: a grade some, e a faixa leva de volta a ela. */}
-            {ehCelular ? (
-              <FolhaMapa
-                gatilho={estado.local}
-                cabecalho={cabecalhoDoPonto}
-                aoVerGrade={() => aoMudar({ vista: 'grade', page: 1 })}
+          <div className={`barra-carga${carregando ? ' on' : ''}`} aria-hidden>
+            <i />
+          </div>
+
+          {/* Mapa e grade nunca juntos: são duas formas de ver a MESMA busca, e
+              mostrar as duas ao mesmo tempo dobra a rolagem sem dobrar a resposta. */}
+          {ehMapa ? (
+            <div className={`mapa-area${ehCelular ? ' mapa-cheio' : ''}`}>
+              <MapaLotes
+                dados={mapa}
+                carregando={mapaCarregando}
+                local={estado.local}
+                ufAtiva={estado.multi.uf.length === 1 ? estado.multi.uf[0] : undefined}
+                aoEscolherLocal={(k) => aoMudar({ local: k, page: 1 })}
+              />
+              {erroMapa && (
+                <div className="mapa-erro" role="alert">
+                  Não foi possível carregar os pontos do mapa.
+                  <button type="button" className="btn-clear tentar" onClick={() => setTentativaMapa((n) => n + 1)}>Tentar de novo</button>
+                </div>
+              )}
+              {/* No celular a lista vive SOBRE o mapa, na folha. No desktop o mapa é a
+                  única vista: a grade some, e a faixa leva de volta a ela. */}
+              {ehCelular ? (
+                <FolhaMapa
+                  gatilho={estado.local}
+                  cabecalho={cabecalhoDoPonto}
+                  aoVerGrade={() => aoMudar({ vista: 'grade', page: 1 })}
+                >
+                  {conteudo}
+                </FolhaMapa>
+              ) : (
+                <div className="mapa-selecao">{cabecalhoDoPonto}</div>
+              )}
+            </div>
+          ) : (
+            conteudo
+          )}
+
+          {!ehMapa && dados && dados.total > 0 && (
+            <div className="pager">
+              <button
+                disabled={estado.page <= 1}
+                onClick={() => {
+                  aoMudar({ page: estado.page - 1 });
+                  rolarParaResultados();
+                }}
               >
-                {conteudo}
-              </FolhaMapa>
-            ) : (
-              <div className="mapa-selecao">{cabecalhoDoPonto}</div>
-            )}
-          </div>
-        ) : (
-          conteudo
-        )}
+                Anterior
+              </button>
+              <span className="pageinfo mono">
+                página {dados.page} de {paginas.toLocaleString('pt-BR')}
+              </span>
+              <button
+                disabled={estado.page >= paginas || estado.page >= 100}
+                onClick={() => {
+                  aoMudar({ page: estado.page + 1 });
+                  rolarParaResultados();
+                }}
+              >
+                Próxima
+              </button>
+            </div>
+          )}
+          {!ehMapa && dados && dados.total > dados.pageSize * 100 && (
+            <p className="pageinfo" role="status">Há mais resultados além das 100 páginas disponíveis. Refine os filtros para reduzir a busca.</p>
+          )}
+        </section>
+      </main>
 
-        {estado.vista === 'grade' && dados && dados.total > 0 && (
-          <div className="pager">
-            <button
-              disabled={estado.page <= 1}
-              onClick={() => {
-                aoMudar({ page: estado.page - 1 });
-                window.scrollTo(0, 0);
-              }}
-            >
-              Anterior
-            </button>
-            <span className="pageinfo mono">
-              página {dados.page} de {paginas.toLocaleString('pt-BR')}
-            </span>
-            <button
-              disabled={estado.page >= paginas}
-              onClick={() => {
-                aoMudar({ page: estado.page + 1 });
-                window.scrollTo(0, 0);
-              }}
-            >
-              Próxima
-            </button>
-          </div>
-        )}
-      </section>
-    </main>
+      {!ehMapa && <VistosRecentes aoAbrir={aoAbrirLote} />}
+      {!ehMapa && <ComoFunciona />}
+    </>
   );
 }

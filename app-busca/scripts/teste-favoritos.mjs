@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 
-const API = 'http://localhost:4500';
+const API = process.env.API_URL ?? 'http://localhost:4500';
 
 function acharChromium() {
   const cache = path.join(homedir(), '.cache', 'ms-playwright');
@@ -46,7 +46,7 @@ const totalAntes = antesDoTeste.length;
 await page.goto(`${API}/busca`, { waitUntil: 'networkidle' });
 await page.waitForSelector('.grade .card', { timeout: 15000 });
 
-const candidato = page.locator('.grade .card').filter({ hasNot: page.locator('button.ico[aria-pressed="true"]') }).first();
+const candidato = page.locator('.grade .card').filter({ hasNot: page.locator('button.lc-fav[aria-pressed="true"]') }).first();
 // O id, não o título: o worker recoleta ao vivo e pode reclassificar o
 // título entre uma leitura e outra — o id é a identidade estável do lote.
 // E a partir daqui a busca é sempre por [data-id]: um locator baseado em
@@ -55,7 +55,7 @@ const candidato = page.locator('.grade .card').filter({ hasNot: page.locator('bu
 // cartão.
 const idLote = await candidato.getAttribute('data-id');
 const cardFixo = page.locator(`.grade .card[data-id="${idLote}"]`);
-const estrela = cardFixo.locator('button.ico');
+const estrela = cardFixo.locator('button.lc-fav');
 await estrela.waitFor({ state: 'visible' });
 await page.screenshot({ path: 'shots/favoritos-1-antes.png' });
 
@@ -79,7 +79,7 @@ afirma(idsNaAba.length === totalAntes + 1, `aba Favoritos mostra ${totalAntes + 
 afirma(idsNaAba.includes(idLote), `o lote favoritado (${idLote}) aparece na aba`);
 
 const cardRecemFavoritado = page.locator(`.grade .card[data-id="${idLote}"]`);
-await cardRecemFavoritado.locator('button.ico').click();
+await cardRecemFavoritado.locator('button.lc-fav').click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: 'shots/favoritos-3-depois-remover.png' });
 afirma(await page.locator(`.grade .card[data-id="${idLote}"]`).count() === 0, 'desfavoritar pela aba remove só aquele card');

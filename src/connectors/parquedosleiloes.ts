@@ -107,6 +107,7 @@ export const parquedosleiloes: Connector = {
             sourceId: 'parquedosleiloes',
             externalId: id,
             lotUrl: `${HOST}/leilao/${evento}/lote/${id}`,
+            auctioneerName: 'Parque dos Leilões',
             titleRaw: titulo,
             brand: parsed.brand,
             model: parsed.model,

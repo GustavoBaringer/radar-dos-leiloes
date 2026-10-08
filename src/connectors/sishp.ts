@@ -4,6 +4,8 @@ import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
+import type { TenantAttempt } from '../core/tenant-attempts.js';
 
 /**
  * SISHP — rede de 8 domínios (vinco, sfrazão, wleiloes...) que COMPARTILHA o
@@ -38,12 +40,19 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const EVENTOS_POR_TENANT = 6;
 const LOTES_POR_EVENTO = 12;
 
-async function tenants(limite: number): Promise<string[]> {
+function leiloeiroDoHost(host: string): string {
+  return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
   const rows = await query<{ domain: string }>(
-    `SELECT domain FROM discovered_sites WHERE platform='sishp' AND http_status=200 ORDER BY auctioneers DESC LIMIT $1`,
-    [limite],
+    `SELECT domain FROM discovered_sites WHERE platform='sishp' AND http_status=200 ORDER BY auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain);
+  const escolhidos = await dueTenants({ sourceId: 'sishp', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return escolhidos;
+  const apenas = filterTenantPopulation(escolhidos, tenant);
+  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de sishp`);
+  return apenas;
 }
 
 function dinheiro(v?: string | null): number | null {
@@ -119,47 +128,56 @@ export const sishp: Connector = {
     notes:
       'Rede de 8 domínios com o MESMO espaço de ids (idLeilao/idLote resolve igual em qualquer host, dedupe por idLote só). Listagem sem status/data; página do lote tem os dois.',
   },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
     const idsVistos = new Set<string>();
 
-    const dominios = await tenants(Number(process.env.SISHP_TENANTS ?? 8));
+    const dominios = await tenants(Number(process.env.SISHP_TENANTS ?? 8), tenant);
 
     for (const host of dominios) {
       if (lots.length >= limit) break;
+      const attempt = await observer?.start(host);
+      const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+      let truncated = false;
+      try {
       let r;
       try {
         r = await fetchText(`https://${host}/`, { headers: { 'user-agent': UA }, gapMs: 1100 });
       } catch {
+        attempt?.failure('network');
         continue;
       }
+      attempt?.response(r.status);
       httpStatus = r.status;
       if (r.status !== 200) continue;
 
-      const eventosIds = [...new Set([...r.body.matchAll(/leilao\.php\?idLeilao=(\d+)/g)].map((m) => m[1]))].slice(
-        0,
-        EVENTOS_POR_TENANT,
-      );
+      const todosEventos = [...new Set([...r.body.matchAll(/leilao\.php\?idLeilao=(\d+)/g)].map((m) => m[1]))];
+      const eventosIds = todosEventos.slice(0, EVENTOS_POR_TENANT);
+      if (todosEventos.length > EVENTOS_POR_TENANT) truncated = true;
 
       for (const idEvento of eventosIds) {
-        if (lots.length >= limit) break;
+        if (lots.length >= limit) { truncated = true; break; }
         let er;
         try {
           er = await fetchText(`https://${host}/leilao.php?idLeilao=${idEvento}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
         } catch {
+          attempt?.failure('network');
           continue;
         }
+        attempt?.response(er.status);
         if (er.status !== 200) continue;
 
-        const cards = lerCards(er.body).slice(0, LOTES_POR_EVENTO);
+        const todosCards = lerCards(er.body);
+        if (todosCards.length > LOTES_POR_EVENTO) truncated = true;
+        const cards = todosCards.slice(0, LOTES_POR_EVENTO);
         if (!cards.length) continue; // "Divulgação" velha e evento sem card caem aqui, sem diferença de custo
         fetched += cards.length;
 
         for (const c of cards) {
-          if (lots.length >= limit) break;
+          if (lots.length >= limit) { truncated = true; break; }
           if (idsVistos.has(c.id)) continue; // mesmo lote, outro host da rede
           idsVistos.add(c.id);
           if (!c.titulo || looksLikePart(c.titulo)) {
@@ -171,9 +189,11 @@ export const sishp: Connector = {
           try {
             dr = await fetchText(`https://${host}/lote.php?idLote=${c.id}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
           } catch {
+            attempt?.failure('network');
             skipped++;
             continue;
           }
+          attempt?.response(dr.status);
           if (dr.status !== 200) {
             skipped++;
             continue;
@@ -192,6 +212,7 @@ export const sishp: Connector = {
             sourceId: 'sishp',
             externalId: c.id,
             lotUrl: `https://${host}/lote.php?idLote=${c.id}`,
+            auctioneerName: leiloeiroDoHost(host),
             titleRaw: c.titulo,
             brand: parsed.brand,
             model: parsed.model,
@@ -217,6 +238,12 @@ export const sishp: Connector = {
             raw: { tenant: host, evento: idEvento, statusTexto: statusTxt },
           });
         }
+      }
+      } catch (error) {
+        attempt?.failure('parser');
+        throw error;
+      } finally {
+        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
     }
     return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };

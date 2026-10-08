@@ -3,6 +3,7 @@ import { fetchText, fetchJson } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, maskPlate } from '../core/normalize.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
 
 const BASE = 'https://www.freitasleiloeiro.com.br';
 
@@ -126,7 +127,8 @@ async function fetchDetail(leilaoId: number, loteNumero: number): Promise<Freita
       despesas: parseBrMoney(desp?.[1]),
       obs: $('.text-secondary.pt-2.small').first().text().trim() || null,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) throw error;
     return null;
   }
 }
@@ -139,7 +141,8 @@ async function fetchStatus(leilaoId: number, loteNumero: number): Promise<{ stat
     );
     if (status !== 200 || !data?.message) return null;
     return { status: mapStatusName(data.message.nome), nome: data.message.nome ?? null };
-  } catch {
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) throw error;
     return null;
   }
 }
@@ -155,7 +158,8 @@ async function fetchPhotos(leilaoId: number, loteNumero: number): Promise<string
       if (href) hrefs.push(href);
     });
     return hrefs.filter((h, i) => hrefs.indexOf(h) === i).slice(0, 30);
-  } catch {
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) throw error;
     return [];
   }
 }
@@ -217,12 +221,14 @@ export const freitas: Connector = {
     notes: 'HTML + AJAX (GoCache, UA de browser obrigatório). Cadeia TLS incompleta. Fechamento por lote (RetornarTempoEncerramento). Sem km, sem laudo, sem valor de mercado.',
   },
   async collect({ limit }): Promise<CollectResult> {
+    throwIfCancelled();
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
 
     for (let page = 1; lots.length < limit; page++) {
+      throwIfCancelled();
       const res = await fetchText(
         `${BASE}/Leiloes/PesquisarLotes?Categoria=1&PageNumber=${page}&TopRows=100`,
         OPTS,
@@ -236,6 +242,7 @@ export const freitas: Connector = {
 
       for (const cardEl of cards) {
         if (lots.length >= limit) break;
+        throwIfCancelled();
         const c = parseCard($, $(cardEl));
         if (!c || looksLikePart(c.desc)) {
           skipped++;

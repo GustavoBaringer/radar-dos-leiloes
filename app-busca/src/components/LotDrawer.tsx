@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Star, X } from 'lucide-react';
+import { ExternalLink, Heart, X } from 'lucide-react';
 import type { Lot } from '@/lib/types';
 import {
   EXPLICA_FECHAMENTO, LABEL_ASSET, LABEL_COMB, LABEL_COR, LABEL_DOC, LABEL_PROPERTY,
   LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE, SRC_LABEL,
 } from '@/lib/labels';
-import { dataBr, img, money, nopicDe, titulo, whenLabel } from '@/lib/format';
+import { dataBr, fracaoDaAvaliacao, img, money, nopicDe, rotuloLance, titulo, whenLabel } from '@/lib/format';
 import { BotaoCompartilhar } from './BotaoCompartilhar';
 
 type Par = [string, string | null | undefined];
@@ -49,7 +49,7 @@ function BlocoKv({ titulo: t, pares }: { titulo: string; pares: Par[] }) {
  * evita a divergência que já aconteceu com o cartão.
  */
 export function LotDrawer({
-  lot, aoFechar, comoPagina = false, favoritado, aoFavoritar,
+  lot: lotAtual, aoFechar, comoPagina = false, favoritado, aoFavoritar,
 }: {
   lot: Lot | null;
   aoFechar: () => void;
@@ -57,6 +57,23 @@ export function LotDrawer({
   favoritado?: boolean;
   aoFavoritar?: (id: number) => void;
 }) {
+  // Sai animando: o último lote fica na tela até a gaveta deslizar para fora.
+  // Com o lote zerado na hora, ela sumia de um quadro para o outro.
+  const [lot, setLot] = useState(lotAtual);
+  const [saindo, setSaindo] = useState(false);
+  useEffect(() => {
+    if (lotAtual || comoPagina) {
+      setLot(lotAtual);
+      setSaindo(false);
+      return;
+    }
+    setSaindo(true);
+    const t = window.setTimeout(() => {
+      setLot(null);
+      setSaindo(false);
+    }, 260);
+    return () => window.clearTimeout(t);
+  }, [lotAtual, comoPagina]);
   const [fotoGrande, setFotoGrande] = useState(0);
   const painel = useRef<HTMLDivElement>(null);
   const botaoFechar = useRef<HTMLButtonElement>(null);
@@ -64,7 +81,7 @@ export function LotDrawer({
   useEffect(() => setFotoGrande(0), [lot?.id]);
 
   useEffect(() => {
-    if (!lot || comoPagina) return;
+    if (!lotAtual || comoPagina) return;
     botaoFechar.current?.focus();
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') aoFechar();
@@ -94,17 +111,14 @@ export function LotDrawer({
       document.removeEventListener('keydown', tecla);
       document.body.style.overflow = antes;
     };
-  }, [lot, aoFechar, comoPagina]);
+  }, [lotAtual, aoFechar, comoPagina]);
 
   if (!lot) return null;
 
   const when = whenLabel(lot);
   const lance = lot.current_bid ?? lot.min_bid;
-  const rotuloLance = lot.current_bid != null ? 'Lance atual' : 'Lance mínimo';
-  const desconto =
-    !lot.bid_suspect && lot.appraisal && lance != null && lot.appraisal > lance
-      ? Math.round((1 - lance / lot.appraisal) * 100)
-      : null;
+  const rotulo = rotuloLance(lot);
+  const fracao = fracaoDaAvaliacao(lot, lance);
 
   const chips: Array<[string, string]> = [];
   if (lot.current_bid != null && lot.min_bid != null) chips.push(['Mínimo', money(lot.min_bid)!]);
@@ -149,7 +163,7 @@ export function LotDrawer({
                 aria-label={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                 title={favoritado ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
               >
-                <Star size={16} aria-hidden fill={favoritado ? 'currentColor' : 'none'} />
+                <Heart size={17} aria-hidden fill={favoritado ? 'currentColor' : 'none'} />
               </button>
             )}
             {/* A descrição acompanha o compartilhamento nativo: sem ela, o
@@ -198,14 +212,20 @@ export function LotDrawer({
 
           <div className="col-dados">
             <div className="preco">
-              <div className="preco-lbl">{rotuloLance}</div>
+              <div className="preco-lbl">{rotulo}</div>
               <div className={`preco-v mono${lance == null ? ' vazio' : ''}`}>
                 {lance != null ? money(lance) : 'a fonte não publica valor para este lote'}
               </div>
-              {desconto != null && (
-                <div className="preco-desc">
-                  <b>{desconto}% abaixo</b> da avaliação de {money(lot.appraisal)}{' '}
-                  <span className="nota">— avaliação não é preço de venda</span>
+              {rotulo === 'Lance inicial' && (
+                <div className="preco-nota">Valor publicado antes do pregão começar. Pode subir bastante durante o pregão.</div>
+              )}
+              {fracao != null && (
+                <div className="preco-pos">
+                  <div className="lc-trilho"><i style={{ width: `${fracao}%` }} /></div>
+                  <div className="preco-desc">
+                    <b>{fracao}% da avaliação</b> de {money(lot.appraisal)}{' '}
+                    <span className="nota">— avaliação não é preço de venda</span>
+                  </div>
                 </div>
               )}
               {lot.bid_suspect && (
@@ -310,7 +330,7 @@ export function LotDrawer({
   if (comoPagina) return <main className="faixa lote-pagina">{corpo}</main>;
 
   return (
-    <div className="drawer open" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div className={`drawer open${saindo ? ' saindo' : ''}`} role="dialog" aria-modal="true" aria-labelledby="drawerTitle" inert={saindo}>
       <div className="scrim" onClick={aoFechar} />
       <div className="painel" ref={painel}>
         {corpo}

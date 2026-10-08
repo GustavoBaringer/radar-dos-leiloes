@@ -140,11 +140,11 @@ window.Cartao = (() => {
       <div class="meta">${linhaMeta(lot).map((m) => `<span>${esc(m)}</span>`).join('')}</div>
       <div class="bid">
         ${bid != null
-          ? `<span class="v">${money(bid)}</span><span class="lbl">${lot.current_bid != null ? 'lance atual' : 'lance mínimo'}</span>`
+          ? `<span class="v">${money(bid)}</span><span class="lbl">${lot.current_bid != null ? (lot.status === 'agendado' ? 'lance inicial' : 'lance atual') : 'lance mínimo'}</span>`
           : '<span class="lbl">sem lance publicado</span>'}
         ${lot.appraisal && !lot.bid_suspect && bid != null && lot.appraisal > bid ? `<span class="appraisal">${money(lot.appraisal)}</span>` : ''}
       </div>
-      ${lot.bid_suspect ? '<div class="suspect" title="Valor publicado pela fonte fora de faixa plausível">valor atípico na fonte</div>' : ''}
+      ${lot.bid_suspect ? '<div class="suspect" title="Valor publicado pela fonte fora de faixa plausível">valor atípico</div>' : ''}
       <div class="when ${when.cls}">${esc(when.text)}</div>
     </div>`;
   }

@@ -80,6 +80,7 @@ export const lucianleiloes: Connector = {
         sourceId: 'lucianleiloes',
         externalId: id,
         lotUrl: `${HOST}/${href[1]}`,
+        auctioneerName: 'Lucian Leilões',
         titleRaw: titulo,
         brand: parsed.brand,
         model: parsed.model,

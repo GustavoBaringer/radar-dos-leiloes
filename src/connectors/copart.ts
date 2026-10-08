@@ -1,7 +1,7 @@
 import { fetchJson } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, fold } from '../core/normalize.js';
 
 const URL_SEARCH = 'https://www.copart.com.br/public/lots/search';
 
@@ -41,9 +41,23 @@ function fullSizePhoto(url?: string | null): string | null {
   }
 }
 
+/**
+ * `td` NORMAL é o DOCUMENTO do veículo, não a lataria: convive com capotamento,
+ * enchente e colisão, e virava "Conservado" na tela. Nesse caso quem decide é o
+ * dano físico que a própria Copart publica (`dd`). Exportado para o backfill.
+ */
+export function docCopart(td: string | null | undefined, monta: string | null | undefined, dano: string | null | undefined): string | null {
+  const parts = [td, monta].filter(Boolean);
+  if (!parts.length) return null;
+  if (!/^(normal|nao aplicavel)/.test(fold(td ?? ''))) return parts.join(' / ');
+  const d = fold(dano ?? '').trim();
+  if (d === 'normal') return parts.join(' / ');
+  if (!d || /nao avaliavel|desconhecid|mecanic/.test(d)) return null;
+  return `avariado: ${dano}`;
+}
+
 function docTypeOf(c: any): string | null {
-  const parts = [c.td || c.stt, c.damageClassification].filter(Boolean);
-  return parts.length ? parts.join(' / ') : null;
+  return docCopart(c.td || c.stt, c.damageClassification, c.dd);
 }
 
 function mapLot(c: any): CanonicalLot | null {
@@ -105,6 +119,8 @@ function mapLot(c: any): CanonicalLot | null {
     raw: {
       lossType: c.lossType,
       damage: c.dd,
+      documento: c.td || c.stt || null,
+      monta: c.damageClassification ?? null,
       drivability: c.drivabilityRating,
       photoCount: c.phynumb,
       saleYard: c.syn,

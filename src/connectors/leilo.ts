@@ -2,7 +2,7 @@ import { fetchJson, fetchText } from './http.js';
 import * as campos from '../core/campos.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, classifyAsset } from '../core/normalize.js';
 
 const URL_SEARCH = 'https://api.leilo.com.br/v1/lote/busca-elastic';
 
@@ -110,7 +110,9 @@ function mapLot(l: any, eventos: Map<string, Leiloeiro>): CanonicalLot | null {
   const v = l.veiculo ?? {};
   const valor = l.valor ?? {};
   const loc = l.localizacao ?? {};
-  const parsed = parseTitle(title, v.infocarMarca, v.infocarModelo);
+  // Parser de veículo só em veículo: em Equipamentos, "CAIXA DE SOM PULSE" virava Fiat Pulse 2000.
+  const ehVeiculo = classifyAsset(title, l.tipo).assetType === 'veiculo';
+  const parsed = ehVeiculo ? parseTitle(title, v.infocarMarca, v.infocarModelo) : ({} as Partial<ReturnType<typeof parseTitle>>);
   const end = l.dataFim ? new Date(l.dataFim) : null;
   const start = l.leilao?.data ? new Date(l.leilao.data) : null;
 
@@ -119,12 +121,12 @@ function mapLot(l: any, eventos: Map<string, Leiloeiro>): CanonicalLot | null {
     externalId: String(l.lelId ?? l.id),
     lotUrl: lotUrl(l),
     titleRaw: title,
-    brand: parsed.brand ?? v.infocarMarca ?? null,
+    brand: ehVeiculo ? (parsed.brand ?? v.infocarMarca ?? null) : null,
     // Ver copart.ts: modelo cru da fonte quebra a busca estrutural.
-    model: parsed.model,
-    version: parsed.version,
-    yearMake: v.anoFabricacao ?? parsed.yearMake,
-    yearModel: v.anoModelo ?? parsed.yearModel,
+    model: parsed.model ?? null,
+    version: parsed.version ?? null,
+    yearMake: ehVeiculo ? (v.anoFabricacao ?? parsed.yearMake) : null,
+    yearModel: ehVeiculo ? (v.anoModelo ?? parsed.yearModel) : null,
     km: typeof v.km === 'number' ? v.km : null,
     docType: v.retomada && v.retomada !== '-' ? v.retomada : null,
     sourceCategory: l.tipo ?? null,

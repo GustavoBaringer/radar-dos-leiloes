@@ -19,6 +19,17 @@ import * as campos from '../core/campos.js';
 
 const PAGINA = 200;
 
+function leiloeiroDoHost(host: string): string {
+  return host
+    .replace(/^www\./, '')
+    .replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '')
+    .replace(/leiloes?|leiloeiro/gi, ' Leilões ')
+    .replace(/[-_.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
 /**
  * Status do lote → canônico. Os rótulos são os medidos em campo, em
  * `GetLoteRealTime[0].Lote_SubStatus_Label`.
@@ -118,10 +129,16 @@ function mapLot(l: any, host: string): CanonicalLot | null {
   const assetType = tipoDaCategoria(l.Categoria);
   if (!assetType) return null;
 
-  const fotos: string[] = (Array.isArray(l.Fotos) ? l.Fotos : [])
-    // `Foto` já vem com a extensão; concatenar ".jpg" produz 404.
-    .map((f: any) => (f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null))
-    .filter(Boolean) as string[];
+  const fotos: string[] = [
+    ...(Array.isArray(l.Fotos) ? l.Fotos : []).map((f: any) =>
+      f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null,
+    ),
+    ...(Array.isArray(l.FotosLista) ? l.FotosLista : []).map((f: any) =>
+      f?.Foto ? `https://${host}/imagens/1200x1200/${f.Foto}` : null,
+    ),
+  ]
+    .map((x) => x)
+    .filter((x, i, a): x is string => !!x && a.indexOf(x) === i);
 
   return {
     sourceId: 'suaplataforma',
@@ -130,7 +147,18 @@ function mapLot(l: any, host: string): CanonicalLot | null {
     // sobrescreve o outro em silêncio.
     externalId: `${host}:${id}`,
     lotUrl: l.URLlote ? `https://${host}/${String(l.URLlote).replace(/^\/+/, '')}` : null,
-    titleRaw: titulo,
+    titleRaw: (() => {
+      const t = titulo;
+      if (t && !/^\s*(judicial|extrajudicial)\s*$/i.test(t.trim()) && t.trim().length > 10) return t;
+      try {
+        const m = l.URLlote?.match(/\/lote\/([^/]+)/);
+        if (m) {
+          const slug = decodeURIComponent(m[1]).replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+          if (slug) return slug.toUpperCase();
+        }
+      } catch {}
+      return t;
+    })(),
     // `LabelModalidade` e não os booleans `IsJudicial`/`IsExtraJudicial`:
     // medido lote com rótulo "Extrajudicial" e os dois booleans em false.
     docType: l.LabelModalidade ? String(l.LabelModalidade) : null,
@@ -146,6 +174,7 @@ function mapLot(l: any, host: string): CanonicalLot | null {
     bidIncrement: num(rt?.ValorIncremento),
     appraisal: num(l.ValorAvaliacao ?? rt?.ValorAvaliacao),
     feesPct: num(rt?.Comissao),
+    auctioneerName: leiloeiroDoHost(host),
     // A fonte identifica o COMITENTE, não o leiloeiro.
     sellerName: l.Comitente ? String(l.Comitente) : null,
     // O `localDoTitulo` cobre o formato "…, Cidade/UF" do título. Quando ele

@@ -1,6 +1,8 @@
 import webpush from 'web-push';
 import { query } from './db.js';
 import { marcarNotificado, type Disparo } from './alerts.js';
+import { getLot } from './repo.js';
+import { slugDoLote } from './slug.js';
 
 /**
  * Entrega dos alertas. O sino é sempre gravado (é só uma linha em alert_hits);
@@ -43,13 +45,13 @@ export async function enviarPush(disparos: Disparo[]) {
   for (const d of alvos) {
     const inscricoes = porDono.get(d.ownerId) ?? [];
     if (!inscricoes.length) continue;
+    const lot = await getLot(d.lotId);
+    if (!lot) continue;
     const payload = JSON.stringify({
       title: `Novo lote: ${d.label}`,
       body: `${d.title.slice(0, 80)} — ${moeda(d.bid)}`,
-      // `/` passou a ser a landing de venda, e `?lote=` nunca foi lido pelo app:
-      // o push levava para marketing ou para a busca vazia. O id no fim do slug
-      // é o que resolve o lote, então o texto antes dele é dispensável aqui.
-      url: `/lote/alerta-${d.lotId}`,
+      // O detalhe aceita apenas o slug canônico, inclusive nos links de push.
+      url: `/lote/${slugDoLote(lot)}`,
       tag: `alerta-${d.alertId}-${d.lotId}`,
     });
     for (const s of inscricoes) {
