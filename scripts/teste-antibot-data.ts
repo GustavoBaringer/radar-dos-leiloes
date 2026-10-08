@@ -96,7 +96,7 @@ test('public DTO allowlists protect detail, hits, favorites and alert rows', () 
   const favorite = toPublicFavorite({ ...lotFixture(), favorited_em: '2026-10-05T00:00:00Z' });
   assert.equal(favorite.favorited_em, '2026-10-05T00:00:00Z');
   const alert = toPublicAlert({ id: 4, owner_id: 999, label: 'Lote', q: 'civic', channels: ['push', 'unsafe'], email: 'x@example.test', total: 3, nao_vistos: 2, secret: 'drop' });
-  assert.deepEqual(alert, { id: 4, label: 'Lote', q: 'civic', channels: ['push'], email: 'x@example.test', total: 3, nao_vistos: 2 });
+  assert.deepEqual(alert, { id: 4, label: 'Lote', q: 'civic', channels: ['push'], email: 'x@example.test', total: 3, nao_vistos: 2, filters: {} });
 });
 
 test('invalid repository search is rejected before any injected DB query', async () => {
