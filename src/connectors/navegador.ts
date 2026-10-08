@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright-core';
+import { combinedSignal, erroDeCancelamento, throwIfAborted } from '../core/collection-cancellation.js';
 
 /**
  * superbid (Cloudflare) e caixa (Radware/ShieldSquare) exigem um navegador de
@@ -42,21 +43,54 @@ async function esperaDesafio(page: Page) {
  * entrega a `page` (já com os cookies de sessão) pra `fn` reusar em quantas
  * chamadas quiser. Fecha o browser sempre, sucesso ou erro — um coletor
  * agendado 3x/dia não pode deixar processo pendurado entre execuções.
+ *
+ * `signal` (opcional; combinado com o sinal da coleta, se houver) cancela a
+ * navegação: a corrida rejeita com CollectionCancellationError e o `finally`
+ * fecha o browser. Cancelado antes de abrir, nem lança o Chromium.
  */
-export async function comNavegador<T>(entrada: string, fn: (page: Page) => Promise<T>): Promise<T> {
+export async function comNavegador<T>(
+  entrada: string,
+  fn: (page: Page) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const sinal = combinedSignal(signal);
+  throwIfAborted(sinal);
   const exe = acharChromium();
   if (!exe) {
     throw new Error('Chromium do Playwright não encontrado em ~/.cache/ms-playwright — rode `npx playwright install chromium`');
   }
   const browser = await chromium.launch({ executablePath: exe, headless: true });
-  try {
+  const trabalho = (async () => {
     const page = await browser.newPage({ userAgent: UA });
     await page.goto(entrada, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await esperaDesafio(page);
     return await fn(page);
+  })();
+  // Se o cancelamento vencer a corrida, `trabalho` morre junto com o close do
+  // browser e este catch evita rejeição órfã (unhandled).
+  trabalho.catch(() => {});
+  const parada = sinal ? pararEm(sinal) : null;
+  try {
+    return parada ? await Promise.race([trabalho, parada.promessa]) : await trabalho;
   } finally {
+    parada?.limpar();
     await browser.close();
   }
+}
+
+/** Promessa que rejeita com CollectionCancellationError quando `sinal` abortar. */
+function pararEm(sinal: AbortSignal): { promessa: Promise<never>; limpar(): void } {
+  let aoAbortar: () => void = () => {};
+  const promessa = new Promise<never>((_, reject) => {
+    aoAbortar = () => reject(erroDeCancelamento(sinal.reason));
+    if (sinal.aborted) aoAbortar();
+    else sinal.addEventListener('abort', aoAbortar, { once: true });
+  });
+  promessa.catch(() => {});
+  return {
+    promessa,
+    limpar: () => sinal.removeEventListener('abort', aoAbortar),
+  };
 }
 
 export interface RespostaNavegador {
@@ -82,7 +116,10 @@ export async function getJsonViaNavegador<T = any>(
   page: Page,
   url: string,
   headers: Record<string, string> = {},
+  signal?: AbortSignal,
 ): Promise<{ status: number; data: T | null; raw: string }> {
+  // Cancelado aqui (chamador ou contexto da coleta) não deve nem tocar na página.
+  throwIfAborted(combinedSignal(signal));
   const { status, raw } = await getBruto(page, url, headers);
   try {
     return { status, data: JSON.parse(raw) as T, raw };
@@ -97,7 +134,9 @@ export async function getLatin1ViaNavegador(
   page: Page,
   url: string,
   headers: Record<string, string> = {},
+  signal?: AbortSignal,
 ): Promise<RespostaNavegador> {
+  throwIfAborted(combinedSignal(signal));
   return page.evaluate(
     async ([u, h]) => {
       const res = await fetch(u as string, { headers: h as Record<string, string> });

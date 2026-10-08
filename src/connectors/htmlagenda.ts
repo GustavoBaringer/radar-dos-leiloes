@@ -6,6 +6,7 @@ import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller, looksLikePart, parseTitle } from '../core/normalize.js';
 import * as campos from '../core/campos.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36';
 const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos/proximos', '/evento.php', '/leilao', '/lotes-encerrando', '/lotes', '/lotes/imoveis', '/lotes/veiculos'];
@@ -54,6 +55,8 @@ async function linksDePagina(base: string, path: string, observer?: import('../c
   try {
     r = await fetchText(`${base}${path}`, { headers: { 'user-agent': UA }, gapMs: 900 });
   } catch (error) {
+    // Cancelamento não é falha de rede daquele tenant: o catch externo classifica.
+    if (error instanceof CollectionCancellationError) throw error;
     observer?.failure('network');
     throw error;
   }
@@ -76,7 +79,10 @@ async function loteDeUrl(host: string, url: string, observer?: import('../core/t
     const r = await fetchText(url, { headers: { 'user-agent': UA }, gapMs: 900 });
     observer?.response(r.status);
     if (r.status === 200) html = r.body;
-  } catch { observer?.failure('network'); /* usa slug */ }
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) throw error;
+    observer?.failure('network'); /* usa slug */
+  }
   const $ = cheerio.load(html);
   const h1 = texto($('h1').first().text() || $('title').first().text());
   const titulo = h1 && !/^(início|home)$/i.test(h1) ? h1 : slugTitulo(url);
@@ -100,11 +106,13 @@ async function loteDeUrl(host: string, url: string, observer?: import('../core/t
 export const htmlagenda: Connector = {
   def: { id: 'htmlagenda', name: 'HTML Agenda Genérico', platform: 'HTML Agenda', method: 'html', tier: 5, siteUrl: 'https://sites-de-leiloeiros', notes: 'Conector conservador para sites server-rendered com links /lote, /lotes, /leilao ou /eventos/leilao; só grava títulos de imóvel/veículo/máquina/equipamento.' },
   async collect({ limit, observer, tenant }): Promise<CollectResult> {
+    throwIfCancelled();
     const lots: CanonicalLot[] = [];
     let fetched = 0, skipped = 0, httpStatus = 0;
     const dominios = await tenants(Number(process.env.HTMLAGENDA_TENANTS ?? 30), tenant);
     for (const host of dominios) {
       if (lots.length >= limit) break;
+      throwIfCancelled();
       const attempt = await observer?.start(host);
       const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
@@ -113,20 +121,26 @@ export const htmlagenda: Connector = {
       const urls = new Set<string>();
       for (const p of PAGINAS) {
         if (lots.length >= limit) { truncated = true; break; }
+        throwIfCancelled();
         try {
           const r = await linksDePagina(base, p, attempt); httpStatus = r.status || httpStatus;
           r.links.forEach((l) => urls.add(l));
-        } catch { /* falha de rede já registrada pela função */ }
+        } catch (error) {
+          // falha de rede já registrada pela função; cancelamento corta o laço
+          if (error instanceof CollectionCancellationError) throw error;
+        }
       }
       for (const u of urls) {
         if (lots.length >= limit) { truncated = true; break; }
+        throwIfCancelled();
         fetched++;
         const lot = await loteDeUrl(host, u, attempt);
         if (lot) lots.push(lot); else skipped++;
       }
       if (lots.length >= limit) truncated = true;
       } catch (error) {
-        attempt?.failure('parser');
+        if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+        else attempt?.failure('parser');
         throw error;
       } finally {
         await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });

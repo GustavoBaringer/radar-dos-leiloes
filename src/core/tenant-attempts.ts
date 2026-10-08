@@ -3,7 +3,12 @@ import { query } from './db.js';
 
 export interface TenantAttempt {
   response(status: number): void;
-  failure(kind?: 'network' | 'parser'): void;
+  /**
+   * `budget` é exclusivo de cancelamento por prazo da coleta (deadline): o
+   * finish grava state `failed` + error_kind `budget`. Shutdown/lock_lost entram
+   * como `network` e seguem a regra de falha de rede. Nenhum valor novo no banco.
+   */
+  failure(kind?: 'network' | 'parser' | 'budget'): void;
   finish(stats: { fetched: number; skipped: number; returned: number; truncated?: boolean }): Promise<void>;
 }
 
@@ -61,7 +66,7 @@ export function createTenantObserver(context: TenantObserverContext, execute: Ex
       let responses = 0;
       let latestStatus: number | null = null;
       let badHttp = false;
-      let failureKind: 'network' | 'parser' | null = null;
+      let failureKind: 'network' | 'parser' | 'budget' | null = null;
       let finished = false;
       const ensureOpen = () => { if (finished) throw new Error('Tenant attempt already finished'); };
 
@@ -83,8 +88,10 @@ export function createTenantObserver(context: TenantObserverContext, execute: Ex
               (stats.truncated !== undefined && typeof stats.truncated !== 'boolean')) {
             throw new Error('Invalid tenant attempt stats');
           }
+          const cancelado = failureKind === 'budget';
           const failed = failureKind !== null || badHttp;
-          const state = failed ? (stats.fetched > 0 || stats.returned > 0 ? 'partial' : 'failed')
+          const state = cancelado ? 'failed'
+            : failed ? (stats.fetched > 0 || stats.returned > 0 ? 'partial' : 'failed')
             : stats.truncated ? 'partial' : responses === 0 ? 'failed' : 'completed';
           const errorKind = failureKind ?? (badHttp ? 'http' : stats.truncated ? 'budget' : responses === 0 ? 'no_response' : null);
           const updated = await execute(

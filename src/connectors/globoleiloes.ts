@@ -3,6 +3,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { classifySeller } from '../core/normalize.js';
+import { CollectionCancellationError, combinedSignal } from '../core/collection-cancellation.js';
 
 const HOST = 'https://globoleiloes.com.br';
 // Mesmo objeto no CDN vive em DUAS árvores e só uma delas responde 200: os lotes
@@ -17,17 +18,21 @@ const CDN_ARVORES = [
 /** Primeiro candidate que a origem confirma com 200 e tipo de imagem. */
 async function fotoNoCdn(img: string, cache: Map<string, string | null>): Promise<string | null> {
   if (cache.has(img)) return cache.get(img)!;
+  // fetch nativo: prazo por foto + sinal da coleta. Cancelamento fecha o laço
+  // de sondagem na hora (o catch só engole erro de origem, nunca de cancelamento).
+  const sinal = combinedSignal(AbortSignal.timeout(12000));
   for (const base of CDN_ARVORES) {
     const u = `${base}/thumb_${img}`;
     try {
-      const res = await fetch(u, { headers: { 'user-agent': UA, referer: `${HOST}/` }, signal: AbortSignal.timeout(12000) });
+      const res = await fetch(u, { headers: { 'user-agent': UA, referer: `${HOST}/` }, signal: sinal });
       const ct = res.headers.get('content-type') ?? '';
       await res.arrayBuffer();
       if (res.status === 200 && ct.startsWith('image/')) {
         cache.set(img, u);
         return u;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
       // tenta a próxima árvore
     }
   }
@@ -62,7 +67,11 @@ export const globoleiloes: Connector = {
     const vistos = new Set<string>();
     let httpStatus = 0;
     let r;
-    try { r = await fetchText(`${HOST}/`, { headers: { 'user-agent': UA }, gapMs: 1100 }); } catch { return { lots, fetched: 0, skipped: 0, httpStatus }; }
+    try { r = await fetchText(`${HOST}/`, { headers: { 'user-agent': UA }, gapMs: 1100 }); }
+    catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
+      return { lots, fetched: 0, skipped: 0, httpStatus };
+    }
     httpStatus = r.status;
     if (r.status !== 200) return { lots, fetched: 0, skipped: 0, httpStatus };
     const raw = r.body.match(/data-page="([^"]+)/)?.[1];
