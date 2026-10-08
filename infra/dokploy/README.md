@@ -29,12 +29,19 @@ navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais lo
 
 ## Ordem de implantação controlada
 
-1. A interpolação do Compose valida as variáveis de todos os serviços, mesmo
-   quando se selecionam serviços para iniciar: cadastre os secrets obrigatórios
-   antes, inclusive `KEYCLOAK_VERSION` como uma versão patch exata `26.x.y`
-   revisada. Revise notas de release, segurança e migração antes de escolher a
-   versão; não use `latest` nem atualize automaticamente. No Dokploy, use um comando Compose
-   customizado equivalente ao abaixo, preservando o nome/flags de projeto que o
+1. A interpolação do Compose valida variáveis obrigatórias de todos os serviços,
+   mesmo quando se selecionam serviços para iniciar. Para a fase de Postgres e
+   Keycloak, forneça credenciais do Postgres, Redis e Keycloak, além de
+   `KEYCLOAK_VERSION` como versão patch exata `26.x.y` revisada. Revise notas de
+   release, segurança e migração antes de escolher a versão; não use `latest` nem
+   atualize automaticamente. Os segredos exclusivos do `web` (sessão, Turnstile,
+   CIDRs e ACK de origem) podem permanecer vazios nesta fase; isso só permite
+   validar/renderizar a configuração e não permite que o serviço `web` inicie.
+   O comando do `web` falha antes de executar o Node enquanto faltarem valores
+   obrigatórios, e exige ACK de origem exatamente `1`; os modos antibot continuam
+   `enforce` e a configuração de confiança do proxy não ganha fallback.
+   No Dokploy, use um comando Compose customizado equivalente ao abaixo,
+   preservando o nome/flags de projeto que o
    Dokploy gerar. Confira o comando renderizado e confirme que somente
    `postgres` e `keycloak` foram iniciados. Não assuma que a interface oferece
    seleção de serviços e nunca rode deploy da stack inteira nesta fase.
