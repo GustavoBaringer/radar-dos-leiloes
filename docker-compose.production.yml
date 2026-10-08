@@ -1,0 +1,118 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_INIT_ADMIN_USER:?Set PG_INIT_ADMIN_USER for first-volume initialization}
+      POSTGRES_PASSWORD: ${PG_INIT_ADMIN_PASSWORD:?Set PG_INIT_ADMIN_PASSWORD for first-volume initialization}
+      POSTGRES_DB: postgres
+      RADAR_DB_PASSWORD: ${RADAR_DB_PASSWORD:?Set RADAR_DB_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - production-pgdata:/var/lib/postgresql/data
+      - ./infra/dokploy/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    networks: [backend]
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command: ["sh", "-ec", "exec redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - production-redisdata:/data
+    networks: [backend]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  keycloak:
+    build:
+      context: .
+      dockerfile: infra/dokploy/Dockerfile.keycloak
+      args:
+        KEYCLOAK_VERSION: ${KEYCLOAK_VERSION:?Choose a reviewed exact Keycloak 26.x.y patch version}
+    image: radar-keycloak:${KEYCLOAK_VERSION:?Choose a reviewed exact Keycloak 26.x.y patch version}
+    restart: unless-stopped
+    command: ["start", "--optimized", "--http-enabled=true", "--http-port=8080", "--hostname=https://auth.radardeleiloes.app.br", "--hostname-strict=true", "--proxy-headers=xforwarded"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak_app
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?Set KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?Set KC_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_HTTP_MANAGEMENT_PORT: "9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["node", "dist/src/server.js"]
+    environment:
+      NODE_ENV: production
+      BIND_HOST: 0.0.0.0
+      PORT: "4500"
+      SITE_URL: https://radardeleiloes.app.br
+      DATABASE_URL: postgres://radar_app:${RADAR_DB_PASSWORD:?Set RADAR_DB_PASSWORD}@postgres:5432/radar
+      OIDC_ISSUER: https://auth.radardeleiloes.app.br/realms/radar
+      OIDC_CLIENT_ID: radar-web
+      OIDC_ROLE_ADMIN: radar-admin
+      APP_SESSAO_SEGREDO: ${APP_SESSAO_SEGREDO:?Set APP_SESSAO_SEGREDO}
+      ANTIBOT_MODE: enforce
+      ANTIBOT_CHALLENGE_MODE: enforce
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY}
+      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:?Set TURNSTILE_HOSTNAMES}
+      ANTIBOT_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379
+      ENCERRAR_POR_AUSENCIA: "0"
+      ANTIBOT_TRUST_PROXY_CIDRS: ${ANTIBOT_TRUST_PROXY_CIDRS:?Set verified narrow proxy CIDRs}
+      ANTIBOT_ORIGIN_PROTECTION_CONFIRMED: ${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:?Confirm origin protection before start}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks: [backend, egress]
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+networks:
+  backend:
+    internal: true
+  egress:
+    driver: bridge
+
+volumes:
+  production-pgdata:
+  production-redisdata:
