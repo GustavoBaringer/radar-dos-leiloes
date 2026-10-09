@@ -199,6 +199,8 @@ function mapLot(l: any, host: string): CanonicalLot | null {
 
 /** Tenants: os domínios que a descoberta marcou como desta plataforma. */
 async function tenants(limite: number): Promise<string[]> {
+  const explicitos = String(process.env.SUAPLATAFORMA_DOMAINS ?? '').trim();
+  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((d) => d.startsWith('www.') ? d : `www.${d}`);
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'sua-plataforma' AND http_status = 200

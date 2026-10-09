@@ -40,6 +40,8 @@ const num = (v: unknown): number | null => {
 const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes.leilao.br', 'e-leiloeiro.leilao.br', 'magalhaesleiloes.com.br']);
 
 async function tenants(limite: number): Promise<string[]> {
+  const explicitos = String(process.env.SUPORTELEILOES_DOMAINS ?? '').trim();
+  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter((d) => d && !FORA.has(d));
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'suporte-leiloes' AND http_status = 200 AND has_lots IS NOT FALSE
