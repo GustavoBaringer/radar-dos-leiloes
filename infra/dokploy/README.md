@@ -15,7 +15,8 @@ navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais lo
    `X-Forwarded-Proto` bruto: testar spoofing desses cabeçalhos antes de confiar
    no proxy. Não presumir que uma rede compartilhada do Dokploy é isolada.
 2. Configurar secrets a partir de `production.env.example` no cofre do Dokploy,
-   nunca versionar o arquivo preenchido. Senhas usadas dentro de URLs devem ser
+   nunca versionar o arquivo preenchido. Configure também o `OIDC_CLIENT_SECRET`
+   do client confidencial `radar-web`. Senhas usadas dentro de URLs devem ser
    URL-safe (sem caracteres reservados); não se presume codificação automática.
     Definir TURNSTILE real para o hostname servido (não depende de Cloudflare DNS
     ou CDN), sessão, senhas e CIDRs estreitos. O ACK de proteção da origem deve

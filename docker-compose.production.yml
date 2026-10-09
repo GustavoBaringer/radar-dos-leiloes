@@ -79,6 +79,7 @@ services:
       DATABASE_URL: postgres://radar_app:${RADAR_DB_PASSWORD:?Set RADAR_DB_PASSWORD}@postgres:5432/radar
       OIDC_ISSUER: https://auth.radardeleiloes.app.br/realms/radar
       OIDC_CLIENT_ID: radar-web
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}
       OIDC_ROLE_ADMIN: radar-admin
       APP_SESSAO_SEGREDO: ${APP_SESSAO_SEGREDO:?Set APP_SESSAO_SEGREDO}
       ANTIBOT_MODE: enforce
