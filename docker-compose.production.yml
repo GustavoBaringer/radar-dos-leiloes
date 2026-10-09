@@ -70,7 +70,19 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    command: ["node", "dist/src/server.js"]
+    command:
+      - sh
+      - -ec
+      - |
+        : "$${APP_SESSAO_SEGREDO:?Set APP_SESSAO_SEGREDO}"
+        : "$${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}"
+        : "$${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}"
+        : "$${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY}"
+        : "$${TURNSTILE_HOSTNAMES:?Set TURNSTILE_HOSTNAMES}"
+        : "$${ANTIBOT_TRUST_PROXY_CIDRS:?Set verified narrow proxy CIDRs}"
+        : "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:?Confirm origin protection before start}"
+        [ "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED}" = 1 ] || { echo "ANTIBOT_ORIGIN_PROTECTION_CONFIRMED must be 1" >&2; exit 1; }
+        exec node dist/src/server.js
     environment:
       NODE_ENV: production
       BIND_HOST: 0.0.0.0
@@ -79,19 +91,19 @@ services:
       DATABASE_URL: postgres://radar_app:${RADAR_DB_PASSWORD:?Set RADAR_DB_PASSWORD}@postgres:5432/radar
       OIDC_ISSUER: https://auth.radardeleiloes.app.br/realms/radar
       OIDC_CLIENT_ID: radar-web
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_ROLE_ADMIN: radar-admin
-      APP_SESSAO_SEGREDO: ${APP_SESSAO_SEGREDO:?Set APP_SESSAO_SEGREDO}
+      APP_SESSAO_SEGREDO: ${APP_SESSAO_SEGREDO:-}
       ANTIBOT_MODE: enforce
       ANTIBOT_CHALLENGE_MODE: enforce
-      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY}
-      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:?Set TURNSTILE_HOSTNAMES}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
       ANTIBOT_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379
       REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379
       ENCERRAR_POR_AUSENCIA: "0"
-      ANTIBOT_TRUST_PROXY_CIDRS: ${ANTIBOT_TRUST_PROXY_CIDRS:?Set verified narrow proxy CIDRs}
-      ANTIBOT_ORIGIN_PROTECTION_CONFIRMED: ${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:?Confirm origin protection before start}
+      ANTIBOT_TRUST_PROXY_CIDRS: ${ANTIBOT_TRUST_PROXY_CIDRS:-}
+      ANTIBOT_ORIGIN_PROTECTION_CONFIRMED: ${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -16,7 +16,8 @@ navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais lo
    no proxy. Não presumir que uma rede compartilhada do Dokploy é isolada.
 2. Configurar secrets a partir de `production.env.example` no cofre do Dokploy,
    nunca versionar o arquivo preenchido. Configure também o `OIDC_CLIENT_SECRET`
-   do client confidencial `radar-web`. Senhas usadas dentro de URLs devem ser
+   do client confidencial `radar-web`; ele pode ficar vazio no bootstrap, mas é
+    obrigatório antes de iniciar `web`. Senhas usadas dentro de URLs devem ser
    URL-safe (sem caracteres reservados); não se presume codificação automática.
     Definir TURNSTILE real para o hostname servido (não depende de Cloudflare DNS
     ou CDN), sessão, senhas e CIDRs estreitos. O ACK de proteção da origem deve
@@ -30,12 +31,20 @@ navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais lo
 
 ## Ordem de implantação controlada
 
-1. A interpolação do Compose valida as variáveis de todos os serviços, mesmo
-   quando se selecionam serviços para iniciar: cadastre os secrets obrigatórios
-   antes, inclusive `KEYCLOAK_VERSION` como uma versão patch exata `26.x.y`
-   revisada. Revise notas de release, segurança e migração antes de escolher a
-   versão; não use `latest` nem atualize automaticamente. No Dokploy, use um comando Compose
-   customizado equivalente ao abaixo, preservando o nome/flags de projeto que o
+1. A interpolação do Compose valida variáveis obrigatórias de todos os serviços,
+   mesmo quando se selecionam serviços para iniciar. Para a fase de Postgres e
+   Keycloak, forneça credenciais do Postgres, Redis e Keycloak, além de
+   `KEYCLOAK_VERSION` como versão patch exata `26.x.y` revisada. Revise notas de
+   release, segurança e migração antes de escolher a versão; não use `latest` nem
+   atualize automaticamente. Os segredos exclusivos do `web` (`OIDC_CLIENT_SECRET`,
+   sessão, Turnstile, CIDRs e ACK de origem) podem permanecer vazios nesta fase;
+   OIDC_CLIENT_SECRET será obrigatório antes de iniciar `web`. Isso só permite
+   validar/renderizar a configuração e não permite que o serviço `web` inicie.
+   O comando do `web` falha antes de executar o Node enquanto faltarem valores
+   obrigatórios, e exige ACK de origem exatamente `1`; os modos antibot continuam
+   `enforce` e a configuração de confiança do proxy não ganha fallback.
+   No Dokploy, use um comando Compose customizado equivalente ao abaixo,
+   preservando o nome/flags de projeto que o
    Dokploy gerar. Confira o comando renderizado e confirme que somente
    `postgres` e `keycloak` foram iniciados. Não assuma que a interface oferece
    seleção de serviços e nunca rode deploy da stack inteira nesta fase.
