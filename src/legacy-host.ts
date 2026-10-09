@@ -1470,7 +1470,9 @@ app.get('/ca.crt', async (_req, reply) => {
 
 app.post('/api/push/subscribe', withReadResources(async (req, reply) => {
   const b = req.body as any;
-  if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => !['endpoint', 'keys'].includes(k))
+  if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => !['endpoint', 'keys', 'expirationTime'].includes(k))
+    || (b.expirationTime !== undefined && b.expirationTime !== null
+      && (typeof b.expirationTime !== 'number' || !Number.isFinite(b.expirationTime) || b.expirationTime < 0))
     || typeof b.endpoint !== 'string' || b.endpoint.length > 4096 || !b.keys || typeof b.keys !== 'object' || Array.isArray(b.keys)
     || Object.keys(b.keys).some((k) => !['p256dh', 'auth'].includes(k))
     || typeof b.keys.p256dh !== 'string' || b.keys.p256dh.length > 512 || !/^[A-Za-z0-9_+\/-]+=*$/.test(b.keys.p256dh)

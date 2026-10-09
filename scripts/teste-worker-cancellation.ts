@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
-import { createWorkerDeps, executeWorkerCollect, type WorkerCollectOptions } from '../src/queue/worker.js';
+import { createWorkerDeps, executeWorkerCollect, runRefreshSources, type WorkerCollectOptions } from '../src/queue/worker.js';
 import { collectQueue, refreshQueue, discoverQueue } from '../src/queue/queues.js';
 import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
 import type {
@@ -246,4 +246,29 @@ test('shutdown durante a persistência: upsert protegido termina ok e o evento s
   assert.equal(cenario.finishChamadas.length, 1);
   assert.equal(cenario.finishChamadas[0].ok, true, 'persistência protegida conclui ok');
   assert.deepEqual(eventos, ['collect'], 'evento publicado mesmo com cancelamento tardio');
+});
+
+test('refresh continua após falha comum, conta circuito freado e propaga cancelamento', async () => {
+  const sources: string[] = [];
+  const logs: string[] = [];
+  const errors: string[] = [];
+  const hot: Array<[string, number]> = [['bad', 100], ['freado', 200], ['good', 300]];
+  const result = await runRefreshSources(hot, async (sourceId) => {
+    sources.push(sourceId);
+    if (sourceId === 'bad') throw new Error('source unavailable');
+    return { freado: sourceId === 'freado' };
+  }, (message) => logs.push(message), (message) => errors.push(message));
+  assert.deepEqual(sources, ['bad', 'freado', 'good']);
+  assert.deepEqual(result, { hot: 3, completed: 1, failed: 1, circuitSkipped: 1 });
+  assert.match(errors[0], /bad falhou: source unavailable/);
+  assert.match(logs[0], /1 concluídas · 1 falhas · 1 freado\(s\) de 3/);
+
+  const cancellation = new CollectionCancellationError('shutdown');
+  const called: string[] = [];
+  await assert.rejects(runRefreshSources(hot, async (sourceId) => {
+    called.push(sourceId);
+    if (sourceId === 'bad') throw cancellation;
+    return {};
+  }, () => {}, () => {}), (error) => error === cancellation);
+  assert.deepEqual(called, ['bad'], 'cancellation stops later sources');
 });

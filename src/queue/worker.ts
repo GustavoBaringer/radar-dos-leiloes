@@ -287,11 +287,32 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }) 
 
   const hot = [...quentes];
   if (!hot.length) return { hot: 0 };
-  for (const [sourceId, limite] of hot) {
-    await runCollect(sourceId, limite, { ...metadata, origin: 'refresh' });
+  return runRefreshSources(hot, (sourceId, limit) =>
+    runCollect(sourceId, limit, { ...metadata, origin: 'refresh' }));
+}
+
+/** Executes an already-selected refresh batch; exported for offline contract tests. */
+export async function runRefreshSources(
+  hot: Array<[string, number]>,
+  collect: (sourceId: string, limit: number) => Promise<{ freado?: boolean }>,
+  log: (message: string) => void = console.log,
+  logError: (message: string) => void = console.error,
+) {
+  let completed = 0;
+  let failed = 0;
+  let circuitSkipped = 0;
+  for (const [sourceId, limit] of hot) {
+    try {
+      if ((await collect(sourceId, limit)).freado) circuitSkipped++;
+      else completed++;
+    } catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
+      failed++;
+      logError(`[refresh] ${sourceId} falhou: ${error instanceof Error ? error.message : error}`);
+    }
   }
-  console.log(`[refresh] ${hot.map(([f, l]) => `${f}(${l})`).join(' ')}`);
-  return { hot: hot.length };
+  log(`[refresh] ${completed} concluídas · ${failed} falhas · ${circuitSkipped} freado(s) de ${hot.length}`);
+  return { hot: hot.length, completed, failed, circuitSkipped };
 }
 
 /**

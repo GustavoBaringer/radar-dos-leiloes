@@ -7,16 +7,17 @@ export const BRANDS_SQL = 'SELECT brand, COUNT(*)::int AS count FROM lots WHERE 
 export const PHOTO_HOSTS_SQL = /SELECT split_part\(split_part\(p, ':/;
 
 export function dependencies({ queryFailure = false, identityDeleted = false, startupFailure = false, mode = 'off', injectDriver = true } = {}) {
-  const state = { queries: [], init: 0, closes: 0, queueClosed: 0, ensured: 0, redis: 0, connected: 0, subscribed: 0, queueCreated: 0, driverChecks: [], identityLookups: 0, antibotUrl: '', wsUrl: '', antibotRedisConnected: 0, antibotRedisClosed: 0, protectionClosed: 0 };
+  const state = { queries: [], pushSubscriptions: [], init: 0, closes: 0, queueClosed: 0, ensured: 0, redis: 0, connected: 0, subscribed: 0, queueCreated: 0, driverChecks: [], identityLookups: 0, antibotUrl: '', wsUrl: '', antibotRedisConnected: 0, antibotRedisClosed: 0, protectionClosed: 0 };
   const deps = {
     data: {
-      query: async (sql) => {
+      query: async (sql, params) => {
         state.queries.push(sql);
         if (sql === BRANDS_SQL) {
           if (queryFailure && state.queries.filter((seen) => seen === BRANDS_SQL).length === 1) throw new Error('db secret detail');
           return [{ brand: 'FORD', count: 2 }];
         }
         if (PHOTO_HOSTS_SQL.test(sql)) return [];
+        if (sql.includes('INSERT INTO push_subscriptions')) { state.pushSubscriptions.push(params); return []; }
         throw new Error(`unexpected SQL in host test: ${sql}`);
       },
       searchLots: async () => { throw Error('unexpected searchLots'); },

@@ -119,6 +119,30 @@ test('startup failure is memoized and closes initialized ownership', async () =>
   assert.equal(host.state.closes, 1);
 });
 
+test('push subscribe accepts browser expirationTime contract and rejects malformed/unknown fields', async () => {
+  const host = await hostFor();
+  try {
+    const headers = sessionHeaders();
+    const subscription = { endpoint: 'https://push.example.test/subscription', keys: { p256dh: 'AQ==', auth: 'Ag==' } };
+    for (const expirationTime of [null, 1_800_000_000_000]) {
+      const response = await host.app.inject({ method: 'POST', url: '/api/push/subscribe', headers, payload: { ...subscription, expirationTime } });
+      assert.equal(response.statusCode, 200, response.body);
+    }
+    const omitted = await host.app.inject({ method: 'POST', url: '/api/push/subscribe', headers, payload: subscription });
+    assert.equal(omitted.statusCode, 200, omitted.body);
+    for (const expirationTime of [-1, 'soon', {}, false]) {
+      const response = await host.app.inject({ method: 'POST', url: '/api/push/subscribe', headers, payload: { ...subscription, expirationTime } });
+      assert.equal(response.statusCode, 400, `expirationTime=${JSON.stringify(expirationTime)}`);
+    }
+    const nonFinite = await host.app.inject({ method: 'POST', url: '/api/push/subscribe', headers: { ...headers, 'content-type': 'application/json' }, payload: `{"endpoint":"${subscription.endpoint}","keys":${JSON.stringify(subscription.keys)},"expirationTime":1e400}` });
+    assert.equal(nonFinite.statusCode, 400, 'non-finite JSON number rejected');
+    const unknown = await host.app.inject({ method: 'POST', url: '/api/push/subscribe', headers, payload: { ...subscription, extra: true } });
+    assert.equal(unknown.statusCode, 400);
+    assert.equal(host.state.pushSubscriptions.length, 3, 'expirationTime remains unpersisted');
+    assert.equal(host.state.pushSubscriptions[0].length, 5, 'only existing subscription columns are persisted');
+  } finally { await host.app.close(); }
+});
+
 test('OIDC-off host is rejected without silently opening auth', async () => {
   const { deps, state } = dependencies();
   deps.oidc.oidcLigado = () => false;

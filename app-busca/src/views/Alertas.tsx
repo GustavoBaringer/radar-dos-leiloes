@@ -5,7 +5,7 @@ import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api } from '@/lib/api';
 import { LABEL_CANAL } from '@/lib/labels';
 import { dataCurta } from '@/lib/format';
-import { ativarPush, podePush } from '@/lib/push';
+import { ativarPush, podePush, sincronizarPushAutorizado } from '@/lib/push';
 import { LotCard } from '@/components/LotCard';
 import { Paginacao } from '@/components/Paginacao';
 
@@ -59,6 +59,13 @@ export function Alertas({
     // Entrar na aba marca os hits como vistos — o sino zera ao ser lido.
     api.marcarHitsVistos().then(() => aoContarNaoVistos(0)).catch(() => {});
     if (typeof Notification !== 'undefined') setPermissao(Notification.permission);
+    let ativo = true;
+    void sincronizarPushAutorizado().then((r) => {
+      if (ativo && !r.ok && r.motivo) toast(`Não foi possível sincronizar notificações: ${r.motivo}`);
+    }).catch((e) => {
+      if (ativo) toast(`Não foi possível sincronizar notificações: ${(e as Error)?.message ?? e}`);
+    });
+    return () => { ativo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versao]);
 

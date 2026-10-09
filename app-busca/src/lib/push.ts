@@ -17,6 +17,19 @@ export function podePush(): boolean {
   return typeof window !== 'undefined' && 'PushManager' in window && window.isSecureContext;
 }
 
+/** Re-register an existing, already-authorized browser subscription without prompting. */
+export async function sincronizarPushAutorizado(): Promise<{ ok: boolean; motivo?: string }> {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return { ok: false };
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.isSecureContext) {
+    return { ok: false, motivo: 'Este navegador não permite sincronizar notificações push.' };
+  }
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return { ok: false };
+  await api.inscreverPush(sub.toJSON());
+  return { ok: true };
+}
+
 /**
  * Liga a notificação do navegador neste aparelho.
  *

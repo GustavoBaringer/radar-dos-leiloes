@@ -1,8 +1,27 @@
-# Produção no Dokploy (template, ainda não ativado)
+# Produção no Dokploy
 
-Este arquivo prepara configuração para uma VPS futura. Não executar nem testar
-deploy nesta máquina empresarial. Operações de VPS ficam a cargo do usuário, no
-navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais locais.
+O site público está operacional conforme o registro herdado de 2026-10-09; este
+guia é referência operacional, não autorização para alterar a VPS. Não executar
+ações de VPS nesta máquina empresarial: operações ficam a cargo do usuário, no
+navegador externo. Não usar SSH, túneis, IPs/domínios reais ou credenciais locais.
+
+## Estado operacional e cautelas — 2026-10-09
+
+- O registro herdado informa 46/48 fontes com coleta bem-sucedida na última
+  conferência; isso é cobertura limitada, não validação completa. Caixa retornou
+  403 e Suporte Leilões aguarda cooldown. Encerramento por ausência segue desligado.
+- Todas as alterações visuais foram revertidas. Patches de produção e evidências
+  permanecem na VPS em `/root/radar-deploy`; reconciliar arquivos locais não prova
+  que houve novo deploy. Não fazer ações destrutivas no painel (Start/Stop/Reset/Delete).
+- O runtime usa IDs imutáveis; o comando consolidado de Deploy/Redeploy está em
+  `/root/radar-deploy/consolidation/dokploy-command.txt`, e o worker runtime em
+  `/etc/dokploy/radar-runtime/059af2b/workers.yml` (referência operacional;
+  não executar daqui). Limites exatos por fonte e rotação de Sua Plataforma ainda
+  não estão reconciliados localmente: aguardar acesso a
+  `/root/radar-deploy/worker-build/worker-deployment.patch`.
+- Backup local diário está ativo. O último backup foi restaurado isoladamente em
+  `/root/radar-backups/predeploy-20261009T203534Z` (15 tabelas Radar e 101 Keycloak).
+- Não há autorização para mudanças de runtime ou mutações de produção neste fluxo.
 
 ## Pré-requisitos e gates
 
@@ -23,9 +42,11 @@ navegador externo; não usar SSH, túneis, IPs/domínios reais ou credenciais lo
     ou CDN), sessão, senhas e CIDRs estreitos. O ACK de proteção da origem deve
     permanecer vazio até verificação operacional independente; CIDRs precisam
     ser verificados, não preenchidos por suposição.
-3. Antes de qualquer escrita pública, validar backup externo e um restore
-   testado, com identidade de usuários preservada por `sub`/roles, sem merge por
-   e-mail. Atualmente não há backup automatizado nem SMTP/recuperação de conta.
+3. **Template de bootstrap Compose:** antes de qualquer escrita pública nova,
+    validar backup externo e um restore
+    testado, com identidade de usuários preservada por `sub`/roles, sem merge por
+    e-mail. Este template não configura backup automatizado nem SMTP/recuperação;
+    isso não descreve o estado do backup local documentado acima.
    Manter registro público e self-registration do Keycloak desabilitados no
    início; preparar canal de suporte/recuperação manual antes de abrir cadastro.
 
@@ -89,7 +110,47 @@ garantia de capacidade. Há volumes persistentes locais, não substituem backup.
 proxy é anexada pelo Dokploy e não declarada aqui. Management do Keycloak em
 9000 fica privado.
 
-Não há worker no stack padrão: jobs/coletas não executam. Projetar worker
-separado somente com gate de recursos e execução operacional aprovados. Sem
-SMTP não há promessa de recuperação de conta por e-mail; sem backup externo
-testado não habilitar escrita pública.
+**Limite do template Compose:** não há worker nesta stack; jobs/coletas não
+executam nela. O worker saudável citado no estado operacional é um runtime de
+produção separado, não declarado por este Compose. Projetar worker separado para
+novas implantações somente com gate de recursos e execução aprovados. Sem SMTP não
+há promessa de recuperação de conta por e-mail; backup local não substitui backup
+externo testado antes de habilitar escrita pública em uma nova implantação.
+
+## Integrações externas pendentes
+
+Brevo e Backblaze B2 foram escolhidos em 2026-10-09; ambos seguem bloqueados por
+credenciais ausentes. Os caminhos abaixo são **arquivos privados da VPS**, não
+devem ser criados/versionados localmente. Manter permissão `0600` e nunca enviar
+segredos por chat.
+
+### Brevo / SMTP
+
+Criar conta e remetente, autenticar o domínio e obter o login e a chave SMTP
+(não a senha da conta nem a chave API). Preencher `/etc/radar/smtp.json` a partir
+de `/etc/radar/smtp.json.example` com `smtp-relay.brevo.com`, porta 587,
+STARTTLS e remetente aprovado. Validar conexão/autenticação sem envio com
+`finalization/verify-smtp.mjs` em container descartável. Só depois configurar
+app/worker e SMTP do realm. Não enviar e-mail de teste até confirmar o destinatário;
+reset/recuperação e autorregistro Keycloak permanecem desativados até validação e
+aprovação explícitas.
+
+### Backblaze B2 / Restic
+
+Criar bucket privado exclusivo e chave de aplicação limitada a esse bucket, com
+permissões necessárias de leitura/escrita/listagem. Preencher
+`/etc/radar/external-backup.json` a partir do `.example`, mantendo `0600`; não
+habilitar `enabled: true` até preencher as credenciais (necessário para `init`/
+`upload`). Guardar uma cópia privada de
+`/etc/radar/restic-password` fora da VPS: sem ela o backup não pode ser restaurado.
+
+Após credenciais e senha guardada externamente, executar `init`, `upload` e
+`check` do `/root/radar-deploy/external-backup.py`; validar download e restauração
+de um snapshot real antes de habilitar o timer externo. O timer segue desativado;
+nenhum upload B2 foi feito, e acesso/restauração remotos não estão validados. O
+Restic passou apenas validação offline de init/upload/check/restore, incluindo
+rejeição de senha incorreta e snapshot adulterado. O teto conservador de 8 GB do
+script não limita cobrança do B2: inspecionar uso do bucket e versões de objetos,
+e configurar alertas de uso. A retenção 7 diários/4 semanais/3 mensais é apenas
+`retention-preview`: revisar o relatório privado, sem aplicar exclusões. Não há
+regra de ciclo de vida nem script que apague backups; não aplicar retenção.
