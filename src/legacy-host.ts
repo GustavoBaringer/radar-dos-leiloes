@@ -1344,9 +1344,11 @@ app.delete('/api/alerts/:id', withReadResources(async (req, reply) => {
 
 app.get('/api/alerts/hits', withReadResources(async (req) => {
   const queryInput = req.query as Record<string, unknown>;
-  if (Object.keys(queryInput).some((key) => !['naoVistos', 'page', 'pageSize'].includes(key))) throw new BoundedInputError('Parâmetro de consulta inválido.');
+  if (Object.keys(queryInput).some((key) => !['naoVistos', 'page', 'pageSize', 'alertId'].includes(key))) throw new BoundedInputError('Parâmetro de consulta inválido.');
   if (Array.isArray(queryInput.naoVistos) || (queryInput.naoVistos !== undefined && !['true', 'false'].includes(String(queryInput.naoVistos)))) throw new BoundedInputError('Parâmetro naoVistos inválido.');
   const { naoVistos } = queryInput as { naoVistos?: string };
+  const alertId = queryInput.alertId === undefined ? null : safePositiveId(queryInput.alertId);
+  if (queryInput.alertId !== undefined && alertId === null) throw new BoundedInputError('Parâmetro alertId inválido.');
   const { page, pageSize, offset } = parsePagination(queryInput.page, queryInput.pageSize);
   const ownerId = (await donoDe(req)).userId;
   // Agrupado por LOTE, não por disparo: cinco alertas parecidos apontando para
@@ -1372,6 +1374,7 @@ app.get('/api/alerts/hits', withReadResources(async (req) => {
       JOIN alerts a ON a.id = h.alert_id
       JOIN lots l ON l.id = h.lot_id
       WHERE a.owner_id = $1 ${naoVistos === 'true' ? 'AND NOT h.seen' : ''}
+       ${alertId === null ? '' : 'AND a.id = $2'}
        -- Lote encerrado sai da aba: avisar sobre leilão que já passou é ruído.
        -- Filtra na LEITURA e não apaga o hit, porque lote reabre na 2ª praça
        -- com o mesmo id, e aí ele volta a aparecer sozinho.
@@ -1382,18 +1385,23 @@ app.get('/api/alerts/hits', withReadResources(async (req) => {
        -- dentro de um template literal e a crase fecharia a string.)
        AND NOT ${VENCIDO}
       GROUP BY l.id`;
-  const [{ total }] = await query<{ total: number }>(`SELECT count(*)::int AS total FROM (${base}) grouped`, [ownerId]);
-  const rows = await query(`${base} ORDER BY max(h.created_at) DESC, l.id DESC LIMIT $2 OFFSET $3`, [ownerId, pageSize + 1, offset]);
+  const params = alertId === null ? [ownerId] : [ownerId, alertId];
+  const [{ total }] = await query<{ total: number }>(`SELECT count(*)::int AS total FROM (${base}) grouped`, params);
+  const rows = await query(`${base} ORDER BY max(h.created_at) DESC, l.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, pageSize + 1, offset]);
   const pageRows = paginateRows(rows, page, pageSize);
   const lots = pageRows.items.map(toPublicHit);
   return { ...pageRows, items: await accountContext.decorateLots(ownerId, lots), total };
 }));
 
 app.post('/api/alerts/hits/seen', withReadResources(async (req) => {
+  const alertInput = (req.body as { alertId?: unknown } | undefined)?.alertId;
+  const alertId = alertInput === undefined ? null : safePositiveId(alertInput);
+  if (alertInput !== undefined && alertId === null) throw new BoundedInputError('Parâmetro alertId inválido.');
   await query(
     `UPDATE alert_hits SET seen = TRUE
-      WHERE NOT seen AND alert_id IN (SELECT id FROM alerts WHERE owner_id = $1)`,
-    [(await donoDe(req)).userId],
+      WHERE NOT seen AND alert_id IN (SELECT id FROM alerts WHERE owner_id = $1)
+      ${alertId === null ? '' : 'AND alert_id = $2'}`,
+    alertId === null ? [(await donoDe(req)).userId] : [(await donoDe(req)).userId, alertId],
   );
   return { ok: true };
 }));

@@ -146,7 +146,7 @@ export type WsMessage =
   | { type: 'bids'; changes: Array<{ lotId: number; newBid: number; title: string }> }
   | { type: 'collect'; sourceId: string; upserted: number }
   | { type: 'encerrados'; total: number; porPrazo?: number; porAusencia?: number; origem?: string }
-  | { type: 'alertas'; disparos: Array<{ label: string; title: string }> };
+  | { type: 'alertas'; disparos: Array<{ alertId: number; lotId: number; label: string; title: string }> };
 
 export interface PontoMapa {
   k: string;

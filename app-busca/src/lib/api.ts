@@ -62,8 +62,8 @@ export const api = {
   eu: () => get<AccountSummary>('/api/me'),
 
   alertas: (page = 1, sinal?: AbortSignal) => get<PaginatedResponse<Alerta>>(`/api/alerts?page=${page}&pageSize=24`, sinal).then((r) => legacyPage(r, page)),
-  hits: (page = 1, sinal?: AbortSignal) => get<PaginatedResponse<Hit>>(`/api/alerts/hits?page=${page}&pageSize=24`, sinal).then((r) => legacyPage(r, page)),
-  marcarHitsVistos: () => envia<unknown>('/api/alerts/hits/seen', 'POST'),
+  hits: (page = 1, sinal?: AbortSignal, alertId?: number) => get<PaginatedResponse<Hit>>(`/api/alerts/hits?page=${page}&pageSize=24${alertId === undefined ? '' : `&alertId=${alertId}`}`, sinal).then((r) => legacyPage(r, page)),
+  marcarHitsVistos: (alertId?: number) => envia<unknown>('/api/alerts/hits/seen', 'POST', alertId === undefined ? undefined : { alertId }),
   criarAlerta: (corpo: unknown) => envia<{ no_indice_agora?: number }>('/api/alerts', 'POST', corpo),
   // PATCH e não PUT: o servidor aceita só rótulo, canais e e-mail (server.ts:821).
   editarAlerta: (id: number, corpo: unknown) => envia<unknown>(`/api/alerts/${id}`, 'PATCH', corpo),

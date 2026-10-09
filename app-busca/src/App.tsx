@@ -263,7 +263,16 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     if (msg.type === 'alertas') {
       setNaoVistos((n) => n == null ? n : n + msg.disparos.length);
       if (naoVistos == null) atualizarResumo();
-      for (const d of msg.disparos.slice(0, 3)) toast(`Alerta "${d.label}": ${d.title.slice(0, 40)}`);
+      const grupos = new Map<number, { label: string; lotes: Set<number> }>();
+      for (const d of msg.disparos) {
+        const grupo = grupos.get(d.alertId) ?? { label: d.label, lotes: new Set<number>() };
+        grupo.lotes.add(d.lotId);
+        grupos.set(d.alertId, grupo);
+      }
+      for (const grupo of grupos.values()) {
+        const n = grupo.lotes.size;
+        toast(`Radar: Encontramos ${n} ${n === 1 ? 'novo lote' : 'novos lotes'} para o seu alerta "${grupo.label}"`);
+      }
       if (aba === 'alertas') setVersaoAlertas((v) => v + 1);
     }
   }, [papel, aba, toast, naoVistos, atualizarResumo]);

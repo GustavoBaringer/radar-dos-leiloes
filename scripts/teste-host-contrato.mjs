@@ -20,6 +20,7 @@ process.chdir('/');
 
 async function hostFor(options = {}) {
   const { deps, state } = dependencies(options);
+  if (options.query) deps.data.query = options.query;
   const host = await createLegacyHost({
     env: { NODE_ENV: 'test', ANTIBOT_MODE: options.mode ?? 'off', ANTIBOT_REDIS_URL: 'redis://antibot.fixture:6391', REDIS_URL: 'redis://queue.fixture:6380', CHALLENGE_MODE: 'off' }, paths, dependencies: deps,
   });
@@ -182,4 +183,45 @@ test('host-owned antibot Redis connects at initialization and closes exactly onc
   } finally { await host.app.close(); }
   assert.equal(host.state.antibotRedisClosed, 1, 'antibot Redis closes exactly once with the host');
   assert.equal(host.state.protectionClosed, 0, 'an injected driver is absent in this scenario');
+});
+
+
+test('alert deep link filters and seen updates retain owner boundary and pagination', async () => {
+  const queries = [];
+  const host = await hostFor({ query: async (sql, params) => {
+    queries.push({ sql, params });
+    return sql.startsWith('SELECT count(*)') ? [{ total: 0 }] : [];
+  } });
+  try {
+    const headers = sessionHeaders();
+    const response = await host.app.inject({ url: '/api/alerts/hits?alertId=42&page=2', headers });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json().items, []);
+    assert.equal(queries.length, 2);
+    for (const q of queries) {
+      assert.match(q.sql, /a.owner_id = \$1/);
+      assert.match(q.sql, /AND a.id = \$2/);
+    }
+    assert.deepEqual(queries[0].params, [7, 42]);
+    assert.deepEqual(queries[1].params, [7, 42, 25, 24]);
+    assert.match(queries[1].sql, /LIMIT \$3 OFFSET \$4/);
+    queries.length = 0;
+    const seen = await host.app.inject({ method: 'POST', url: '/api/alerts/hits/seen', headers, payload: { alertId: 42 } });
+    assert.equal(seen.statusCode, 200);
+    assert.match(queries[0].sql, /owner_id = \$1/);
+    assert.match(queries[0].sql, /AND alert_id = \$2/);
+    assert.deepEqual(queries[0].params, [7, 42]);
+    queries.length = 0;
+    assert.equal((await host.app.inject({ url: '/api/alerts/hits', headers })).statusCode, 200);
+    assert.deepEqual(queries[1].params, [7, 25, 0]);
+    assert.match(queries[1].sql, /LIMIT \$2 OFFSET \$3/);
+    queries.length = 0;
+    for (const value of ['0', '-1', '1.5', 'abc', '9007199254740992', '1&alertId=2']) {
+      assert.equal((await host.app.inject({ url: `/api/alerts/hits?alertId=${value}`, headers })).statusCode, 400);
+    }
+    assert.equal(queries.length, 0);
+    assert.equal((await host.app.inject({ method: 'POST', url: '/api/alerts/hits/seen', headers, payload: { alertId: 0 } })).statusCode, 400);
+    assert.equal((await host.app.inject('/api/alerts/hits?alertId=42')).statusCode, 401);
+    assert.equal(queries.length, 0);
+  } finally { await host.app.close(); }
 });

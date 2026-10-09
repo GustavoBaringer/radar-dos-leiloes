@@ -139,9 +139,9 @@ export async function contarCasaveis(a: Alerta): Promise<number> {
   return r?.n ?? 0;
 }
 
-export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
+export async function avaliarAlertas(lotIds: number[], queryFn: typeof query = query): Promise<Disparo[]> {
   if (!lotIds.length) return [];
-  const alertas = await query<Alerta>(
+  const alertas = await queryFn<Alerta>(
     `SELECT id, owner_id, created_at, label, q, filters, channels, email FROM alerts WHERE enabled ORDER BY id`,
   );
   const disparos: Disparo[] = [];
@@ -164,7 +164,7 @@ export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
      * Ambas moram no CASAMENTO, não só em quem chama: é o único ponto por onde
      * todo disparo passa, venha da coleta ou de qualquer outro gatilho.
      */
-    const achados = await query<any>(
+    const achados = await queryFn<any>(
       `SELECT id, title_raw, lot_url, source_id, COALESCE(current_bid, min_bid) AS bid
          FROM lots
         WHERE id = ANY($1::bigint[])
@@ -172,19 +172,21 @@ export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
           AND status NOT IN ('encerrado','vendido')
           AND NOT ${VENCIDO}
           ${where}
-        LIMIT 50`,
+        ORDER BY id`,
       [lotIds, a.created_at, ...params],
     );
 
+    // Registra todos os lotes em uma operação; o UNIQUE exclui os já avisados,
+    // inclusive quando duas coletas avaliam o mesmo lote ao mesmo tempo.
+    const inseridos = achados.length ? await queryFn<{ lot_id: number }>(
+      `INSERT INTO alert_hits (alert_id, lot_id)
+       SELECT $1, lot_id FROM unnest($2::bigint[]) AS novos(lot_id)
+       ON CONFLICT (alert_id, lot_id) DO NOTHING RETURNING lot_id`,
+      [a.id, achados.map((l) => Number(l.id))],
+    ) : [];
+    const novos = new Set(inseridos.map((l) => Number(l.lot_id)));
     for (const l of achados) {
-      // O UNIQUE (alert_id, lot_id) é o que garante um aviso por lote; o
-      // ON CONFLICT DO NOTHING devolve zero linhas quando já avisamos antes.
-      const [ins] = await query<{ id: string }>(
-        `INSERT INTO alert_hits (alert_id, lot_id) VALUES ($1,$2)
-         ON CONFLICT (alert_id, lot_id) DO NOTHING RETURNING id`,
-        [a.id, l.id],
-      );
-      if (!ins) continue;
+      if (!novos.has(Number(l.id))) continue;
       disparos.push({
         alertId: a.id,
         ownerId: Number(a.owner_id),
@@ -198,7 +200,7 @@ export async function avaliarAlertas(lotIds: number[]): Promise<Disparo[]> {
         source: l.source_id,
       });
     }
-    await query('UPDATE alerts SET last_run_at = now() WHERE id = $1', [a.id]);
+    await queryFn('UPDATE alerts SET last_run_at = now() WHERE id = $1', [a.id]);
   }
   return disparos;
 }

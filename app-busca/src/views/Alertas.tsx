@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pencil, Search, Trash2 } from 'lucide-react';
 import type { Alerta, Hit } from '@/lib/types';
 import type { FavoriteReadStamp } from '@/lib/favorite-context';
@@ -27,6 +27,8 @@ interface Props {
 export function Alertas({
   aoAbrirLote, toast, aoEditar, aoAplicar, versao, aoContarNaoVistos, favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
 }: Props) {
+  const leitura = useRef(0);
+  const [alertId, setAlertId] = useState<number | null | undefined>(undefined);
   const [alertas, setAlertas] = useState<{ items: Alerta[]; page: number; hasMore: boolean } | null>(null);
   const [hits, setHits] = useState<{ items: Hit[]; page: number; hasMore: boolean } | null>(null);
   const [alertPage, setAlertPage] = useState(1);
@@ -36,28 +38,46 @@ export function Alertas({
   const [apagando, setApagando] = useState<number | null>(null);
   const [permissao, setPermissao] = useState<NotificationPermission | 'indisponivel'>('indisponivel');
 
+  useEffect(() => {
+    const value = new URLSearchParams(location.search).get('alertId');
+    const id = value && /^\d+$/.test(value) ? Number(value) : null;
+    setAlertId(id && Number.isSafeInteger(id) && id > 0 ? id : null);
+  }, []);
+
+  function mostrarTodos() {
+    setAlertId(null);
+    setHitPage(1);
+    history.replaceState(history.state, '', '/alertas');
+  }
+
   async function carregar() {
+    if (alertId === undefined) return;
+    const request = ++leitura.current;
     const favoriteStamp = iniciarLeituraFavoritos();
     setLoading(true);
     try {
-      const [a, h] = await Promise.all([api.alertas(alertPage), api.hits(hitPage)]);
+      const [a, h] = await Promise.all([api.alertas(alertPage), api.hits(hitPage, undefined, alertId ?? undefined)]);
+      if (request !== leitura.current) return;
       setAlertas(a);
       setHits(h);
       aoConhecerLotes(h.items, favoriteStamp);
       setErro(null);
+      // Marca somente após carregar os resultados com sucesso.
+      void api.marcarHitsVistos(alertId ?? undefined).then(() => api.eu()).then((summary) => {
+        if (request === leitura.current) aoContarNaoVistos(summary.unreadAlertCount ?? 0);
+      }).catch(() => {});
     } catch (e) {
+      if (request !== leitura.current) return;
       setErro(String((e as Error)?.message ?? e));
-    } finally { setLoading(false); }
+    } finally { if (request === leitura.current) setLoading(false); }
   }
 
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versao, alertPage, hitPage]);
+  }, [versao, alertPage, hitPage, alertId]);
 
   useEffect(() => {
-    // Entrar na aba marca os hits como vistos — o sino zera ao ser lido.
-    api.marcarHitsVistos().then(() => aoContarNaoVistos(0)).catch(() => {});
     if (typeof Notification !== 'undefined') setPermissao(Notification.permission);
     let ativo = true;
     void sincronizarPushAutorizado().then((r) => {
@@ -67,7 +87,7 @@ export function Alertas({
     });
     return () => { ativo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versao]);
+  }, []);
 
   async function apagar(id: number) {
     setApagando(id);
@@ -92,8 +112,8 @@ export function Alertas({
     <main className="faixa sec">
       <h1 className="page-head">Alertas</h1>
       <p className="page-sub">
-        Cada alerta guarda uma busca. Quando um lote novo entra no índice e casa com ela, você é
-        avisado. O casamento usa o mesmo dicionário de marca e modelo da busca, então "volkswagen
+        Cada alerta guarda uma busca. Os novos lotes encontrados em cada coleta são agrupados
+        em uma única notificação por alerta. O casamento usa o mesmo dicionário de marca e modelo da busca, então "volkswagen
         taos" não dispara por um "taos" solto numa descrição.
       </p>
 
@@ -160,6 +180,12 @@ export function Alertas({
       {alertas && <Paginacao label="Páginas de alertas" page={alertas.page} hasMore={alertas.hasMore} loading={loading} onPage={setAlertPage} />}
 
       <h2 className="sub-head">Lotes encontrados</h2>
+      {alertId != null && (
+        <p className="page-sub">
+          Exibindo lotes do alerta selecionado.{' '}
+          <button type="button" className="btn-clear" onClick={mostrarTodos}>Ver todos os alertas</button>
+        </p>
+      )}
       {/* Com a carga falhando, "Nada encontrado" afirmava um resultado que não existe. */}
       {erro ? (
         <div className="empty">Os lotes dos alertas também não carregaram.</div>

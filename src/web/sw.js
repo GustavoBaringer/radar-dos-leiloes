@@ -23,7 +23,11 @@ self.addEventListener('notificationclick', (evento) => {
   // Reaproveita uma aba já aberta em vez de abrir outra a cada clique.
   evento.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((abas) => {
-      for (const aba of abas) if ('focus' in aba) return aba.focus();
+      for (const aba of abas) {
+        if ('focus' in aba && new URL(aba.url).origin === self.location.origin) {
+          return aba.navigate(alvo).then((destino) => (destino || aba).focus());
+        }
+      }
       return clients.openWindow(alvo);
     }),
   );
