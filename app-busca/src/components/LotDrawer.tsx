@@ -7,6 +7,7 @@ import {
 } from '@/lib/labels';
 import { dataBr, fracaoDaAvaliacao, img, money, nopicDe, rotuloLance, titulo, whenLabel } from '@/lib/format';
 import { BotaoCompartilhar } from './BotaoCompartilhar';
+import { ImagemGaleria } from './ImagemGaleria';
 
 type Par = [string, string | null | undefined];
 
@@ -75,10 +76,11 @@ export function LotDrawer({
     return () => window.clearTimeout(t);
   }, [lotAtual, comoPagina]);
   const [fotoGrande, setFotoGrande] = useState(0);
+  const [miniaturas, setMiniaturas] = useState(0);
   const painel = useRef<HTMLDivElement>(null);
   const botaoFechar = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => setFotoGrande(0), [lot?.id]);
+  useEffect(() => { setFotoGrande(0); setMiniaturas(0); }, [lot?.id]);
 
   useEffect(() => {
     if (!lotAtual || comoPagina) return;
@@ -183,7 +185,9 @@ export function LotDrawer({
         <div className="painel-corpo">
           <div className="col-midia">
             <figure className="foto-grande">
-              <img
+              <ImagemGaleria
+                key={`${lot.id}-${fotoGrande}`}
+                aoConcluir={() => setMiniaturas((n) => Math.max(n, 1))}
                 src={fotos.length ? img(fotos[fotoGrande], 1200) : nopicDe(lot)}
                 className={fotos.length ? '' : 'is-nopic'}
                 alt={fotos.length ? `Foto ${fotoGrande + 1} de ${titulo(lot)}` : 'Lote sem foto disponível'}
@@ -203,7 +207,12 @@ export function LotDrawer({
                     aria-label={`Ver foto ${i + 1}`}
                     aria-pressed={i === fotoGrande}
                   >
-                    <img loading="lazy" src={img(p, 180)} alt="" />
+                    {i < miniaturas && (
+                      <ImagemGaleria
+                        src={img(p, 180)} alt=""
+                        aoConcluir={() => setMiniaturas((n) => Math.max(n, i + 2))}
+                      />
+                    )}
                   </button>
                 ))}
               </div>

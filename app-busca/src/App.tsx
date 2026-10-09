@@ -393,10 +393,11 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         mostraCobertura={papel === 'admin'}
       />
 
-      {aba === 'busca' && (
+      {aba === 'busca' && (!loteInicial || !lote) && (
         <Busca
           key={`busca-${ownerEpoch.current}`}
           estado={estado}
+          pausarFotos={Boolean(lote)}
           aoMudar={mudar}
           aoLimpar={limpar}
           aoAbrirLote={abrirLote}

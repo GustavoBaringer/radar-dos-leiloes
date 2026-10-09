@@ -48,6 +48,7 @@ function specsDe(lot: Lot): Array<{ ico: ReactNode; txt: string }> {
 }
 
 interface Props {
+  pausarFoto?: boolean;
   lot: Lot;
   aoAbrir: (id: number) => void;
   /** Lance que chegou pelo WebSocket, sobrepondo o do último fetch. */
@@ -61,7 +62,7 @@ interface Props {
 }
 
 export function LotCard({
-  lot, aoAbrir, lanceAoVivo, piscando, destaque, rodape, favoritado, aoFavoritar,
+  lot, aoAbrir, lanceAoVivo, piscando, destaque, rodape, favoritado, aoFavoritar, pausarFoto = false,
 }: Props) {
   const foto = lot.photos?.[0] ?? null;
   const lance = lanceAoVivo ?? lot.current_bid ?? lot.min_bid;
@@ -81,14 +82,14 @@ export function LotCard({
       data-fim={lot.auction_end_utc ?? undefined}
     >
       <div className="lc-foto">
-        <img
+        {!pausarFoto && <img
           loading="lazy"
           className={foto ? '' : 'is-nopic'}
           src={foto ? img(foto, 640) : nopicDe(lot)}
           data-fallback={foto ? undefined : 'yes'}
           onError={aoFalharImagem}
           alt={foto ? `Foto do lote ${titulo(lot)}` : 'Lote sem foto disponível'}
-        />
+        />}
         <div className="lc-selos">
           {lot.is_novo && <span className="lc-selo novo">Novo</span>}
           {lot.doc_type && (

@@ -15,6 +15,7 @@ import { VistosRecentes } from '@/components/VistosRecentes';
 import { ComoFunciona } from '@/components/ComoFunciona';
 
 interface Props {
+  pausarFotos?: boolean;
   estado: EstadoBusca;
   aoMudar: (patch: Partial<EstadoBusca>) => void;
   aoLimpar: () => void;
@@ -35,7 +36,7 @@ const POS_FAIXA = 6;
 
 export function Busca({
   estado, aoMudar, aoLimpar, aoAbrirLote, aoCriarAlerta, lancesAoVivo, piscando, aoCarregar,
-  favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos,
+  favoritos, aoFavoritar, aoConhecerLotes, iniciarLeituraFavoritos, pausarFotos = false,
 }: Props) {
   const [dados, setDados] = useState<SearchResponse | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -235,6 +236,7 @@ export function Busca({
           {i === Math.min(POS_FAIXA, itens.length) && !ehMapa && faixaAlerta}
           <LotCard
             lot={lot}
+            pausarFoto={pausarFotos}
             aoAbrir={aoAbrirLote}
             lanceAoVivo={lancesAoVivo[lot.id]}
             piscando={piscando.has(lot.id)}
