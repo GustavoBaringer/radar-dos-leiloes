@@ -101,8 +101,8 @@ Prioridade inicial: execução por domínio e rotação dos conectores existente
 
 | Frente | Estado verificável |
 |---|---|
-| 1 — Observabilidade | Relatório read-only validado por testes e revisão independente; ledger ausente no preflight atual. Sem migração ou ativação; 984 domínios oficiais ainda não observados por esse ledger. |
-| 2 — Rotação | Correção de starvation validada com ciclos e mutações. Adiamento relativo de falhas recentes preservado; ausência do ledger e configuração do worker ainda impedem afirmar recorrência. |
+| 1 — Observabilidade | Relatório read-only, migração 016 e SQL real validados independentemente. Na fotografia de 10/10/2026 às 21:01 UTC, o novo ledger tinha zero tentativas e os 984 domínios oficiais estavam sem observação nele. Nenhuma ativação do worker. |
+| 2 — Rotação | Correção de starvation validada com ciclos e mutações. Adiamento relativo de falhas recentes preservado; configuração e execução operacional do worker ainda impedem afirmar recorrência. |
 | 3 — Vínculos | Seis sites pesquisados. Andra corresponde a registro já vinculado a outro domínio; Bueno requer fonte oficial/ID; Absoluta tem identidade incompleta; Avelar retornou 403; Central Sul/Foco não identificaram pessoa. Nenhuma aplicação adicional. |
 | 4 — Contratos | Cinco sites pesquisados. Molgado lote 6 é candidato imobiliário, ainda sem semântica segura de preço/status. Marcus item 3773 contém peças para tear, portanto não é equipamento elegível. Nenhum parser ativado. |
 | 5 — Identidade dos lotes | Quinze amostras atuais consultadas. `raw` é projeção insuficiente para replay de identidade/evento; correção genérica e backfill permanecem bloqueados. |
@@ -117,4 +117,12 @@ Os três bloqueios da primeira revisão foram resolvidos: fixture HTML Leilotech
 - Relatório distingue tentativa, coleta completa e resultado do run. `returned` não é gravado; persistência por domínio permanece desconhecida. Contagens de observação são pares fonte/domínio, não pessoas únicas.
 - Sem mudanças em schema, filas, configurações, worker ou cadastros. Sem reinício de processos.
 
-Próximo gate operacional: aprovação separada para aplicar somente `db/016_tenant_collection_attempts.sql`, revisar a configuração efetiva do ledger e planejar ativação sem interferir nos processos existentes. Não executar o migrador geral ou prometer recorrência a partir de testes offline.
+Gate operacional fechado: o usuário autorizou somente `db/016_tenant_collection_attempts.sql`, aplicada em transação sem alterar cadastros, outras migrações, configurações ou processos. Validação independente confirmou 16 colunas, PK, dois índices adicionais, dez checks e duas FKs; a CLI executou o caminho de ledger presente no PostgreSQL real. Dataset vazio comprova compatibilidade da consulta, não agrupamento positivo nem recorrência. Revisão adversarial aceitou esse escopo.
+
+As contagens observadas permaneceram em 1.947 oficiais, 1.195 com domínio e 984 domínios distintos. O relatório mostrou `ledger_available=true`, zero pares fonte/domínio observados e 984 domínios oficiais não observados. Isso não reconstrói tentativas antigas registradas apenas por conector.
+
+A inspeção somente leitura identificou um worker no WSL, mas o processo terminou antes da segunda confirmação. Flags efetivas, versão carregada e ciclos automáticos não foram comprovados; nenhuma instância foi iniciada ou reiniciada por esta entrega. Não concluir que toda execução está desligada, pois outros ambientes não foram comprovados.
+
+Próximo passo, ainda não autorizado: revisar a configuração efetiva do ledger e planejar ativação sem interferir nos processos existentes. Não executar o migrador geral ou prometer recorrência a partir de testes offline ou da simples existência da tabela.
+
+Reverter a migração com `DROP` não é automático: o ledger pode receber dados depois da fotografia vazia. Qualquer reversão destrutiva exige inspeção atual e nova autorização.
