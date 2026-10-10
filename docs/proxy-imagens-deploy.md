@@ -3,7 +3,9 @@
 O proxy não tem cota de requisições/minuto, seja com cache ou sem cache.
 Continuam os limites de dois processamentos de imagem, quatro leituras, cache
 limitado, download de até 20 MiB, validação de host/raster e prazo de 15 segundos.
-Saturação pode retornar 503; não há 429 por quantidade de imagens.
+Os cartões visíveis carregam em pares e retentam falhas temporárias, para evitar
+saturar o proxy ao navegar pelas páginas. Saturação por tráfego concorrente pode
+retornar 503; não há 429 por quantidade de imagens.
 
 Administradores consultam `/api/security/metrics`: `images` contém volume,
 picos por minuto e por cliente, cache, falhas, sobrecarga e tempos de resposta.
@@ -22,11 +24,14 @@ navegador não faz requisição ao proxy e não entra nessas métricas.
 No campo Command do Dokploy, configurar (o painel acrescenta `docker` no início):
 
 ```sh
-version --format '{{.Server.Version}}' >/dev/null && flock -w 1800 /etc/dokploy/radar-runtime/deploy-main.lock node /etc/dokploy/compose/radar-stack-m9wohj/code/infra/dokploy/deploy-main.mjs
+exec radar-deploy-runner flock -w 1800 /etc/dokploy/radar-runtime/deploy-main.lock node /etc/dokploy/compose/radar-stack-m9wohj/code/infra/dokploy/deploy-main.mjs
 ```
 
-O prefixo `version` valida o Docker; depois o shell executa `flock` e Node.
-Para execução manual, acrescentar `docker` antes de `version`.
+O executor valida um único comando Docker: `exec` executa o script no container
+`radar-deploy-runner`, que tem Node, Git, Docker CLI e flock. Esse container usa
+`deploy-runner.yml`, sem rede ou portas, com os diretórios do Dokploy e socket
+Docker necessários à publicação. Para execução manual, acrescentar `docker`
+antes de `exec`.
 O Dokploy clona a main antes de executar o comando. O script verifica a revisão,
 exporta os arquivos desse commit (independente do Compose modificado pelo painel),
 constrói web e worker com a revisão nas labels, testa a web candidata e só então

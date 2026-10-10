@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = [
+  'scripts/teste-image-queue.ts',
   'scripts/teste-image-telemetry.ts',
   'scripts/teste-worker-deployment.ts',
   'scripts/teste-refresh-isolation.ts',

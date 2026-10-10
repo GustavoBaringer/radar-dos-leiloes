@@ -1,0 +1,22 @@
+services:
+  deploy-runner:
+    # Reuse the reviewed executor image: Node, Git, Docker CLI and flock already exist.
+    image: dokploy/dokploy:v0.30.8@sha256:e8789a3f71a1e50d817836ad222ee0eab8ee69fc1b0451fee189a880b5602871
+    container_name: radar-deploy-runner
+    entrypoint: [node]
+    command: [-e, "setInterval(() => {}, 3600000)"]
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    environment:
+      DOCKER_CONFIG: /tmp/docker-config
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.75
+    pids_limit: 128
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=128m,mode=1777"]
+    volumes:
+      - /etc/dokploy:/etc/dokploy
+      - /var/run/docker.sock:/var/run/docker.sock

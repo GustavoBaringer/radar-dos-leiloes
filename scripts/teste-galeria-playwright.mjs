@@ -29,6 +29,7 @@ const server = createServer(async (req, res) => {
     const key = `${url.searchParams.get('u')}|${url.searchParams.get('w')}`;
     const count = (counts.get(key) ?? 0) + 1; counts.set(key, count);
     active++; maximum = Math.max(maximum, active);
+    if (active > 2) { active--; res.statusCode = 503; json({error:'overloaded'}); return; }
     await new Promise((r) => setTimeout(r, 80));
     active--;
     res.setHeader('Cache-Control', 'no-store');
@@ -42,7 +43,9 @@ const server = createServer(async (req, res) => {
   if (url.pathname.startsWith('/api/lot/')) return json(lot);
   if (url.pathname === '/api/search') {
     searchRequests++;
-    return json({ total:1, page:1, pageSize:24, items:[lot], interpreted:{brand:null,model:null,freeTerms:[]},
+    const page = Number(url.searchParams.get('page') ?? 1);
+    const items = Array.from({length:24},(_,i)=>({...lot,id:lot.id+(page-1)*24+i,photos:i===0?[...lot.photos]:[`https://photos.test/card-${page}-${i}.png`]}));
+    return json({ total:72, page, pageSize:24, items, interpreted:{brand:null,model:null,freeTerms:[]},
       facets:Object.fromEntries(['brands','models','states','cities','sources','assetTypes','vehicleTypes','propertyTypes','auctioneers','sellers','sellerTypes','statuses','docTypes'].map(k=>[k,[]])) });
   }
   if (url.pathname.startsWith('/api/')) return json({});
@@ -91,13 +94,22 @@ try {
     assert.equal(counts.get('https://photos.test/3.png|180'), 3, 'falha permanente tem limite de três tentativas e não bloqueia a próxima foto');
     terminal = false;
     await page.goto(origin + '/busca');
-    await page.locator('.card').waitFor();
+    await page.locator('.card').first().waitFor();
     await page.locator('.card h3 a, .card h3 button, .card h3').first().click();
     await page.locator('.foto-grande img').waitFor();
     assert.equal(await page.locator('.card .lc-foto img').count(), 0, 'fotos da busca pausam com a galeria aberta');
     await page.getByRole('button', {name:'Fechar detalhe do lote',exact:true}).click();
-    await page.locator('.card .lc-foto img').waitFor();
+    await page.locator('.card .lc-foto img').first().waitFor();
+    maximum = 0;
+    for (let index = 1; index <= 3; index++) {
+      await page.evaluate(async () => {
+        for(let y=0;y<document.body.scrollHeight;y+=600){window.scrollTo(0,y);await new Promise(r=>setTimeout(r,120))}
+      });
+      await page.waitForFunction(() => [...document.querySelectorAll('.card .lc-foto img')].every(img=>img.complete&&img.naturalWidth>0&&img.getAttribute('src')?.includes('/api/img')));
+      assert(maximum <= 2, `card requests share two slots: ${maximum}`);
+      if(index<3){await page.getByRole('button',{name:'Próxima',exact:true}).click();await page.waitForTimeout(300);}
+    }
     await page.close();
-    console.log(`OK ${width}px: quatro fotos, recuperação de 503, retentativas limitadas, busca pausada e retomada`);
+    console.log(`OK ${width}px: quatro fotos, recuperação de 503, retentativas limitadas, busca pausada e retomada, três páginas com até dois pedidos ativos`);
   }
 } finally { await browser.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); }

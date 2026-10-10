@@ -1,3 +1,4 @@
+import { ImagemCartao } from './ImagemCartao';
 import { type ReactNode, useCallback } from 'react';
 import { ArrowUpRight, BedDouble, Calendar, Gauge, Heart, MapPin, Ruler } from 'lucide-react';
 import type { Lot } from '@/lib/types';
@@ -15,15 +16,6 @@ import { useAgora } from '@/hooks/useAgora';
 
 const TITULO_AVALIACAO =
   'Avaliação publicada pela fonte. Avaliação não é preço de venda, e lance de abertura não é preço de arremate.';
-
-/** Rede, origem fora do ar ou formato recusado: o cartão precisa mostrar algo. */
-function aoFalharImagem(e: React.SyntheticEvent<HTMLImageElement>) {
-  const el = e.currentTarget;
-  if (el.dataset.fallback === 'yes') return; // guard contra laço se o nopic falhar
-  el.dataset.fallback = 'yes';
-  el.classList.add('is-nopic');
-  el.src = '/nopic.svg';
-}
 
 function tipoDe(lot: Lot): string {
   if (lot.asset_type === 'imovel') {
@@ -82,12 +74,10 @@ export function LotCard({
       data-fim={lot.auction_end_utc ?? undefined}
     >
       <div className="lc-foto">
-        {!pausarFoto && <img
-          loading="lazy"
+        {!pausarFoto && <ImagemCartao
           className={foto ? '' : 'is-nopic'}
           src={foto ? img(foto, 640) : nopicDe(lot)}
-          data-fallback={foto ? undefined : 'yes'}
-          onError={aoFalharImagem}
+          fallback={nopicDe(lot)}
           alt={foto ? `Foto do lote ${titulo(lot)}` : 'Lote sem foto disponível'}
         />}
         <div className="lc-selos">
