@@ -31,6 +31,7 @@ async function runOffline(run: (agent: MockAgent, attempts: any[], querySql: str
   };
   (pool as any).query = async (sql: string) => {
     querySql.push(sql);
+    if (sql.includes("platform='leilotech'")) return { rows: [] }; // uses the connector's pinned arrematabem.com.br tenant only
     return { rows: sql.includes('discovered_sites') ? [{ domain: host(1) }] : [] };
   };
   (globalThis as any).setTimeout = (fn: (...args: any[]) => void) => { queueMicrotask(fn); return 0; };
@@ -83,6 +84,7 @@ test('Leilão PRO and Leilotech record list requests without real database/netwo
     agent.get('https://arrematabem.com.br').intercept({ path: '/agenda' }).reply(200, '<html></html>');
     const result = await leilotech.collect({ limit: 10, observer: ledger(attempts) });
     assert.equal(result.lots.length, 0);
+    assert.equal(attempts[0].start[2], 'arrematabem.com.br');
     assert.equal(attempts[1].finish[1], 'completed', JSON.stringify(attempts));
   });
 });

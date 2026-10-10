@@ -101,10 +101,20 @@ Prioridade inicial: execução por domínio e rotação dos conectores existente
 
 | Frente | Estado verificável |
 |---|---|
-| 1 — Observabilidade | Relatório read-only implementado; ledger ausente no preflight atual. Sem migração ou ativação. Código ainda sob validação independente. |
-| 2 — Rotação | Correção de starvation implementada, mas revisão bloqueou alteração de preferência para falhas recentes e exigiu teste multiciclo/integrado. Não afirmar recorrência. |
+| 1 — Observabilidade | Relatório read-only validado por testes e revisão independente; ledger ausente no preflight atual. Sem migração ou ativação; 984 domínios oficiais ainda não observados por esse ledger. |
+| 2 — Rotação | Correção de starvation validada com ciclos e mutações. Adiamento relativo de falhas recentes preservado; ausência do ledger e configuração do worker ainda impedem afirmar recorrência. |
 | 3 — Vínculos | Seis sites pesquisados. Andra corresponde a registro já vinculado a outro domínio; Bueno requer fonte oficial/ID; Absoluta tem identidade incompleta; Avelar retornou 403; Central Sul/Foco não identificaram pessoa. Nenhuma aplicação adicional. |
 | 4 — Contratos | Cinco sites pesquisados. Molgado lote 6 é candidato imobiliário, ainda sem semântica segura de preço/status. Marcus item 3773 contém peças para tear, portanto não é equipamento elegível. Nenhum parser ativado. |
 | 5 — Identidade dos lotes | Quinze amostras atuais consultadas. `raw` é projeção insuficiente para replay de identidade/evento; correção genérica e backfill permanecem bloqueados. |
 
-Bloqueios de validação da próxima entrega: resolver falha da fixture HTML Leilotech com causa demonstrada; testar executor→API/HTML→observer real com I/O simulado e falsificação; preservar o adiamento relativo de falhas parciais/recentes enquanto corrige starvation de falhas antigas. Não modificar fontes durante a execução do teste independente.
+Os três bloqueios da primeira revisão foram resolvidos: fixture HTML Leilotech corrigida com causa demonstrada também no HEAD; executor→API/HTML→observer real exercitado com I/O simulado; adiamento relativo das falhas recentes preservado. Suíte independente: 34/34, typecheck e diff-check verdes. Restaurar a prioridade antiga ou desconectar o observer em cópia isolada fez os mesmos testes falharem, como esperado.
+
+### Entrega de código e reprodução
+
+- Seleção corrigida: `src/connectors/tenant-scheduler.ts`.
+- Relatório somente leitura: `node --env-file=.env --import tsx scripts/relatorio-cobertura-dominios.ts`.
+- Testes: `node --import tsx --test scripts/teste-tenant-scheduler.ts scripts/teste-relatorio-cobertura-dominios.ts scripts/teste-cobertura-adversarial.ts scripts/teste-executor-tenant-observer.ts scripts/teste-tenant-observer-api.ts scripts/teste-tenant-observer-html.ts scripts/teste-collection-execution.ts`.
+- Relatório distingue tentativa, coleta completa e resultado do run. `returned` não é gravado; persistência por domínio permanece desconhecida. Contagens de observação são pares fonte/domínio, não pessoas únicas.
+- Sem mudanças em schema, filas, configurações, worker ou cadastros. Sem reinício de processos.
+
+Próximo gate operacional: aprovação separada para aplicar somente `db/016_tenant_collection_attempts.sql`, revisar a configuração efetiva do ledger e planejar ativação sem interferir nos processos existentes. Não executar o migrador geral ou prometer recorrência a partir de testes offline.
