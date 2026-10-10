@@ -1,4 +1,4 @@
-import { fetchText, fetchJson } from './http.js';
+import { fetchText, fetchJson, type FetchOpts } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, looksLikePart } from '../core/normalize.js';
@@ -19,10 +19,36 @@ function parseBrDate(date: string, time: string): Date | null {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
-function parseMoney(v?: string | null): number | null {
+function parseMoney(v?: string | number | null): number | null {
   if (!v) return null;
-  const n = Number(String(v).replace(/\./g, '').replace(',', '.'));
+  const n = typeof v === 'number' ? v : Number(v.trim().replace(/\./g, '').replace(',', '.'));
   return isFinite(n) && n > 0 ? n : null;
+}
+
+export interface KussBidHistory {
+  av?: string | number | null;
+}
+type HistoryFetcher = (url: string, opts: FetchOpts) => Promise<{ status: number; data: KussBidHistory | null }>;
+
+/** `valor` da listagem é a oferta atual; somente `av` do histórico é o lance inicial.
+ * loteado=S é necessário mesmo quando a listagem usa N. le_id é a identidade
+ * estável; seq=0 evita depender da posição do lote no pregão.
+ * Não persistir a resposta: ela também pode conter dados dos licitantes.
+ */
+export async function buscarLanceMinimoKuss(
+  leilaoId: string, leId: string, fetchHistory: HistoryFetcher = fetchJson<KussBidHistory>,
+): Promise<number | null> {
+  if (!/^\d+$/.test(leilaoId) || !/^\d+$/.test(leId)) throw new Error('Identidade Kuss inválida');
+  const { status, data } = await fetchHistory(`${BASE}/json_lance_historico.php`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ leilaoID: leilaoId, le_id: leId, loteado: 'S', seq: '0', incr: '0', sugestao: 'S' }).toString(),
+    gapMs: 900,
+  });
+  if (status !== 200 || !data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`Histórico Kuss inválido (HTTP ${status})`);
+  }
+  return parseMoney(data.av);
 }
 
 function parseYearPair(ano?: string | null): { make: number | null; model: number | null } {
@@ -95,6 +121,7 @@ export const kuss: Connector = {
         fetched += items.length;
 
         for (const it of items) {
+          if (lots.length >= limit) break;
           const title = it.bem ?? '';
           if (!title || looksLikePart(title)) {
             skipped++;
@@ -124,7 +151,7 @@ export const kuss: Connector = {
             sourceTz: 'America/Sao_Paulo',
             status: auction.startUtc && auction.startUtc.getTime() > Date.now() ? 'agendado' : 'aberto',
             currentBid: parseMoney(it.valor),
-            minBid: null,
+            minBid: await buscarLanceMinimoKuss(auction.id, String(it.seq)),
             auctioneerName: 'Cláudio César Kuss',
             auctioneerReg: 'JUCEPAR 507',
             sellerName: null,
