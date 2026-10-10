@@ -43,6 +43,14 @@ for (const [target, tag] of [['web', webTag], ['worker', workerTag]]) {
 }
 const imageId = tag => docker(['image', 'inspect', tag, '--format', '{{.Id}}'], true).trim();
 const webId = imageId(webTag), workerId = imageId(workerTag);
+docker(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+  '--security-opt', 'no-new-privileges:true', '--tmpfs', '/tmp:rw,noexec,nosuid,size=128m,mode=1777',
+  '--memory', '512m', '--entrypoint', 'node', workerId, '--input-type=module', '-e', `
+    import {chromium} from 'playwright-core';
+    const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+    try { const page=await browser.newPage(); await page.goto('about:blank'); console.log('worker Chromium smoke passed'); }
+    finally { await browser.close(); }
+  `]);
 const liveWeb = inspect('radar-stack-m9wohj-web-1');
 const envFile = join(release, 'candidate.env');
 const candidate = `radar-candidate-${revision.slice(0, 12)}`;
