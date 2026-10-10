@@ -4,11 +4,9 @@ import { rotateTenants } from './tenant-rotation.js';
 /**
  * Seleção "due" de tenants: em vez de girar a roda cegamente, escolhe os
  * domínios que mais precisam de coleta, usando o ledger `tenant_collection_attempts`
- * (db/016). Ordem de prioridade:
- *   0. nunca tentados (ordem de entrada = ordem canônica da consulta)
- *   1. concluídos, mais antigos primeiro (finished_at/started_at ASC)
- *   2. não-concluídos (partial/failed/running), mais antigos primeiro; os que
- *      começaram há menos de 6h contam como ativos e ficam no fim da categoria
+ * (db/016). Nunca tentados vêm primeiro; tentativas terminadas são ordenadas
+ * pela idade da última tentativa, sem preferência permanente por sucesso.
+ * Running recente (menos de 6h) fica no fim.
  *
  * Ledger desligado (`TENANT_LEDGER_ENABLED !== '1'`) ou query falhando:
  * volta para `rotateTenants` (rotação clássica por slot de cron).
@@ -71,15 +69,13 @@ export function selectDue(
   const ranked = unique.map((domain, index) => {
     const row = latest.get(domain);
     if (!row) return { domain, index, cat: 0, asof: index };
-    if (row.state === 'completed') {
-      const done = row.finished_at ?? row.started_at;
-      return { domain, index, cat: 1, asof: done ? done.getTime() : 0 };
+    const startedMs = row.started_at?.getTime() ?? -Infinity;
+    const recentNonCompleted = ['partial', 'failed', 'running'].includes(row.state ?? '') && startedMs > nowMs - ACTIVE_MS;
+    if (recentNonCompleted) {
+      return { domain, index, cat: 2, asof: Number.MAX_SAFE_INTEGER };
     }
-    // partial/failed/running: começado há menos de 6h ainda está ativo → fim da fila;
-    // mais velho que isso (inclusive 'running' órfão de worker caindo) volta a ser due.
-    const startedMs = row.started_at ? row.started_at.getTime() : 0;
-    const active = startedMs > nowMs - ACTIVE_MS;
-    return { domain, index, cat: 2, asof: active ? Number.MAX_SAFE_INTEGER : startedMs };
+    const attemptMs = (row.state === 'running' ? row.started_at : row.finished_at ?? row.started_at)?.getTime() ?? -Infinity;
+    return { domain, index, cat: 1, asof: attemptMs };
   });
   ranked.sort((a, b) => a.cat - b.cat || a.asof - b.asof || a.index - b.index);
   return ranked.slice(0, count).map((r) => r.domain);
@@ -91,7 +87,7 @@ export async function loadTenantAttempts(sourceId: string, execute: Execute = qu
     `SELECT DISTINCT ON (lower(trim(domain))) lower(trim(domain)) AS domain, started_at, state, finished_at
        FROM tenant_collection_attempts
       WHERE source_id = $1
-      ORDER BY lower(trim(domain)), started_at DESC`,
+       ORDER BY lower(trim(domain)), started_at DESC, id DESC`,
     [sourceId],
   );
   return (rows ?? []).map((r) => ({

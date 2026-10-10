@@ -69,6 +69,42 @@ export interface ResultadoFenaju {
   aSondar: number;
 }
 
+export const UPSERT_AUCTIONEER_FENAJU_SQL = `
+  INSERT INTO auctioneers (registry, external_id, name, matricula, junta, uf, situacao, domain, domain_origin,
+                            uf_junta, ano_posse, credenciamento, associado, nivel, dominio_leilao)
+  VALUES ('fenaju',$1,$2,$3,$4,$5,$6,$7,$8,$5,$9,$10,$11,$12,$13)
+  ON CONFLICT (registry, external_id) DO UPDATE SET
+    name=EXCLUDED.name, matricula=EXCLUDED.matricula, junta=EXCLUDED.junta, uf=EXCLUDED.uf,
+    situacao=EXCLUDED.situacao,
+    domain=CASE WHEN auctioneers.domain_origin='reconciliado_site_fenaju' AND coalesce(auctioneers.domain,'') <> ''
+                THEN auctioneers.domain ELSE EXCLUDED.domain END,
+    domain_origin=CASE WHEN auctioneers.domain_origin='reconciliado_site_fenaju' AND coalesce(auctioneers.domain,'') <> ''
+                       THEN auctioneers.domain_origin ELSE EXCLUDED.domain_origin END,
+    uf_junta=EXCLUDED.uf_junta, ano_posse=EXCLUDED.ano_posse, credenciamento=EXCLUDED.credenciamento,
+    associado=EXCLUDED.associado, nivel=EXCLUDED.nivel, dominio_leilao=EXCLUDED.dominio_leilao,
+    collected_at=now()
+  WHERE auctioneers.domain_origin IS DISTINCT FROM 'reconciliado_site_fenaju'
+     OR coalesce(auctioneers.domain,'') = ''
+     OR (auctioneers.name IS NOT DISTINCT FROM EXCLUDED.name
+         AND auctioneers.matricula IS NOT DISTINCT FROM EXCLUDED.matricula
+         AND auctioneers.junta IS NOT DISTINCT FROM EXCLUDED.junta
+         AND auctioneers.uf IS NOT DISTINCT FROM EXCLUDED.uf
+         AND auctioneers.uf_junta IS NOT DISTINCT FROM EXCLUDED.uf_junta)
+  RETURNING domain`;
+
+export function requirePersistedFenaju<T>(row: T | undefined, externalId: string): T {
+  if (!row) throw new Error(`Upsert FENAJU recusado para external_id=${externalId}; registro reconciliado divergente.`);
+  return row;
+}
+
+export function acumulaSiteFenaju(sites: Map<string, { ufs: Set<string>; n: number }>, domain: string | null, uf: string | null) {
+  if (!domain) return;
+  const cur = sites.get(domain) ?? { ufs: new Set<string>(), n: 0 };
+  cur.n++;
+  if (uf) cur.ufs.add(uf);
+  sites.set(domain, cur);
+}
+
 export async function descobrirFenaju(): Promise<ResultadoFenaju> {
   const todos: any[] = [];
   let page = 1;
@@ -97,29 +133,18 @@ export async function descobrirFenaju(): Promise<ResultadoFenaju> {
     if (domLeilao) comLeilaoBr++;
     const uf = String(l.juntaUF ?? '').toUpperCase().slice(0, 2) || null;
 
-    await query(
-      `INSERT INTO auctioneers (registry, external_id, name, matricula, junta, uf, situacao, domain, domain_origin,
-                                uf_junta, ano_posse, credenciamento, associado, nivel, dominio_leilao)
-       VALUES ('fenaju',$1,$2,$3,$4,$5,$6,$7,$8,$5,$9,$10,$11,$12,$13)
-       ON CONFLICT (registry, external_id) DO UPDATE SET
-         name=EXCLUDED.name, matricula=EXCLUDED.matricula, junta=EXCLUDED.junta, uf=EXCLUDED.uf,
-         situacao=EXCLUDED.situacao, domain=EXCLUDED.domain, domain_origin=EXCLUDED.domain_origin,
-         uf_junta=EXCLUDED.uf_junta, ano_posse=EXCLUDED.ano_posse, credenciamento=EXCLUDED.credenciamento,
-         associado=EXCLUDED.associado, nivel=EXCLUDED.nivel, dominio_leilao=EXCLUDED.dominio_leilao,
-         collected_at=now()`,
+    const [persistedRow] = await query<{ domain: string | null }>(
+      UPSERT_AUCTIONEER_FENAJU_SQL,
       [String(l.id), l.nome ?? '', l.matricula ?? null, l.juntaSigla ?? null, uf, l.situacao ?? null,
         domain, declarado ? 'declarado' : domLeilao ? 'dominio_url' : doEmail ? 'email' : null,
         l.anoPosse ?? null, l.credenciamento ?? null, l.isAssociado ?? null, l.nivel ?? null, domLeilao],
     );
+    const persisted = requirePersistedFenaju(persistedRow, String(l.id));
 
     // Só leiloeiro regular vira candidato a fonte.
     if (!/regular/i.test(String(l.situacao ?? ''))) continue;
-    for (const d of [domain, domLeilao].filter(Boolean) as string[]) {
-      const cur = sites.get(d) ?? { ufs: new Set<string>(), n: 0 };
-      cur.n++;
-      if (uf) cur.ufs.add(uf);
-      sites.set(d, cur);
-    }
+    acumulaSiteFenaju(sites, persisted?.domain ?? null, uf);
+    if (domLeilao && domLeilao !== persisted?.domain) acumulaSiteFenaju(sites, domLeilao, uf);
   }
 
   for (const [domain, info] of sites) {

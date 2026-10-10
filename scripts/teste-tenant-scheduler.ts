@@ -6,7 +6,7 @@ import { rotateTenants } from '../src/connectors/tenant-rotation.js';
 const NOW = new Date('2026-10-07T12:00:00Z');
 const h = (n: number) => new Date(NOW.getTime() - n * 3600_000);
 
-test('selectDue: nunca tentados primeiro, depois concluídos antigos, depois não-concluídos velhos', () => {
+test('selectDue: nunca tentados primeiro; tentativas terminadas ordenadas por idade', () => {
   const rows = [
     { domain: 'done-old.br', state: 'completed', started_at: h(50), finished_at: h(49) },
     { domain: 'done-new.br', state: 'completed', started_at: h(10), finished_at: h(9) },
@@ -14,7 +14,34 @@ test('selectDue: nunca tentados primeiro, depois concluídos antigos, depois nã
     { domain: 'running-fresh.br', state: 'running', started_at: h(1), finished_at: null },
   ];
   const order = selectDue(['done-new.br', 'never.br', 'failed-stale.br', 'done-old.br', 'running-fresh.br'], rows, 5, NOW);
-  assert.deepEqual(order, ['never.br', 'done-old.br', 'done-new.br', 'failed-stale.br', 'running-fresh.br']);
+  assert.deepEqual(order, ['never.br', 'done-old.br', 'failed-stale.br', 'done-new.br', 'running-fresh.br']);
+});
+
+test('selectDue: falha antiga recupera vaga entre sucessos repetidos com budget menor que pool', () => {
+  const completed = [
+    { domain: 'healthy.br', state: 'completed', started_at: h(1), finished_at: h(1) },
+    { domain: 'bad.br', state: 'failed', started_at: h(48), finished_at: h(47) },
+  ];
+  const regressedPick = ['healthy.br', 'bad.br'].sort((a, b) =>
+    Number(completed.find((row) => row.domain === a)?.state !== 'completed') -
+    Number(completed.find((row) => row.domain === b)?.state !== 'completed'))[0];
+  assert.equal(regressedPick, 'healthy.br', 'completed-first mutation should starve the old failure');
+  assert.deepEqual(selectDue(['healthy.br', 'bad.br'], completed, 1, NOW), ['bad.br']);
+  const nextCycle = [
+    ...completed.filter((r) => r.domain !== 'healthy.br'),
+    { domain: 'healthy.br', state: 'completed', started_at: NOW, finished_at: NOW },
+  ];
+  assert.deepEqual(selectDue(['healthy.br', 'bad.br'], nextCycle, 1, NOW), ['bad.br']);
+});
+
+test('selectDue: null timestamps are oldest and duplicate domains use latest start', () => {
+  const order = selectDue(['null.br', 'dup.br', 'recent.br'], [
+    { domain: 'null.br', state: 'failed', started_at: null, finished_at: null },
+    { domain: 'dup.br', state: 'failed', started_at: h(40), finished_at: h(40) },
+    { domain: 'dup.br', state: 'completed', started_at: h(2), finished_at: h(2) },
+    { domain: 'recent.br', state: 'completed', started_at: h(1), finished_at: h(1) },
+  ], 3, NOW);
+  assert.deepEqual(order, ['null.br', 'dup.br', 'recent.br']);
 });
 
 test('selectDue: partial recente (<6h) é adiado; running órfão antigo volta a ser due', () => {
@@ -25,6 +52,16 @@ test('selectDue: partial recente (<6h) é adiado; running órfão antigo volta a
   ];
   const order = selectDue(['partial-fresh.br', 'running-dead.br', 'partial-stale.br'], rows, 3, NOW);
   assert.deepEqual(order, ['running-dead.br', 'partial-stale.br', 'partial-fresh.br']);
+});
+
+test('selectDue: partial e failed iniciados recentemente ficam atrás de completed mais recente', () => {
+  for (const state of ['partial', 'failed']) {
+    const order = selectDue(['recent-error.br', 'recent-success.br'], [
+      { domain: 'recent-error.br', state, started_at: h(2), finished_at: h(2) },
+      { domain: 'recent-success.br', state: 'completed', started_at: h(1), finished_at: h(1) },
+    ], 1, NOW);
+    assert.deepEqual(order, ['recent-success.br'], `${state} iniciado há 2h mantém adiamento relativo de 6h`);
+  }
 });
 
 test('selectDue: normaliza www/ponto/caixa, deduplica, respeita limit e candidatos vazios', () => {
