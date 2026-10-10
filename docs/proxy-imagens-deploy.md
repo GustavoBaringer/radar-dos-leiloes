@@ -34,5 +34,6 @@ e limites por fonte, serialização e prontidão. O worker contém Chromium.
 
 A publicação pausa e drena as filas, preserva pausas prévias e retoma as demais.
 Confere saúde e revisão dos dois containers. Em falha de ativação, restaura os
-arquivos e imagens anteriores. Não ativa deploy automático. Evidências e arquivos
+arquivos e imagens anteriores. Preserva a opção de deploy automático do Dokploy,
+já habilitada nesta instalação. Evidências e arquivos
 para rollback ficam em `/etc/dokploy/radar-runtime/releases/<commit>/`.
