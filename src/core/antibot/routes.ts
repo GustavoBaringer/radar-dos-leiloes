@@ -24,8 +24,6 @@ export const ROUTE_POLICIES: Readonly<Record<string, PolicyId>> = {
   'HEAD /api/search/mapa': 'mapa',
   'GET /api/vitrine': 'vitrine',
   'HEAD /api/vitrine': 'vitrine',
-  'GET /api/img': 'image',
-  'HEAD /api/img': 'image',
   'POST /api/cadastro': 'cadastro',
   'POST /api/espera': 'espera',
   'POST /api/login': 'login',

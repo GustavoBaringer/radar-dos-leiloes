@@ -15,12 +15,7 @@ export type ImageOutcome =
   | { kind: 'image'; buffer: Buffer; contentType: string; cache: 'hit' | 'miss' }
   | { kind: 'placeholder'; reason: ImagePlaceholderReason }
   | { kind: 'source-failure'; reason: 'client-aborted' | 'service-closed' }
-  | { kind: 'quota'; retryAfterSeconds: number }
   | { kind: 'overload' };
-
-export type MissQuotaDecision =
-  | { allowed: true }
-  | { allowed: false; retryAfterSeconds: number };
 
 export interface ImageResponseBody extends AsyncIterable<Uint8Array> {
   destroy?: () => void;
@@ -97,8 +92,6 @@ export interface ImageServiceOptions {
   dispatcherForHost?: (host: string) => Dispatcher | undefined;
   request?: ImageRequester;
   processImage?: ImageProcessor;
-  /** Default miss quota check; request handlers may instead pass a request-scoped check to get(). */
-  checkMiss?: () => Promise<MissQuotaDecision>;
   tryAcquireResource: () => ResourceLease | null;
   tryAcquireImageJob: () => ResourceLease | null;
   acquireDegradedWork: () => ResourceLease | null;
@@ -114,9 +107,9 @@ export interface ImageService {
 }
 
 export interface ImageRequestContext {
+  /** Reports the lookup even when downloading/processing later fails. */
+  onCache?: (cache: 'hit' | 'miss') => void;
   signal?: AbortSignal;
-  /** Must check imageMiss for the requesting IP; invoked only for a cache miss. */
-  checkMiss?: () => Promise<MissQuotaDecision>;
 }
 
 interface CacheEntry {
@@ -364,13 +357,7 @@ export function createImageService(options: ImageServiceOptions): ImageService {
       controller?.abort();
     };
     try {
-      let quota: MissQuotaDecision;
-      const checkMiss = context.checkMiss ?? options.checkMiss;
-      if (!checkMiss) return { kind: 'overload' };
-      try { quota = await checkMiss(); }
-      catch { return { kind: 'overload' }; }
       if (closed) return { kind: 'source-failure', reason: 'service-closed' };
-      if (!quota.allowed) return { kind: 'quota', retryAfterSeconds: Math.max(1, quota.retryAfterSeconds) };
       if (clientSignal?.aborted) return { kind: 'source-failure', reason: 'client-aborted' };
 
       try {
@@ -434,6 +421,7 @@ export function createImageService(options: ImageServiceOptions): ImageService {
     const width = widthBucket(widthInput);
     const key = `${url.href}|${width ?? 'full'}`;
     const cached = cacheGet(key, now());
+    try { context.onCache?.(cached ? 'hit' : 'miss'); } catch { /* observer cannot change outcome */ }
     if (cached) return { kind: 'image', buffer: cached.buffer, contentType: cached.contentType, cache: 'hit' };
 
     const operation = runMiss(key, url, width, context);

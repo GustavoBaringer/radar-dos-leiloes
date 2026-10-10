@@ -374,7 +374,7 @@ export async function sondarDominios(dominios: string[], concorrencia = 6): Prom
 }
 
 /** Registra em collection_runs para a tela de cobertura enxergar a descoberta. */
-export async function rodarDescoberta(qual: 'fenaju' | 'sonda', limite?: number) {
+export async function rodarDescoberta(qual: 'fenaju' | 'sonda', limite?: number, concorrencia?: number) {
   const runId = await startRun(qual === 'fenaju' ? 'fenaju' : 'sonda-sites', 'discover');
   try {
     if (qual === 'fenaju') {
@@ -382,7 +382,7 @@ export async function rodarDescoberta(qual: 'fenaju' | 'sonda', limite?: number)
       await finishRun(runId, { ok: true, fetched: r.leiloeiros, upserted: r.sitesNoCatalogo, skipped: r.aSondar });
       return r;
     }
-    const r = await sondarSites(limite);
+    const r = await sondarSites(limite, concorrencia);
     await finishRun(runId, { ok: true, fetched: r.sondados, upserted: r.comPlataforma, skipped: r.sondados - r.noAr });
     return r;
   } catch (err: any) {

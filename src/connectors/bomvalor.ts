@@ -1,3 +1,4 @@
+import { rotateTenants } from './tenant-rotation.js';
 /**
  * Plataforma **Bom Valor** — marketplace único com fachada white-label por leiloeiro.
  *
@@ -215,7 +216,10 @@ function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
 
 async function tenants(): Promise<string[]> {
   const env = String(process.env.BOMVALOR_TENANTS ?? '').trim();
-  if (env) return env.split(',').map((s) => s.trim()).filter(Boolean);
+  if (env) {
+    const candidates = env.split(',').map((s) => s.trim()).filter(Boolean);
+    return rotateTenants(candidates, Number(process.env.BOMVALOR_TENANT_BATCH ?? candidates.length));
+  }
   // A lista curada é o padrão; o banco entra só como rede de segurança caso os
   // domínios mudem de nome.
   const rows = await query<{ domain: string }>(
@@ -223,7 +227,8 @@ async function tenants(): Promise<string[]> {
   );
   const conhecidos = new Set(rows.map((r) => r.domain));
   const usar = TENANTS_PADRAO.filter((d) => conhecidos.has(d));
-  return usar.length ? usar : TENANTS_PADRAO;
+  const candidates = usar.length ? usar : TENANTS_PADRAO;
+  return rotateTenants(candidates, Number(process.env.BOMVALOR_TENANT_BATCH ?? candidates.length));
 }
 
 export const bomvalor: Connector = {

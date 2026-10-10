@@ -62,6 +62,10 @@ export async function comNavegador<T>(
   const browser = await chromium.launch({ executablePath: exe, headless: true });
   const trabalho = (async () => {
     const page = await browser.newPage({ userAgent: UA });
+    await page.route('**/*', (route) => {
+      const unnecessary = ['image', 'font', 'media'].includes(route.request().resourceType());
+      return unnecessary ? route.abort() : route.continue();
+    });
     await page.goto(entrada, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await esperaDesafio(page);
     return await fn(page);

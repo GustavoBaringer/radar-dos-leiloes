@@ -8,7 +8,7 @@ export { createImageService } from './images.js';
 export type {
   ImageOutcome, ImagePlaceholderReason, ImageService, ImageServiceOptions,
   ImageLimits, ImageRequester, ImageRequestOptions, ImageRequestContext, ImageTransportResponse,
-  ImageProcessor, ImageResponseBody, MissQuotaDecision,
+  ImageProcessor, ImageResponseBody,
 } from './images.js';
 export { createResourcePool, tryAcquireResource, tryAcquireImageJob } from './resources.js';
 export type { ResourceLease, ResourcePool, ResourcePoolOptions } from './resources.js';

@@ -31,11 +31,9 @@ function harness(overrides: Partial<Parameters<typeof createImageService>[0]> = 
     return response([png]);
   });
   const resources = createResourcePool();
-  let missChecks = 0;
   const service = createImageService({
     safeHostChecker: (url) => url.hostname === 'images.example.test' || url.hostname === 'cdn.example.test',
     request: (url, options) => requestImpl(url, options),
-    checkMiss: async () => { missChecks++; return { allowed: true }; },
     tryAcquireResource: resources.tryAcquireResource,
     tryAcquireImageJob: resources.tryAcquireImageJob,
     acquireDegradedWork: () => ({ release() {} }),
@@ -43,7 +41,6 @@ function harness(overrides: Partial<Parameters<typeof createImageService>[0]> = 
   });
   return {
     service, requests, setRequest: (fn: typeof requestImpl) => { requestImpl = fn; },
-    missChecks: () => missChecks,
   };
 }
 
@@ -82,7 +79,7 @@ test('image validates URL, credentials, port, all redirect hosts and loop/limit;
   await h.service.close();
 });
 
-test('all cache misses check quota; raster magic, streaming caps, status and output bounds', async () => {
+test('raster magic, streaming caps, status and output bounds', async () => {
   const h = harness({ limits: { maxInputBytes: 128, maxOutputBytes: 8 } });
   let destroyed = 0;
   h.setRequest(async () => response([png], 200, { 'content-length': '129' }, () => destroyed++));
@@ -94,27 +91,23 @@ test('all cache misses check quota; raster magic, streaming caps, status and out
   assert.deepEqual(await h.service.get('https://images.example.test/stream-limit'), { kind: 'placeholder', reason: 'too-large' });
   h.setRequest(async () => response([], 404));
   assert.deepEqual(await h.service.get('https://images.example.test/missing'), { kind: 'placeholder', reason: 'upstream-status' });
-  assert.equal(h.missChecks(), 4);
 
   const output = harness({ processImage: async () => ({ buffer: Buffer.alloc(9), contentType: 'image/webp' }), limits: { maxOutputBytes: 8 } });
   assert.deepEqual(await output.service.get('https://images.example.test/out'), { kind: 'placeholder', reason: 'too-large' });
   await h.service.close(); await output.service.close();
 });
 
-test('miss quota is request-scoped and a denial never fetches', async () => {
+test('more than 120 distinct images can load in the same minute without a rate quota', async () => {
   const h = harness();
-  const denied = await h.service.get('https://images.example.test/quota', null, {
-    checkMiss: async () => ({ allowed: false, retryAfterSeconds: 7 }),
-  });
-  assert.deepEqual(denied, { kind: 'quota', retryAfterSeconds: 7 });
-  assert.equal(h.requests.length, 0);
-  assert.equal(h.missChecks(), 0, 'request callback replaces, not duplicates, factory callback');
-  assert.equal((await h.service.get('https://images.example.test/quota')).kind, 'image');
-  assert.equal(h.requests.length, 1);
+  for (let i = 0; i < 130; i++) {
+    const result = await h.service.get(`https://images.example.test/image-${i}`);
+    assert.equal(result.kind, 'image');
+  }
+  assert.equal(h.requests.length, 130);
   await h.service.close();
 });
 
-test('cache tracks TTL, replacement bytes, eviction and bypasses slots/quota on hit', async () => {
+test('cache tracks TTL, replacement bytes, eviction and bypasses slots on hit', async () => {
   let now = 0;
   let requests = 0;
   const h = harness({
@@ -125,9 +118,9 @@ test('cache tracks TTL, replacement bytes, eviction and bypasses slots/quota on 
   });
   const url = 'https://images.example.test/a';
   assert.equal((await h.service.get(url, 200)).kind, 'image');
-  const beforeHit = h.missChecks();
+  const beforeHit = requests;
   assert.deepEqual((await h.service.get(url, 201)), { kind: 'image', buffer: Buffer.alloc(8, 1), contentType: 'image/webp', cache: 'hit' });
-  assert.equal(h.missChecks(), beforeHit);
+  assert.equal(requests, beforeHit);
   await h.service.get('https://images.example.test/b', 200);
   await h.service.get('https://images.example.test/c', 200);
   assert.equal((await h.service.get(url, 200)).kind, 'image');

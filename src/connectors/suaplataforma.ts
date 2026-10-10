@@ -1,3 +1,4 @@
+import { rotateTenants } from './tenant-rotation.js';
 /**
  * Plataforma **Sua Plataforma de Leilão** — white-label ASP.NET atrás de
  * Cloudflare, servindo dezenas de leiloeiros com o mesmo contrato.
@@ -202,13 +203,11 @@ async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'sua-plataforma' AND http_status = 200
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC
-      LIMIT $1`,
-    [limite],
+      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
   // O host serve em www.; o domínio pelado devolve 301, e POST que segue
   // redirect degrada para GET — a resposta viria 200 e vazia.
-  return rows.map((r) => (r.domain.startsWith('www.') ? r.domain : `www.${r.domain}`));
+  return rotateTenants(rows.map((r) => (r.domain.startsWith('www.') ? r.domain : `www.${r.domain}`)), limite);
 }
 
 export const suaplataforma: Connector = {

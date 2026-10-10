@@ -4,7 +4,7 @@ import type { ChallengeAction } from './challenge.js';
 const MAX_SERIES = 512;
 const MAX_COUNT = Number.MAX_SAFE_INTEGER;
 const MODES: readonly Mode[] = ['off', 'shadow', 'enforce'];
-const POLICIES: readonly PolicyId[] = ['search', 'detail', 'mapa', 'vitrine', 'cadastro', 'espera', 'login', 'image', 'imageMiss', 'wsIp', 'wsAccount', 'write'];
+const POLICIES: readonly PolicyId[] = ['search', 'detail', 'mapa', 'vitrine', 'cadastro', 'espera', 'login', 'wsIp', 'wsAccount', 'write'];
 const CHALLENGE_ACTIONS: readonly ChallengeAction[] = ['login', 'cadastro', 'espera'];
 const WS_EVENTS = ['quota', 'redis_unavailable', 'lease_lost', 'capacity'] as const;
 const WS_OUTCOMES = ['would_deny', 'denied', 'allowed'] as const;

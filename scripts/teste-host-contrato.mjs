@@ -225,3 +225,22 @@ test('alert deep link filters and seen updates retain owner boundary and paginat
     assert.equal(queries.length, 0);
   } finally { await host.app.close(); }
 });
+
+test('image route bypasses minute policies and exposes only aggregate admin metrics', async () => {
+  const host = await hostFor({ mode: 'enforce' });
+  try {
+    for (let i = 0; i < 130; i++) assert.equal((await host.app.inject('/api/img')).statusCode, 200);
+    assert.deepEqual(host.state.driverChecks, [], 'image requests do not invoke quota admission');
+  } finally { await host.app.close(); }
+  const metricsHost = await hostFor();
+  try {
+    await metricsHost.app.inject('/api/img');
+    assert.equal((await metricsHost.app.inject('/api/security/metrics')).statusCode, 401);
+    const response = await metricsHost.app.inject({ url: '/api/security/metrics', headers: sessionHeaders() });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().images.total.requests, 1);
+    assert.equal(response.json().images.total.placeholders, 1);
+    assert.equal(response.json().images.total.rateLimited, 0);
+    assert.equal(JSON.stringify(response.json().images).includes('127.0.0.1'), false);
+  } finally { await metricsHost.app.close(); }
+});

@@ -1,5 +1,14 @@
 # Produção no Dokploy
 
+## Publicação atualizada — 2026-10-10
+
+O fluxo autorizado pelo usuário agora constrói web e worker da revisão da main,
+testa a candidata e verifica saúde/revisão em produção. O comando antigo que
+reutilizava imagens fixas foi substituído. Veja [proxy e deploy](../../docs/proxy-imagens-deploy.md)
+e `deploy-main.mjs`. As seções abaixo documentam o bootstrap e o estado anterior;
+a publicação corrente preserva banco, Redis, Keycloak e relay existentes.
+
+
 O site público está operacional conforme o registro herdado de 2026-10-09; este
 guia é referência operacional, não autorização para alterar a VPS. Não executar
 ações de VPS nesta máquina empresarial: operações ficam a cargo do usuário, no

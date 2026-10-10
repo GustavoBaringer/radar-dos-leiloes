@@ -1,3 +1,4 @@
+import { rotateTenants } from './tenant-rotation.js';
 /**
  * Plataforma **Suporte Leilões** — white-label multi-tenant, HTML com JSON embutido.
  *
@@ -43,11 +44,9 @@ async function tenants(limite: number): Promise<string[]> {
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'suporte-leiloes' AND http_status = 200 AND has_lots IS NOT FALSE
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC
-      LIMIT $1`,
-    [limite],
+      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  return rows.map((r) => r.domain).filter((d) => !FORA.has(d));
+  return rotateTenants(rows.map((r) => r.domain).filter((d) => !FORA.has(d)), limite);
 }
 
 /** A assinatura que separa tenant genuíno de falso positivo da descoberta. */

@@ -17,6 +17,8 @@ import { loadAntibotConfig } from './core/antibot/config.js';
 import { loadChallengeConfig, createChallengeService } from './core/antibot/challenge.js';
 import { createDefaultObserver } from './core/antibot/engine.js';
 import { loadProxyTrustConfig } from './core/antibot/proxy.js';
+import { createImageMetricsLog } from './core/antibot/image-metrics-log.js';
+import { createImageTelemetry } from './core/antibot/image-telemetry.js';
 import { composeOperationsObserver, createOperationsTelemetry } from './core/antibot/telemetry.js';
 import { registerAntibot } from './core/antibot/fastify.js';
 import { normalizeClientIp } from './core/antibot/ip.js';
@@ -231,7 +233,26 @@ app.addHook('onSend', async (req, reply, payload) => {
 // Registradas só depois do 404/handler de erro e dos cabeçalhos de segurança:
 // rota montada antes disso fica fora do handler e da política de resposta.
 registerChallengeHttp(app, challengeObservedService, (reply, file) => reply.sendFile(file));
-registerOperationsMetricsRoute(app, telemetry);
+const imageMetricsLog = createImageMetricsLog(env.IMAGE_METRICS_DIR);
+const imageTelemetry = createImageTelemetry({ emit: (minute) => {
+  console.info('[images.minute]', JSON.stringify(minute));
+  imageMetricsLog.write(minute);
+} });
+const imageStarts = new WeakMap<object, number>();
+app.addHook('onRequest', async (req) => {
+  if (req.routeOptions.url === '/api/img') imageStarts.set(req, imageTelemetry.start(ipDoCliente(req)));
+});
+app.addHook('onResponse', async (req, reply) => {
+  const started = imageStarts.get(req);
+  if (started !== undefined) {
+    imageTelemetry.complete(started, reply.statusCode, reply.getHeader('x-cache'), Boolean(reply.getHeader('x-nopic-motivo')));
+    imageStarts.delete(req);
+  }
+});
+const imageMetricsTimer = setInterval(() => imageTelemetry.flush(), 10_000);
+imageMetricsTimer.unref();
+app.addHook('onClose', async () => { clearInterval(imageMetricsTimer); imageTelemetry.flush(true); await imageMetricsLog.close(); });
+registerOperationsMetricsRoute(app, { snapshot: () => ({ ...telemetry.snapshot(), images: imageTelemetry.snapshot() }) });
 
 // Hook order is intentional: root response handling, IP admission, session auth, account admission.
 const antibot = await registerAntibot(app, {
@@ -1663,18 +1684,11 @@ app.get('/api/img', async (req, reply) => {
   try {
     const outcome = await hostImageService.get(u, w === undefined ? null : Number(w), {
       signal: controller.signal,
-      checkMiss: async () => {
-        const decision = await antibot.check('imageMiss', { type: 'ip', value: ipDoCliente(req) });
-        return { allowed: decision.allowed, retryAfterSeconds: decision.retryAfterSeconds };
-      },
+      onCache: (cache) => { reply.header('x-cache', cache); },
     });
     if (outcome.kind === 'image') {
       return reply.header('content-type', outcome.contentType).header('cache-control', 'public, max-age=86400')
         .header('x-cache', outcome.cache).send(outcome.buffer);
-    }
-    if (outcome.kind === 'quota') {
-      return reply.code(429).header('Retry-After', String(outcome.retryAfterSeconds)).header('Cache-Control', 'no-store')
-        .send({ error: 'rate_limited', retryAfterSeconds: outcome.retryAfterSeconds });
     }
     if (outcome.kind === 'overload') {
       return reply.code(503).header('Retry-After', '1').header('Cache-Control', 'no-store')

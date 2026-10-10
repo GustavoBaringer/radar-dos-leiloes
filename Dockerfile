@@ -29,3 +29,15 @@ RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 4500
 CMD ["node", "dist/src/server.js"]
+
+# Worker publishes the same revision with its browser runtime and dependencies.
+FROM runtime AS worker
+USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright
+RUN node node_modules/playwright-core/cli.js install --with-deps chromium \
+    && chown -R node:node /home/node/.cache/ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+USER node
+CMD ["node", "dist/src/queue/worker.js"]
+
+FROM runtime AS web

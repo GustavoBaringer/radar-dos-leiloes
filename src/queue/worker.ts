@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { Worker, type Job, type Processor, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
@@ -9,7 +10,9 @@ import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
 import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
-import { CollectionCancellationError } from '../core/collection-cancellation.js';
+import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
+import { refreshBatch } from './refresh-batch.js';
+import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
 import {
   executeCollection,
   type CollectionExecutionDependencies,
@@ -23,6 +26,15 @@ import {
 } from './queues.js';
 
 const publisher = makeRedis();
+const DEPLOY = workerDeployment();
+const serialCollect = createCollectionGate();
+for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
+  if (!getConnector(source)) throw new Error(`Unknown collection override source: ${source}`);
+}
+if (DEPLOY.sources) for (const source of DEPLOY.sources) {
+  if (!getConnector(source)) throw new Error(`Unknown WORKER_SOURCES entry: ${source}`);
+}
+const enabledSource = (id: string) => !DEPLOY.sources || DEPLOY.sources.has(id);
 
 /**
  * Deps reais do worker para o executor compartilhado (`executeCollection`) —
@@ -104,15 +116,23 @@ async function runCollect(
   metadata: CollectionMetadata = { origin: 'unknown' },
   exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {},
 ) {
-  const freio = await consultaFreio(sourceId);
+  const operation = async () => {
+    throwIfAborted(exec.signal);
+    if (!enabledSource(sourceId)) throw new Error(`Source outside WORKER_SOURCES: ${sourceId}`);
+    const connector = getConnector(sourceId);
+    const bounded = boundedCollection(DEPLOY, sourceId, connector?.def.method ?? 'html', limit);
+    limit = bounded.limit;
+    const freio = await consultaFreio(sourceId);
   if (!freio.permite) {
     console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
     return { fetched: 0, upserted: 0, skipped: 0, freado: true };
   }
   // startRun, validação da fonte, HTTP vazio, upsert e finishRun vivem no
   // executor compartilhado (mesmo caminho da CLI, ver [[collection-execution]]).
-  const r = await executeWorkerCollect({ sourceId, limit, metadata, ...exec });
-  return { fetched: r.result.fetched, upserted: r.upserted, skipped: r.result.skipped };
+  const r = await executeWorkerCollect({ sourceId, limit, metadata, timeoutMs: bounded.timeoutMs, ...exec });
+    return { fetched: r.result.fetched, upserted: r.upserted, skipped: r.result.skipped };
+  };
+  return DEPLOY.serial ? serialCollect(operation) : operation();
 }
 
 /**
@@ -140,6 +160,30 @@ const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
     });
   } catch (err: any) {
     console.error(`[collect] ${job.data.sourceId} falhou (sem retry automático): ${err?.message ?? err}`);
+    throw err;
+  } finally {
+    sinal?.removeEventListener('abort', fechando);
+    emAndamento.delete(id);
+  }
+};
+
+const processarRefresh: Processor<RefreshJob> = async (job, _token, sinal) => {
+  const id = job.id ?? job.name;
+  const controller = new AbortController();
+  emAndamento.set(id, controller);
+  // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
+  const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
+  if (sinal) {
+    if (sinal.aborted) fechando();
+    else sinal.addEventListener('abort', fechando, { once: true });
+  }
+  try {
+    return await runRefresh(collectionJobContext(job, 'refresh'), {
+      signal: controller.signal,
+      queueJob: job,
+    });
+  } catch (err: any) {
+    console.error(`[refresh] falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
   } finally {
     sinal?.removeEventListener('abort', fechando);
@@ -237,7 +281,7 @@ async function cicloAoVivo() {
   }
 }
 
-async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }) {
+async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {}) {
   const quentes = new Map<string, number>();
 
   // Timer por lote: limite pequeno basta, porque o conector dessas fontes
@@ -252,7 +296,7 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }) 
        AND l.status IN ('aberto','agendado')
        AND l.auction_end_utc BETWEEN now() AND now() + interval '1 hour'
      GROUP BY l.source_id`)) {
-    if (FORA_DO_REFRESH.has(row.source_id)) continue;
+    if (!enabledSource(row.source_id) || FORA_DO_REFRESH.has(row.source_id)) continue;
     // Fonte com canal ao vivo só recoleta pelo lote que o canal não alcançou.
     const aoVivo = AO_VIVO && row.source_id in LEITORES;
     if (aoVivo && !semCanal.has(row.source_id)) continue;
@@ -282,13 +326,17 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }) 
           WHERE r.source_id = l.source_id
             AND r.started_at > now() - interval '${DESCANSO_PREGAO_MIN} minutes')`)) {
     const c = connectors.find((x) => x.def.id === row.source_id);
-    if (c) quentes.set(row.source_id, c.def.method === 'api' ? 15000 : 1200);
+    if (c && enabledSource(row.source_id)) quentes.set(row.source_id, c.def.method === 'api' ? 15000 : 1200);
   }
 
   const hot = [...quentes];
   if (!hot.length) return { hot: 0 };
-  return runRefreshSources(hot, (sourceId, limit) =>
-    runCollect(sourceId, limit, { ...metadata, origin: 'refresh' }));
+  const result = await refreshBatch(hot,
+    (sourceId, limite) => runCollect(sourceId, limite, { ...metadata, origin: 'refresh' }, exec),
+    (sourceId, error) => console.error(`[refresh] ${sourceId} falhou; outras fontes continuam: ${error instanceof Error ? error.message : String(error)}`),
+    exec.signal);
+  console.log(`[refresh] ${hot.map(([f, l]) => `${f}(${l})`).join(' ')}`);
+  return result;
 }
 
 /** Executes an already-selected refresh batch; exported for offline contract tests. */
@@ -363,7 +411,7 @@ async function cicloDeVerificacao() {
   if (verificando) return;
   verificando = true;
   try {
-    const r = await verificarCandidatos();
+    const r = await verificarCandidatos(DEPLOY.verifyLimit);
     if (r.verificados) {
       console.log(
         `[verificar] ${r.verificados} conferidos na origem: ${r.encerrados} encerrados, ` +
@@ -435,7 +483,7 @@ async function agendar(
   for (const i of itens) {
     await fila.upsertJobScheduler(
       i.id,
-      { pattern: i.pattern },
+      { pattern: i.pattern, tz: DEPLOY.timezone },
       { name: i.nome, data: i.data, opts: { removeOnComplete: i.manter, removeOnFail: i.manter } },
     );
   }
@@ -448,29 +496,29 @@ async function agendarTudo() {
   // o 3º horário, a lacuna 13h→07h (18h) carregava 49% do catálogo, incluindo 701
   // lotes `pregao_em_horario` — fecham na própria abertura, e um publicado depois
   // das 13h só apareceria às 07h já encerrado.
-  await agendar(collectQueue, connectors.map((c) => ({
+  await agendar(collectQueue, connectors.filter(c => enabledSource(c.def.id)).map((c, index) => ({
     id: `collect-${c.def.id}`,
     nome: `collect:${c.def.id}`,
-    pattern: '0 7,13,18 * * *',
+    pattern: `${DEPLOY.stagger ? (index * 7) % 60 : 0} 7,13,18 * * *`,
     // MEDIDO em 15/09: com limite 600 o Superbid gravava 6.125 lotes enquanto a
     // API entregava 10.463 abertos — a fonte não era o gargalo, o limite era.
     // Fontes de API devolvem catálogo grande numa requisição; as de HTML são
     // caras por lote e continuam com teto menor.
-    data: { sourceId: c.def.id, limit: c.def.method === 'api' ? 15000 : 1200 },
+    data: { sourceId: c.def.id, limit: c.def.method === 'api' ? DEPLOY.apiLimit : DEPLOY.htmlLimit },
     manter: 20,
   })));
 
-  await agendar(refreshQueue, [
+  await agendar(refreshQueue, DEPLOY.refresh ? [
     { id: 'refresh-hot', nome: 'refresh:hot', pattern: '*/2 * * * *', data: { reason: 'lotes encerrando' }, manter: 20 },
-  ]);
+  ] : []);
 
   // Descoberta é semanal porque cadastro de junta comercial muda devagar, e a
   // sonda vai em fatia diária: são 1.023 sites a 1 req/s por host, uns 17 min de
   // uma vez só. A fatia de 150 cobre o catálogo inteiro em uma semana.
-  await agendar(discoverQueue, [
+  await agendar(discoverQueue, DEPLOY.discover ? [
     { id: 'discover-fenaju', nome: 'discover:fenaju', pattern: '23 4 * * 1', data: { qual: 'fenaju' }, manter: 10 },
-    { id: 'discover-sonda', nome: 'discover:sonda', pattern: '41 5 * * *', data: { qual: 'sonda', limite: 150 }, manter: 10 },
-  ]);
+    { id: 'discover-sonda', nome: 'discover:sonda', pattern: '41 5 * * *', data: { qual: 'sonda', limite: DEPLOY.discoveryLimit }, manter: 10 },
+  ] : []);
 }
 
 export interface WorkerHubDeps {
@@ -516,12 +564,12 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       if (ligado) return;
       ligado = true;
       if (AO_VIVO) periodico(cicloAoVivo, 15_000);
-      periodico(cicloDeEncerramento, 60_000);
-      periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
+      if (DEPLOY.close) periodico(cicloDeEncerramento, 60_000);
+      if (DEPLOY.verify) periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
       // Roda na subida também: reiniciar o worker não deve deixar lote vencido
       // esperando o primeiro minuto.
-      void cicloDeVerificacao();
-      void cicloDeEncerramento();
+      if (DEPLOY.verify) void cicloDeVerificacao();
+      if (DEPLOY.close) void cicloDeEncerramento();
 
       // ensureSources primeiro: banco fora do ar aborta aqui, antes de qualquer
       // comando em Redis (limparAgendamentosOrfaos varre a fila).
@@ -529,31 +577,32 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       await limparAgendamentosOrfaos();
 
       workers.push(
-        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: 2 })
+        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: DEPLOY.concurrency })
           .on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message))
           .on('error', (err) => console.error('[collect] worker:', err.message))
           .on('lockRenewalFailed', aoPerderLock),
-        new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? ((job) => runRefresh(collectionJobContext(job, 'refresh'))), {
+        ...(DEPLOY.refresh ? [new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? processarRefresh, {
           connection: makeRedis(),
           concurrency: 1,
         })
           .on('failed', (_job, err) => console.error('[refresh] falhou:', err.message))
           .on('error', (err) => console.error('[refresh] worker:', err.message))
-          .on('lockRenewalFailed', aoPerderLock),
-        new Worker<DiscoverJob>(
+          .on('lockRenewalFailed', aoPerderLock)] : []),
+        ...(DEPLOY.discover ? [new Worker<DiscoverJob>(
           QUEUE_DISCOVER,
           deps.discover ?? (async (job) => {
-            const r = await rodarDescoberta(job.data.qual, job.data.limite);
+            const r = await rodarDescoberta(job.data.qual, Math.min(job.data.limite ?? DEPLOY.discoveryLimit, DEPLOY.discoveryLimit), DEPLOY.discoveryConcurrency);
             console.log(`[discover] ${job.data.qual}:`, r);
             return r;
           }),
           { connection: makeRedis(), concurrency: 1 },
         )
           .on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message))
-          .on('error', (err) => console.error('[discover] worker:', err.message)),
+          .on('error', (err) => console.error('[discover] worker:', err.message))] : []),
       );
 
       await agendarTudo();
+      if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
     },
 

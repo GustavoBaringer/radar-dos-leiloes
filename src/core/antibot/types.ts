@@ -1,7 +1,7 @@
 export type Mode = 'off' | 'shadow' | 'enforce';
 export type PolicyId =
   | 'search' | 'detail' | 'mapa' | 'vitrine' | 'cadastro' | 'espera' | 'login'
-  | 'image' | 'imageMiss' | 'wsIp' | 'wsAccount' | 'write';
+  | 'wsIp' | 'wsAccount' | 'write';
 export type Subject = { type: 'ip'; value: string } | { type: 'account'; id: number };
 export type DecisionReason = 'allowed' | 'quota' | 'capacity' | 'degraded_budget';
 export type DecisionSource = 'redis' | 'fallback' | 'off';
