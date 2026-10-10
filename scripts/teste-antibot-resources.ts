@@ -7,7 +7,7 @@ import { createResourcePool } from '../src/core/antibot/resources.js';
 test('new image/ws/write policies have contract limits and identities', () => {
   assert.deepEqual(POLICY_IDS.slice(-5), ['image', 'imageMiss', 'wsIp', 'wsAccount', 'write']);
   assert.deepEqual(POLICIES.image, { id: 'image', identity: 'ip', max: 120, windowMs: 60_000 });
-  assert.deepEqual(POLICIES.imageMiss, { id: 'imageMiss', identity: 'ip', max: 60, windowMs: 60_000 });
+  assert.deepEqual(POLICIES.imageMiss, { id: 'imageMiss', identity: 'ip', max: 100, windowMs: 60_000 });
   assert.deepEqual(POLICIES.wsIp, { id: 'wsIp', identity: 'ip', max: 30, windowMs: 60_000 });
   assert.deepEqual(POLICIES.wsAccount, { id: 'wsAccount', identity: 'account', max: 10, windowMs: 60_000 });
   assert.deepEqual(POLICIES.write, { id: 'write', identity: 'account', max: 30, windowMs: 60_000 });

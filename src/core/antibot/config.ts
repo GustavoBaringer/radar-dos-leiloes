@@ -16,7 +16,7 @@ export const POLICIES: Readonly<Record<PolicyId, Policy>> = {
   image: { id: 'image', identity: 'ip', max: 120, windowMs: 60_000 },
   // Uma página tem 24 fotos; a galeria pode pedir mais 18 miniaturas e fotos grandes.
   // Mantém a cota por IP e os limites de dois jobs de imagem/quatro leituras ativos.
-  imageMiss: { id: 'imageMiss', identity: 'ip', max: 60, windowMs: 60_000 },
+  imageMiss: { id: 'imageMiss', identity: 'ip', max: 100, windowMs: 60_000 },
   wsIp: { id: 'wsIp', identity: 'ip', max: 30, windowMs: 60_000 },
   wsAccount: { id: 'wsAccount', identity: 'account', max: 10, windowMs: 60_000 },
   write: { id: 'write', identity: 'account', max: 30, windowMs: 60_000 },
