@@ -19,12 +19,14 @@ navegador não faz requisição ao proxy e não entra nessas métricas.
 
 ## Dokploy
 
-O comando controlado usa:
+No campo Command do Dokploy, configurar (o painel acrescenta `docker` no início):
 
 ```sh
-flock -w 1800 /etc/dokploy/radar-runtime/deploy-main.lock node /etc/dokploy/compose/radar-stack-m9wohj/code/infra/dokploy/deploy-main.mjs
+version --format '{{.Server.Version}}' >/dev/null && flock -w 1800 /etc/dokploy/radar-runtime/deploy-main.lock node /etc/dokploy/compose/radar-stack-m9wohj/code/infra/dokploy/deploy-main.mjs
 ```
 
+O prefixo `version` valida o Docker; depois o shell executa `flock` e Node.
+Para execução manual, acrescentar `docker` antes de `version`.
 O Dokploy clona a main antes de executar o comando. O script verifica a revisão,
 exporta os arquivos desse commit (independente do Compose modificado pelo painel),
 constrói web e worker com a revisão nas labels, testa a web candidata e só então
