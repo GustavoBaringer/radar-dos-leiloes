@@ -402,10 +402,12 @@ export function MapaLotes({ dados, carregando, local, aoEscolherLocal, ufAtiva }
         </div>
       )}
 
-      {dados && dados.semLocalizacao > 0 && (
+      {dados && (dados.semNada > 0 || dados.soCidade > 0) && (
         <div className="mapa-fora">
-          <b className="mono">{fmt.format(dados.semLocalizacao)}</b> sem localização
-          <span>{fmt.format(dados.soCidade)} só com o nome da cidade · {fmt.format(dados.semNada)} sem nada</span>
+          {dados.semNada > 0 && <b className="mono">{fmt.format(dados.semNada)}</b>}
+          {dados.semNada > 0 && ' sem localização'}
+          {dados.semNada > 0 && dados.soCidade > 0 && ' · '}
+          {dados.soCidade > 0 && <span>{fmt.format(dados.soCidade)} só com o nome da cidade</span>}
         </div>
       )}
       {aviso && (

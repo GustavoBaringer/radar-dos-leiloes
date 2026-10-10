@@ -58,6 +58,10 @@ test('real legacy routes preserve auth, static assets, headers, errors and singl
     assert.equal((await host.app.inject('/api/search')).statusCode, 401);
     assert.equal((await host.app.inject('/busca')).statusCode, 302);
     assert.equal((await host.app.inject('/lote/lot-7')).statusCode, 302);
+    // Preview de link compartilhado: o robô social passa pelo portão e chega ao
+    // SSR do lote (não cai no login); humano sem sessão continua barrado.
+    const crawlerLote = await host.app.inject({ url: '/lote/lot-7', headers: { 'user-agent': 'facebookexternalhit/1.0' } });
+    assert.notEqual(crawlerLote.headers.location, '/login');
     assert.equal((await host.app.inject({ url: '/login', headers: { cookie: 'radar_sessao=bad' } })).statusCode, 200);
 
     const headers = sessionHeaders();

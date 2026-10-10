@@ -397,6 +397,19 @@ if (dependencies.oidc.oidcLigado()) {
       (req as any).eu = dependencies.identity.ANONIMO;
       return;
     }
+    // Preview de link compartilhado: o robô social precisa do SSR do lote para
+    // montar o cartão (título/descrição/og). O SSR já filtra campos sensíveis;
+    // humanos seguem bloqueados pelo portão abaixo.
+    const UA = String(req.headers['user-agent'] ?? '');
+    if (
+      caminho.startsWith('/lote/') &&
+      req.method === 'GET' &&
+      /facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|Slack-ImgProxy|TelegramBot|Googlebot|bingbot|Applebot/i.test(UA)
+    ) {
+      (req as any).papel = 'comum';
+      (req as any).eu = dependencies.identity.ANONIMO;
+      return;
+    }
     // API responde 401 em JSON; navegação vai para a tela de senha.
     if (caminho.startsWith('/api/') || caminho === '/ws') {
       return reply.code(401).send({ erro: 'não autenticado' });
