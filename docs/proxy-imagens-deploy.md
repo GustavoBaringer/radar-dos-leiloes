@@ -29,7 +29,8 @@ exec radar-deploy-runner flock -w 1800 /etc/dokploy/radar-runtime/deploy-main.lo
 
 O executor valida um único comando Docker: `exec` executa o script no container
 `radar-deploy-runner`, que tem Node, Git, Docker CLI e flock. Esse container usa
-`deploy-runner.yml`, sem rede ou portas, com os diretórios do Dokploy e socket
+`deploy-runner.yml`, sem portas e conectado somente à rede de saída para baixar
+as imagens base. Usa os diretórios do Dokploy e socket
 Docker necessários à publicação. Para execução manual, acrescentar `docker`
 antes de `exec`.
 O Dokploy clona a main antes de executar o comando. O script verifica a revisão,

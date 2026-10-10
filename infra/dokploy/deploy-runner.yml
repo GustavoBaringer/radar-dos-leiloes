@@ -6,7 +6,7 @@ services:
     entrypoint: [node]
     command: [-e, "setInterval(() => {}, 3600000)"]
     restart: unless-stopped
-    network_mode: none
+    networks: [egress]
     read_only: true
     cap_drop: [ALL]
     cap_add: [CHOWN]
@@ -20,3 +20,8 @@ services:
     volumes:
       - /etc/dokploy:/etc/dokploy
       - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  egress:
+    external: true
+    name: radar-stack-m9wohj_egress
