@@ -42,7 +42,7 @@ const num = (v: unknown): number | null => {
  * A assinatura real é o CDN compartilhado no HTML da home.
  */
 const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes.leilao.br', 'e-leiloeiro.leilao.br', 'magalhaesleiloes.com.br']);
-const FOLLOWUP_TENANTS = new Set([
+export const FOLLOWUP_TENANTS = new Set([
   'leiloespb.com.br', 'colossoleiloes.com.br', 'atlanticoleiloes.com.br', 'marcotulioleiloes.com.br',
   'vlleiloes.com.br', 'leiloesmonteiro.com.br', 'maglianoleiloes.com.br',
 ]);
