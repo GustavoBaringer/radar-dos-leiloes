@@ -105,8 +105,9 @@ export function Busca({
         // Cidade manda rótulo próprio (grafia correta) junto da faceta; guardar
         // é o que permite o botão fechado mostrar "Curitiba" e não "CURITIBA".
         setRotulos((antes) => {
-          const novo = { ...antes, city: { ...(antes.city ?? {}) } };
+          const novo = { ...antes, city: { ...(antes.city ?? {}) }, sourceSite: { ...(antes.sourceSite ?? {}) } };
           for (const c of r.facets?.cities ?? []) if (c.label) novo.city[String(c.value)] = c.label;
+          for (const site of r.facets?.sites ?? []) if (site.label) novo.sourceSite[String(site.value)] = site.label;
           return novo;
         });
         aoCarregar?.(r);

@@ -1,5 +1,5 @@
 import type { FacetRow, Facets } from './types';
-import { LABEL_DOC, LABEL_PROPERTY, LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE, SRC_LABEL } from './labels';
+import { LABEL_DOC, LABEL_PROPERTY, LABEL_SELLER, LABEL_STATUS, LABEL_VEHICLE } from './labels';
 
 /**
  * As facetas de seleção múltipla.
@@ -24,7 +24,7 @@ export interface DefMulti {
 
 export type MultiId =
   | 'status' | 'vehicleType' | 'propertyType' | 'uf'
-  | 'city' | 'sellerType' | 'sourceId' | 'auctioneer' | 'seller' | 'docType';
+  | 'city' | 'sellerType' | 'sourceSite' | 'auctioneer' | 'seller' | 'docType';
 
 export const MULTIS: DefMulti[] = [
   { id: 'vehicleType', titulo: 'Tipo de veículo', vazio: 'Todos', plural: 'tipos selecionados', faceta: 'vehicleTypes', fixas: LABEL_VEHICLE },
@@ -35,7 +35,7 @@ export const MULTIS: DefMulti[] = [
   // escolhe a melhor grafia entre as que as fontes publicam.
   { id: 'city', titulo: 'Cidade', vazio: 'Todas', plural: 'cidades selecionadas', faceta: 'cities' },
   { id: 'sellerType', titulo: 'Origem do lote', vazio: 'Todas', plural: 'origens selecionadas', faceta: 'sellerTypes', fixas: LABEL_SELLER },
-  { id: 'sourceId', titulo: 'Fonte', vazio: 'Todas', plural: 'fontes selecionadas', faceta: 'sources', rotulo: (v) => SRC_LABEL[v] ?? v },
+  { id: 'sourceSite', titulo: 'Site de origem', vazio: 'Todos', plural: 'sites selecionados', faceta: 'sites' },
   { id: 'auctioneer', titulo: 'Leiloeiro', vazio: 'Todos', plural: 'leiloeiros selecionados', faceta: 'auctioneers' },
   // Comitente é quem PÔS o bem em leilão (Caixa, Porto Seguro, um tribunal) —
   // pergunta diferente de "qual leiloeiro conduz". 87% dos lotes publicam.
@@ -75,7 +75,7 @@ export interface EstadoBusca {
 export const ESTADO_VAZIO: EstadoBusca = {
   q: '', assetType: '', priceMin: '', priceMax: '', yearMin: '', yearMax: '',
   sort: 'ending_soon', onlyWithDate: false, onlyWithPhoto: false, prazo: '', abaixo: false,
-  multi: { status: [], vehicleType: [], propertyType: [], uf: [], city: [], sellerType: [], sourceId: [], auctioneer: [], seller: [], docType: [] },
+  multi: { status: [], vehicleType: [], propertyType: [], uf: [], city: [], sellerType: [], sourceSite: [], auctioneer: [], seller: [], docType: [] },
   page: 1,
   vista: 'grade',
   local: '',

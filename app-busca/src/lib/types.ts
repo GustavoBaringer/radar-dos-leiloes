@@ -73,6 +73,7 @@ export interface Facets {
   states: FacetRow[];
   cities: FacetRow[];
   sources: FacetRow[];
+  sites: FacetRow[];
   sellerTypes: FacetRow[];
   assetTypes: FacetRow[];
   vehicleTypes: FacetRow[];

@@ -241,6 +241,8 @@ export interface SearchParams {
   status?: Multi;
   sellerType?: Multi;
   sourceId?: Multi;
+  /** Domínio real do site que publicou o lote, não o id do conector. */
+  sourceSite?: Multi;
   /** Nome do leiloeiro como a fonte publica; só ~57% dos lotes trazem. */
   auctioneer?: Multi;
   seller?: Multi;
@@ -280,8 +282,17 @@ export interface SearchResponse {
   pageSize: number;
   interpreted: { brand: string | null; model: string | null; freeTerms: string[] };
   items: ReturnType<typeof toPublicLot>[];
-  facets: { states: any[]; cities: any[]; sources: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[]; docTypes: any[] };
+  facets: { states: any[]; cities: any[]; sources: any[]; sites: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[]; docTypes: any[] };
 }
+
+// HTTP(S) only; split authority before path/query/fragment, remove www/port,
+// then expose only valid DNS domains. chr(63) avoids confusing SQL bind markers.
+const SITE_AUTHORITY = `split_part(split_part(split_part(CASE
+  WHEN lower(lot_url) LIKE 'https://%' THEN substring(lot_url from 9)
+  WHEN lower(lot_url) LIKE 'http://%' THEN substring(lot_url from 8)
+END, '/', 1), chr(63), 1), chr(35), 1)`;
+const SITE_HOST_CANDIDATE = `regexp_replace(regexp_replace(lower(${SITE_AUTHORITY}), '^www[.]', ''), ':[0-9]+$', '')`;
+export const LOT_SITE_HOST_SQL = `(CASE WHEN ${SITE_HOST_CANDIDATE} ~ '^([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})([.]([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})){1,}$' THEN ${SITE_HOST_CANDIDATE} END)`;
 
 /**
  * A busca roda no nosso índice, nunca é repassada à fonte.
@@ -365,6 +376,9 @@ function montaFiltro(p: SearchParams) {
 
   PLista('seller_type', p.sellerType, 'sellerTypes');
   PLista('source_id', p.sourceId, 'sources');
+  const sites = lista(p.sourceSite).map((site) => site.toLowerCase().replace(/^www\./, ''));
+  if (sites.length === 1) P(`${LOT_SITE_HOST_SQL} = ?`, sites[0], 'sites');
+  else if (sites.length > 1) P(`${LOT_SITE_HOST_SQL} = ANY(?)`, sites, 'sites');
   PLista('auctioneer_name', p.auctioneer, 'auctioneers');
   PLista('seller_name', p.seller, 'sellers');
   if (p.assetType) P('asset_type = ?', p.assetType, 'assetTypes');
@@ -519,6 +533,18 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
     );
   }
 
+  async function facetSites() {
+    const b = build('sites');
+    const w = b.sql ? `${b.sql} AND` : 'WHERE';
+    return queryFn(
+      `SELECT ${LOT_SITE_HOST_SQL} AS value, COUNT(*)::int AS count,
+              ${LOT_SITE_HOST_SQL} AS label
+         FROM lots ${w} ${LOT_SITE_HOST_SQL} IS NOT NULL
+        GROUP BY 1 ORDER BY 2 DESC, 1`,
+      b.params,
+    );
+  }
+
   /**
    * Cidade tem rótulo próprio: o agrupamento é pela chave sem acento, mas o que
    * aparece na tela tem de ser a grafia correta. Entre "CUIABA", "CUIABÁ" e
@@ -545,10 +571,11 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
     );
   }
 
-  const [states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await awaitAllQueries([
+  const [states, cities, sources, sites, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await awaitAllQueries([
     facet('state', 'states', 30),
     facetCidade(),
     facet('source_id', 'sources'),
+    facetSites(),
     facet('seller_type', 'sellerTypes'),
     facet('asset_type', 'assetTypes'),
     facet('vehicle_type', 'vehicleTypes'),
@@ -575,7 +602,7 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
     pageSize,
     interpreted: { brand: parsed.brand, model: parsed.model, freeTerms: parsed.freeTerms },
     items: publicItems,
-    facets: { states, cities, sources, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet, docTypes },
+    facets: { states, cities, sources, sites, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet, docTypes },
   };
 }
 

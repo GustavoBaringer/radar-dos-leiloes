@@ -46,13 +46,13 @@ function searchInputRecord(value: unknown, message: string): Record<string, unkn
 }
 
 const SEARCH_KEYS = new Set([
-  'q', 'uf', 'status', 'sellerType', 'sourceId', 'auctioneer', 'seller', 'assetType',
+  'q', 'uf', 'status', 'sellerType', 'sourceId', 'sourceSite', 'auctioneer', 'seller', 'assetType',
   'vehicleType', 'propertyType', 'city', 'priceMin', 'priceMax', 'yearMin', 'yearMax',
   'onlyWithDate', 'onlyWithPhoto', 'docType', 'endsWithin', 'belowAppraisal', 'place',
   'includeEnded', 'sort', 'page', 'pageSize',
 ]);
 const LIST_KEYS = new Set([
-  'uf', 'status', 'sellerType', 'sourceId', 'auctioneer', 'seller', 'vehicleType',
+  'uf', 'status', 'sellerType', 'sourceId', 'sourceSite', 'auctioneer', 'seller', 'vehicleType',
   'propertyType', 'city', 'docType',
 ]);
 const STATUS = new Set(['aberto', 'agendado', 'sem_data', 'encerrado', 'vendido']);
@@ -153,6 +153,16 @@ function parseSearch(value: unknown, internal: boolean): SearchParams {
 
   const multi: Record<string, string[] | undefined> = {};
   for (const key of LIST_KEYS) multi[key] = list(row[key], key);
+  if (multi.sourceSite) {
+    multi.sourceSite = multi.sourceSite.map((raw) => {
+      const host = raw.toLowerCase().replace(/^www\./, '');
+      if (host.length > 253 || host.split('.').some((label) => label.length > 63)
+        || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(host)) {
+        return fail('Filtro sourceSite deve conter domínios válidos.');
+      }
+      return host;
+    });
+  }
   if (multi.status?.some((item) => !STATUS.has(item))) return fail('Filtro status inválido.');
   const assetType = enumValue(row.assetType, 'assetType', ASSET);
   const sort = enumValue<'ending_soon' | 'price_asc' | 'price_desc' | 'recent' | 'discount'>(row.sort, 'sort', SORT);
@@ -167,7 +177,7 @@ function parseSearch(value: unknown, internal: boolean): SearchParams {
 
   return {
     q: qValue as string | undefined,
-    uf: multi.uf, status: multi.status, sellerType: multi.sellerType, sourceId: multi.sourceId,
+    uf: multi.uf, status: multi.status, sellerType: multi.sellerType, sourceId: multi.sourceId, sourceSite: multi.sourceSite,
     auctioneer: multi.auctioneer, seller: multi.seller, assetType,
     vehicleType: multi.vehicleType, propertyType: multi.propertyType, city: multi.city,
     priceMin, priceMax, yearMin, yearMax,

@@ -229,8 +229,7 @@ export function FilterSidebar({ estado, facetas, rotulosServidor, aoMudar, aoLim
         {lista('status')}
         <span className="f-sub">Origem do lote</span>
         {lista('sellerType')}
-        <span className="f-sub">Fonte</span>
-        {lista('sourceId')}
+        {multi('sourceSite')}
       </Secao>
 
       <Secao titulo="Leiloeiro e comitente" aberta={false}>

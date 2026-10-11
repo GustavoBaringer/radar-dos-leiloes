@@ -9,6 +9,7 @@ test('aceita o query real do Fastify com CSV e arrays, sem relaxar a validação
     const parsed = parseSearchInput(req.query);
     return { q: parsed.q, yearMin: parsed.yearMin, page: parsed.page, pageSize: parsed.pageSize, vehicleType: parsed.vehicleType, docType: parsed.docType };
   });
+  app.get('/sites', (req) => parseSearchInput(req.query).sourceSite);
   app.get('/invalid-prototype', () => parseSearchInput(Object.create(Object.assign(Object.create(null), { inherited: 'x' }))));
   app.get('/invalid-object', () => parseSearchInput([]));
 
@@ -28,6 +29,12 @@ test('aceita o query real do Fastify com CSV e arrays, sem relaxar a validação
     assert.equal(repeatedLists.statusCode, 200, repeatedLists.body);
     assert.deepEqual(repeatedLists.json().vehicleType, ['carro', 'suv']);
     assert.deepEqual(repeatedLists.json().docType, ['judicial', 'sucata']);
+
+    const sites = await app.inject({ method: 'GET', url: '/sites?sourceSite=WWW.Auctions.com.br&sourceSite=site2.com' });
+    assert.equal(sites.statusCode, 200, sites.body);
+    assert.deepEqual(sites.json(), ['auctions.com.br', 'site2.com']);
+    const invalidSite = await app.inject({ method: 'GET', url: '/sites?sourceSite=https%3A%2F%2Fsite.com%2Fpath' });
+    assert.equal(invalidSite.statusCode, 400);
 
     const duplicateScalar = await app.inject({ method: 'GET', url: '/search?q=Hilux&q=Corolla' });
     assert.equal(duplicateScalar.statusCode, 400);

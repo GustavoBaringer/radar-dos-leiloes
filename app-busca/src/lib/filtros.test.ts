@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { urlDoAlerta, estadoDaUrl } from './filtros';
+import { urlDoAlerta, urlDoEstado, estadoDaUrl } from './filtros';
 
 /** O critério de verdade: a URL do alerta, lida de volta pela tela, reproduz os filtros. */
 function confere(q: string | null, filters: Record<string, any>) {
@@ -30,6 +30,13 @@ test('múltiplas facetas com vários valores', () => {
   assert.deepEqual(e.multi.uf, ['SP', 'RJ', 'PR']);
   assert.deepEqual(e.multi.sellerType, ['judicial']);
   assert.deepEqual(e.multi.status, ['aberto', 'encerrado']);
+});
+
+test('sites de origem são múltiplos na busca e URL; sourceId legado não vira domínio', () => {
+  const e = estadoDaUrl('?sourceSite=portal.exemplo.com,leiloes.exemplo.com');
+  assert.deepEqual(e.multi.sourceSite, ['portal.exemplo.com', 'leiloes.exemplo.com']);
+  assert.match(urlDoEstado(e), /sourceSite=portal\.exemplo\.com%2Cleiloes\.exemplo\.com/);
+  assert.deepEqual(estadoDaUrl('?sourceId=superbid').multi.sourceSite, []);
 });
 
 test('flags booleanas do alerta viram "1" na URL', () => {
