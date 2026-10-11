@@ -145,3 +145,20 @@ Observação de proveniência: `leiloesbrasilpe.com.br` é um deploy PE cujo `si
 ### Reverificar `coliseumleiloes.com.br` após 30/10/2026
 
 Único dos quatro com chance real de virar conector. O leilão "Veículos e Equipamentos" marcado para 30/10/2026 09:00 estava em loteamento; com os lotes publicados, o `idLeilao` pode passar a ser exposto e o contrato fica observável. Critério de aceite: `idLeilao` encontrado em HTML público e `buscarLotes.php` respondendo JSON de lote. Enquanto isso, o monitor em `htmlagenda.ts` reconhece `EM LOTEAMENTO` e não fabrica lotes.
+
+## Teto de coleta do `htmlagenda` (ajuste de runtime de 11/10/2026)
+
+O `htmlagenda` rodava com teto de 20 lotes por rodada para 87 tenants na população, valor que vem de `WORKER_SOURCE_LIMITS` e **não** de código versionado. Removido o teto e ampliado o timeout em `/etc/dokploy/radar-runtime/<commit>/workers.yml`:
+
+```
+WORKER_SOURCE_LIMITS:     sem "htmlagenda"   (era 20)
+WORKER_SOURCE_TIMEOUTS_MS: "htmlagenda":600000  (era 240000)
+```
+
+Remover a chave não deixa o conector ilimitado: `boundedCollection` (`src/queue/deployment.ts:46`) corta sempre por `htmlLimit`, e `WORKER_HTML_LIMIT` é validado com teto 1200. O limite efetivo passou a ser 1200, com 600000 ms de timeout — o máximo aceito por `sourceMap('WORKER_SOURCE_TIMEOUTS_MS', 1000, 600000)`. Subir além disso exigiria mexer no validador de `deployment.ts`, não numa variável.
+
+**Atenção ao que isso muda de fato.** `HTMLAGENDA_TENANTS=2` continua 2: a rodada multi-tenant ainda visita só 2 sites. O que muda é a profundidade em cada visita, não a quantidade de sites cobertos — hoje a rotação completa leva cerca de 15 dias. Para ampliar cobertura é preciso mexer em `HTMLAGENDA_TENANTS`, não no limite.
+
+Observações vindas do ledger `tenant_collection_attempts`, que não são resolvidas por este ajuste: `c3leiloes.com.br` e `leiloescostaesilva.com.br` aparecem como `failed` com 0 lidos, e `tbaracajuleiloes.com.br` como `partial` com 36 lidos, 36 descartados e 0 gravados.
+
+Mudança de runtime: aplicar exige recriar o worker, o que interrompe a coleta em andamento. O repositório não versiona esse arquivo — o valor precisa ser replicado no Dokploy ou neste arquivo de runtime, senão o próximo deploy sobrescreve.
