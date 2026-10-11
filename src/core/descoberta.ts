@@ -9,7 +9,7 @@
 import { query } from './db.js';
 import { fetchJson } from '../connectors/http.js';
 import { request, Agent, interceptors } from 'undici';
-import { startRun, finishRun } from './repo.js';
+import { startRun, finishRun, LOT_SITE_HOST_SQL } from './repo.js';
 
 const BASE_FENAJU = 'https://www.fenaju.org.br/api/public/leiloeiros';
 const GRATUITOS = new Set([
@@ -269,6 +269,20 @@ async function pega(url: string, timeout = 12000) {
   return { status: res.statusCode, body: await res.body.text() };
 }
 
+/**
+ * A sonda só lê a home, então sites que expõem lotes em outra rota são marcados
+ * `has_lots=false` e caem fora da agenda mesmo com catálogo coletado. A tabela
+ * `lots` é a prova: um domínio que já tem lote não é um site sem lotes.
+ * ponytail: só consulta quando o probe negativou; nunca promove site novo.
+ */
+async function temLotesColetados(domain: string): Promise<boolean> {
+  const rows = await query<{ tem: boolean }>(
+    `SELECT EXISTS(SELECT 1 FROM lots WHERE ${LOT_SITE_HOST_SQL} = $1) AS tem`,
+    [domain.toLowerCase()],
+  );
+  return rows[0]?.tem === true;
+}
+
 async function sondar(domain: string) {
   const controlePath = '/__nao-existe-radar-' + Date.now();
   for (const esquema of ['https', 'http'] as const) {
@@ -332,6 +346,7 @@ export async function sondarSites(limite = 150, concorrencia = 12): Promise<Resu
         if (!alvo) break;
         const r = await sondar(alvo.domain);
         const det = conectorDaPlataforma(antes.get(alvo.domain), r.platform);
+        const hasLots = r.hasLots === false && (await temLotesColetados(alvo.domain)) ? true : r.hasLots;
         await query(
           `UPDATE discovered_sites
              SET http_status=$2,
@@ -342,7 +357,7 @@ export async function sondarSites(limite = 150, concorrencia = 12): Promise<Resu
                  note=$7,
                  checked_at=now()
            WHERE domain=$1`,
-          [alvo.domain, r.status, r.hasLots, r.platform, det, r.title, r.note],
+          [alvo.domain, r.status, hasLots, r.platform, det, r.title, r.note],
         );
         if (r.status === 200) noAr++;
         if (r.platform) comPlataforma++;
@@ -375,6 +390,7 @@ export async function sondarDominios(dominios: string[], concorrencia = 6): Prom
         if (!domain) break;
         const r = await sondar(domain);
         const det = conectorDaPlataforma(antes.get(domain), r.platform);
+        const hasLots = r.hasLots === false && (await temLotesColetados(domain)) ? true : r.hasLots;
         await query(
           `UPDATE discovered_sites
              SET http_status=$2,
@@ -385,7 +401,7 @@ export async function sondarDominios(dominios: string[], concorrencia = 6): Prom
                  note=$7,
                  checked_at=now()
            WHERE domain=$1`,
-          [domain, r.status, r.hasLots, r.platform, det, r.title, r.note],
+          [domain, r.status, hasLots, r.platform, det, r.title, r.note],
         );
         if (r.status === 200) noAr++;
         if (r.platform) comPlataforma++;
