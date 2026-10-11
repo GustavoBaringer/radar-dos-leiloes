@@ -56,10 +56,14 @@ try {
      VALUES ('compreipgfn.com.br', 'suporte-leiloes', 200, true, 'PGFN - Compromisso',
              'lotes coletados por htmlagenda; ausente na descoberta'),
             ('aplleiloes.com.br', 'suporte-leiloes', 200, true, 'APL Leiloes',
-             'lotes coletados por htmlagenda; ausente na descoberta')
+             'lotes coletados por htmlagenda; ausente na descoberta'),
+            ('gracieleiloes.com.br', 'sua-plataforma', 200, true, 'Gracie Leilões',
+             'ausente na descoberta; sonda da propria plataforma (11/10/2026) devolveu 200, '
+             'has_lots true e platform sua-plataforma; 1671 lotes historicos e 0 ativos, '
+             'entra na agenda para capturar o primeiro lote publicado')
      ON CONFLICT (domain) DO UPDATE
        SET has_lots = true,
-           platform = COALESCE(discovered_sites.platform, 'suporte-leiloes'),
+           platform = COALESCE(discovered_sites.platform, 'sua-plataforma'),
            checked_at = now()`,
   );
   await query('COMMIT');

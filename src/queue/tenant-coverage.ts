@@ -26,21 +26,65 @@ export const REQUESTED_COVERAGE_DOMAINS20 = [
   { domain: 'lancecertoleiloes.com.br', status: 'pending', reason: 'connector identity/contract unconfirmed' },
   { domain: 'leiloesfreire.com.br', status: 'configured', sourceId: 'leiloesfreire' },
   { domain: 'cassianoleiloes.com.br', status: 'configured', sourceId: 'soleon' },
-  { domain: 'gracieleiloes.com.br', status: 'pending', reason: 'single-tenant adapter pending' },
+  // MEDIDO em 11/10/2026: falta adapter não é o gargalo. POST
+  // /ApiEngine/GetLotes/1/200 responde 200 com CountTotal 1671 e o payload bate
+  // campo a campo com `mapLot`. Varridas as 9 páginas: 1671/1671 itens em
+  // status terminal (encerrado, arrematado, suspenso), ZERO ativos. O conector
+  // já cobre o domínio; entregaria 0 lotes mesmo perfeito.
+  // A lacuna real é de cadastro: NÃO há linha deste domínio em `discovered_sites`
+  // (confirmado em 11/10/2026), e `sondarSites()` só varre quem já está na
+  // tabela — por isso ele nunca entra na agenda. A sonda reprodutida aqui o
+  // classificaria certo (status 200, has_lots true, platform 'sua-plataforma'),
+  // ou seja, basta a linha. Ainda hoje ela renderia 0 lotes.
+  { domain: 'gracieleiloes.com.br', status: 'pending', reason: 'contrato confirmado no suaplataforma (GetLotes 200, 1671 itens); 1671/1671 sem lote ativo em 11/10/2026 — falta só linha em discovered_sites' },
   { domain: 'leilaopernambuco.com.br', status: 'configured', sourceId: 'soleon' },
   { domain: 'rjleiloes.com.br', status: 'configured', sourceId: 'soleon' },
   { domain: 'ghvmleiloes.com.br', status: 'pending', reason: 'auctioneer/source association unconfirmed' },
   { domain: 'inovaleilao.com.br', status: 'pending', reason: 'single-tenant adapter pending' },
   { domain: 'flaviocostaleiloes.com.br', status: 'configured', sourceId: 'leiloar' },
   { domain: 'aragaoleiloes.com.br', status: 'configured', sourceId: 'soleon' },
-  { domain: 'coliseumleiloes.com.br', status: 'pending', reason: 'individual parser probe pending' },
+  // MEDIDO em 11/10/2026: o contrato existe, mas não é alcançável pelo HTML
+  // público. `assests/js/functions.js` faz POST em `buscarLotes.php`
+  // ({idLeilao, page, idTipo, idSucata}) e `detalheLote.php` ({idLote}), com
+  // lote em {nlote, id, foto, marcaModelo, cor, ano, lance, apelido, cidade}.
+  // Só que nenhum HTML público expõe o `idLeilao`: a agenda traz o botão
+  // `<a class="btn loteamento">EM LOTEAMENTO</a>` sem href e sem data-*, e não
+  // existe link para `listar-lotes.php` em nenhuma das 4 categorias. O único
+  // leilão da agenda (Veículos e Equipamentos, 30/10/2026 09:00) está em
+  // loteamento, e a home ainda serve texto de template ("Vivamus feugiat
+  // mollis nisl"). Usar qualquer idLeilao aqui seria chute.
+  { domain: 'coliseumleiloes.com.br', status: 'pending', reason: 'buscarLotes.php/detalheLote.php confirmados, mas idLeilao não é exposto no HTML público e o único leilão (30/10/2026) está EM LOTEAMENTO' },
   { domain: 'jdleiloes.com.br', status: 'configured', sourceId: 'vlance' },
-  { domain: 'albuquerqueleiloes.com.br', status: 'pending', reason: 'individual parser probe pending' },
+  // MEDIDO em 11/10/2026: o domínio não existe em DNS. `dig` contra o
+  // autoritativo `com.br.` devolve NXDOMAIN para A, NS e SOA, e o Google DoH
+  // devolve Status 3 (NXDOMAIN) para apex e www. Sem delegação NS não há host
+  // para sondar, então nenhum conector é possível — nem para registrar falha.
+  // Uma busca web trouxe `albuquerquelins.com.br` (200, título "Albuquerquelins"),
+  // e o dono_negou em 11/10/2026 que seja a mesma empresa. Não trocar o domínio.
+  // Para este item não falta parser: falta um lote publicado para observar.
+  { domain: 'albuquerqueleiloes.com.br', status: 'pending', reason: 'NXDOMAIN no registro.br (sem delegação NS) para apex e www em 11/10/2026 — domínio inexistente, não coletável' },
   { domain: 'portaldosleiloes.com.br', status: 'pending', reason: 'Suporte v2 adapter pending' },
   { domain: 'ericosobral.com.br', status: 'pending', reason: 'connector identity/contract unconfirmed' },
   { domain: 'colodeteleiloes.com.br', status: 'configured', sourceId: 'soleon' },
   { domain: 'joserodovalholeiloes.com.br', status: 'configured', sourceId: 'vlance' },
-  { domain: 'leiloesbrasilpe.com.br', status: 'pending', reason: 'individual parser probe pending' },
+  // MEDIDO em 11/10/2026: o 403 do `discovered_sites` NÃO se reproduz — a
+  // própria sonda (`descoberta.ts`), com o UA do projeto, devolve 200 na home
+  // (3/3). Todas as rotas públicas respondem 200: /, /leiloes, /veiculos,
+  // /imoveis, /maquinas, /materiais, /leilao/3, /edital/3, /clientes, /login,
+  // /cadastro, /robots.txt, /sitemap.xml — e /leilao/1 e /leilao/2 dão 404.
+  // A estrutura É de fonte de lotes (tabela Bem/Valor/Leilão/Data e página de
+  // leilão com "BENS"), mas hoje não há nada publicado: "Nenhum leilão
+  // encontrado", "Nenhum bem aberto para lances" e "Nenhum bem cadastrado". Sem
+  // um lote real não dá para observar a rota de detalhe, só inventá-la.
+  // ATENÇÃO: corrigir o http_status não coloca o domínio na agenda. A sonda
+  // mede `has_lots` na home, que não tem sinal de lote, e o filtro da agenda é
+  // `has_lots IS NOT FALSE` — então o próximo probe o marca false e ele volta a
+  // ficar de fora. Isso só muda quando o site publicar o primeiro bem.
+  // Atenção de proveniência: o sitemap.xml do próprio site aponta para
+  // leiloesbrasilto.com.br e as páginas de erro se titulam "LeiloesBrasilTO",
+  // então este host é um deploy PE de software cujo config canônico ainda é TO.
+  // NÃO confundir com leiloesbrasil.com.br, que tem outro conector.
+  { domain: 'leiloesbrasilpe.com.br', status: 'pending', reason: '200 em todas as rotas (403 não reproduz) e estrutura de lotes confirmada, mas 0 bens publicados em 11/10/2026 — contrato de lote individual não observável' },
   { domain: 'patiorochaleiloes.com.br', status: 'configured', sourceId: 'soleon' },
   { domain: 'vlleiloes.com.br', status: 'pending', reason: 'Suporte v2 adapter pending' },
 ] as const;

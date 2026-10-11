@@ -126,3 +126,22 @@ A inspeção somente leitura identificou um worker no WSL, mas o processo termin
 Próximo passo, ainda não autorizado: revisar a configuração efetiva do ledger e planejar ativação sem interferir nos processos existentes. Não executar o migrador geral ou prometer recorrência a partir de testes offline ou da simples existência da tabela.
 
 Reverter a migração com `DROP` não é automático: o ledger pode receber dados depois da fotografia vazia. Qualquer reversão destrutiva exige inspeção atual e nova autorização.
+
+## Revisão de 11/10/2026 — os quatro domínios pendentes de PE/SE/PB
+
+Nenhum dos quatro sustenta conector novo. Cada um tem um motivo próprio, medido, e nenhum deles é "falta de parser":
+
+| Domínio | Situação verificável |
+|---|---|
+| `gracieleiloes.com.br` | Coberto por `suaplataforma`; o que faltava era cadastro. `POST /ApiEngine/GetLotes` devolve 200 com `CountTotal` 1671 e o payload bate campo a campo com `mapLot`. As 9 páginas foram varridas: 1671/1671 itens em status terminal, zero ativos. |
+| `coliseumleiloes.com.br` | Contrato existe em `assests/js/functions.js` (`buscarLotes.php`, `detalheLote.php`), mas nenhum HTML público expõe o `idLeilao` exigido. O único leilão da agenda está `EM LOTEAMENTO`. |
+| `albuquerqueleiloes.com.br` | NXDOMAIN no autoritativo `com.br.`, para apex e `www`. Sem delegação NS não há host. `albuquerquelins.com.br` foi descartado por decisão do dono: não é a mesma empresa. |
+| `leiloesbrasilpe.com.br` | O `http_status=403` gravado não se reproduz: a própria sonda, com o UA do projeto, devolve 200 (3/3). Corrigir o status não basta — a sonda mede `has_lots` na home, que não tem sinal de lote, e o filtro `has_lots IS NOT FALSE` o mantém fora. |
+
+Única escrita aplicada, autorizada e idempotente: inserção de `gracieleiloes.com.br` em `discovered_sites` (`sua-plataforma`, 200, `has_lots` true). Tenants elegíveis de `suaplataforma` passaram de 27 para 28 e a resolução de tenant passa a devolver `www.gracieleiloes.com.br`. Nenhum lote foi coletado: a fonte segue com zero lotes ativos, e a entrada serve para capturar o primeiro lote publicado.
+
+Observação de proveniência: `leiloesbrasilpe.com.br` é um deploy PE cujo `sitemap.xml` aponta para `leiloesbrasilto.com.br` e cujas páginas de erro se titulam "LeiloesBrasilTO". Não confundir com `leiloesbrasil.com.br`, que tem conector próprio.
+
+### Reverificar `coliseumleiloes.com.br` após 30/10/2026
+
+Único dos quatro com chance real de virar conector. O leilão "Veículos e Equipamentos" marcado para 30/10/2026 09:00 estava em loteamento; com os lotes publicados, o `idLeilao` pode passar a ser exposto e o contrato fica observável. Critério de aceite: `idLeilao` encontrado em HTML público e `buscarLotes.php` respondendo JSON de lote. Enquanto isso, o monitor em `htmlagenda.ts` reconhece `EM LOTEAMENTO` e não fabrica lotes.
