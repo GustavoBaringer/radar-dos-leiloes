@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import * as cheerio from 'cheerio';
+import { readFile } from 'node:fs/promises';
 import { classifyAsset, classifyProperty } from '../src/core/normalize.js';
 import { assinaturaPagina, dataLeilaoUtc, lerCards, novosCards, ROTAS_CATEGORIAS } from '../src/connectors/soleon.js';
 
@@ -10,7 +11,7 @@ const card = (id: number, title: string, status: string, description: string) =>
  <div class="label_lote ${status}">Aguarde Abertura</div><div class="etiqueta">Lance Inicial</div>
  <h4>R$18.801,60</h4></div>`;
 
-assert.deepEqual(ROTAS_CATEGORIAS, ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel']);
+assert.deepEqual(ROTAS_CATEGORIAS, ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel', '/lotes/diversos']);
 assert.equal(dataLeilaoUtc('Leilão:15/10/2026 às23:00')?.toISOString(), '2026-10-16T02:00:00.000Z');
 assert.equal(dataLeilaoUtc('Leilão:31/02/2026 às23:00'), null, 'data de calendário inválida não deve rolar para março');
 
@@ -36,6 +37,18 @@ assert.ok(vehicle);
 assert.equal(vehicle.status, 'aberto');
 assert.equal(classifyAsset(vehicle.titulo, 'veiculo').assetType, 'veiculo');
 assert.equal(classifyProperty(vehicle.titulo, 'veiculo'), null);
+
+const liveFoco = cheerio.load(await readFile(new URL('../fixtures/soleon/foco-veiculo-33367.html', import.meta.url), 'utf8'));
+const focoCards = lerCards(liveFoco, 'focoleiloes.com.br');
+assert.equal(focoCards.length, 3, 'sanitized live Foco cards are parsed');
+assert.deepEqual(focoCards.map((item) => item.itemId), ['33367', '33368', '33369']);
+assert.equal(focoCards[0].titulo, 'YAMAHA/FACTOR YBR125 K', 'real LOTE-0001 h5 uses extracted make/model');
+assert.match(focoCards[0].corpo, /Veículo Conservado/);
+assert.doesNotMatch(focoCards[0].corpo, /\*{5}|placa/i, 'fixture omits plate details');
+assert.equal(focoCards[0].status, 'sem_data', 'em_breve keeps no unsupported open status');
+
+const unknownAndPart = cheerio.load(card(7001, 'LOTE-0001', 'aberto_lance', 'Peça de motocicleta, carenagem avariada.'));
+assert.equal(lerCards(unknownAndPart, 'focoleiloes.com.br')[0].titulo, 'Peça de motocicleta, carenagem avariada.');
 
 const vistos = new Set<string>();
 assert.equal(novosCards(lerCards(cheerio.load(imovelHtml), 'argleiloes.com.br'), vistos).length, 1);

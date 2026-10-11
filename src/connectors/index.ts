@@ -43,6 +43,7 @@ import { mcleilao } from './mcleilao.js';
 import { vipleiloes } from './vipleiloes.js';
 import { portalPublic, ghvmPublic } from './reviewed-public.js';
 import { leiloesbrasilPublic } from './leiloesbrasil-public.js';
+import { celsocunha } from './celsocunha.js';
 
 export const connectors: Connector[] = [
   superbid, copart, leilo, kuss, freitas, caixa, soleon, vlance, leilaopro, suaplataforma, suporteleiloes, bomvalor,
@@ -50,7 +51,7 @@ export const connectors: Connector[] = [
   benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes,
   hastapublica, flexleiloes, alfaleiloes, casadeleiloes, grupocarvalho, simonleiloes, globoleiloes, leiloesfreire, rochaleiloes,
   docxhtml, maycosantos, htmlagenda, rocketleiloes, savoyleiloes, mcleilao, vipleiloes, portalPublic, ghvmPublic, leiloesbrasilPublic,
-  ...supraTenants,
+  celsocunha, ...supraTenants,
 ];
 
 export function getConnector(id: string): Connector | undefined {

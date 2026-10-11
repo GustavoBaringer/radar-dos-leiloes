@@ -16,8 +16,19 @@ assert.ok(lot);
 assert.equal(lot.externalId, `${host}:oferta:877`);
 assert.equal(parseSuporteOferta(payload(), `www.${host}`, '/id-877')?.externalId, lot.externalId);
 assert.equal(lot.assetType, 'imovel');
-assert.equal(lot.auctionEndUtc?.toISOString(), '2026-10-15T13:00:00.000Z');
+assert.equal(lot.auctionStartUtc?.toISOString(), '2026-10-15T13:00:00.000Z');
+assert.equal(lot.auctionEndUtc, null);
 assert.equal(lot.minBid, 48340.63);
+const marcoRealContract = `<script>
+var leilao={"id":340,"statusString":"Aberto"};
+var lote={"id":4195,"aid":3951,"titulo":"GM MERIVA 1.8 MPFI","status":1,"valorInicial":4000,"valorAtual":4600,"valorIncremento":200,"tags":[{"code":"veiculos"}]};
+</script>`;
+const marcoRealLot = parseSuporteOferta(marcoRealContract, 'marcotulioleiloes.com.br', '/oferta/leilao/4195/id-3951/meriva');
+assert.equal(marcoRealLot?.externalId, 'marcotulioleiloes.com.br:oferta:3951');
+assert.equal(marcoRealLot?.minBid, 4000);
+assert.equal(marcoRealLot?.currentBid, 4600);
+assert.equal(marcoRealLot?.bidIncrement, 200);
+assert.equal(marcoRealLot?.status, 'aberto');
 assert.deepEqual(lot.photos, [
   'https://static.suporteleiloes.com.br/abaleiloescombr/bens/841/arquivos/photo.jpg',
   'https://static.suporteleiloes.com.br/abaleiloescombr/bens/841/arquivos/thumb.jpg',
@@ -26,6 +37,9 @@ assert.equal(parseSuporteOferta(payload('Lote 298', undefined, '1', 'Lote encerr
 assert.equal(parseSuporteOferta(payload('Lote 298', undefined, '1', 'Lote vendido'), host, '/id-877')?.status, 'vendido');
 assert.equal(ofertaStatus({ status: 8 }, { statusString: 'Aberto para lances' }, null, 0), 'sem_data');
 assert.equal(parseSuporteOferta(payload('Carrinho Hot Wheels'), host, '/id-877'), null);
+assert.equal(parseSuporteOferta(payload('Plotter digital para gráfica', '[]'), host, '/id-877'), null,
+  'an unknown equipment title must not inherit classifyAsset’s default car');
+assert.equal(parseSuporteOferta(payload().replace('"status":1', '"status":1,"descricao":"Veículo vendido como sucata"'), host, '/id-877'), null);
 const vehicle = parseSuporteOferta(payload('JEEP/RENEGADE LNGTD AT', '[]'), host, '/id-877');
 assert.equal(vehicle?.assetType, 'veiculo');
 const machine = parseSuporteOferta(payload('Retroescavadeira Caterpillar', '[{"code":"maquinas","name":"Máquinas"}]'), host, '/id-877');
@@ -64,7 +78,8 @@ assert.deepEqual(requested.map((url) => new URL(url).pathname + new URL(url).sea
 ]);
 assert.equal(result.lots.length, 1);
 assert.equal(result.lots[0].externalId, `${host}:oferta:877`);
-assert.equal(result.lots[0].auctionEndUtc?.toISOString(), '2026-10-15T13:00:00.000Z');
+assert.equal(result.lots[0].auctionStartUtc?.toISOString(), '2026-10-15T13:00:00.000Z');
+assert.equal(result.lots[0].auctionEndUtc, null);
 assert.ok((result.lots[0].photos?.length ?? 0) >= 1);
 assert.deepEqual(failures, []);
 assert.equal(ledgerState, 'completed');
@@ -111,7 +126,8 @@ const marcoResult = await collectSuporteTenant(marcoHost, 1200, undefined, undef
 assert.equal(marcoResult.fetched, 20);
 assert.equal(marcoResult.lots.length, 20);
 assert.equal(marcoResult.lots[0].externalId, `${marcoHost}:oferta:4126`);
-assert.equal(marcoResult.lots[0].auctionEndUtc?.toISOString(), '2026-10-20T13:00:00.000Z');
+assert.equal(marcoResult.lots[0].auctionStartUtc?.toISOString(), '2026-10-20T13:00:00.000Z');
+assert.equal(marcoResult.lots[0].auctionEndUtc, null);
 assert.ok((marcoResult.lots[0].photos?.length ?? 0) >= 1);
 assert.ok(!marcoRequests.some((url) => url.endsWith('/leiloes/191')));
 assert.equal(marcoRequests.filter((url) => url.includes('/oferta/')).length, 20);

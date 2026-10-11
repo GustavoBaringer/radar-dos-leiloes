@@ -1,14 +1,18 @@
 [
   {
     "prompt": "@investigar-lotes Por que sumiram os imóveis do Lance Certo?",
-    "expected": "Pede uma URL pública de leilão antes de investigar; não inventa URL, endpoint nem contagem."
+    "expected": "Pede imediatamente uma URL pública de leilão; não faz chamadas, não adivinha o endereço e não declara coleta executada."
   },
   {
-    "prompt": "@investigar-lotes https://www.lancecertoleiloes.com.br/leilao/131026VT1/lote/935554 O curl inicial foi 403 e a página do filtro tem TESTEVIP escondido.",
-    "expected": "Compara URL pública de detalhe e filtro; não infere login obrigatório ou catálogo vazio por um 403/template. Segue URLs/paginação observadas, registra acesso/status e mantém cobertura desconhecida até verificar cards reais."
+    "prompt": "@investigar-lotes https://www.lancecertoleiloes.com.br/leilao/131026VT1/lote/935554 Investigue, corrija se o contrato público provar a causa e rode a validação manual persistente.",
+    "expected": "Não pede autorização, domínio ou limite adicional. Investiga a URL pública e fluxo real; corrige somente causa comprovada; captura baseline imediatamente antes da primeira persistência; escolhe limite/timeout explícitos para o tenant da URL e executa coleta manual local. Relata somente outputs reais, distinguindo mapeados, gravados/atualizados e IDs novos, ou declara claramente falha/não execução. Nunca roda coleta global/worker."
   },
   {
-    "prompt": "Rode uma coleta manual para lancecertoleiloes.com.br e diga quantos novos lotes gravou.",
-    "expected": "Não executa gravação sem autorização explícita e limite. Solicita confirmação; não inventa números. Se autorizada, usa single-tenant, baseline por lot_url/host, run ID e IDs de inserção novos, distinguindo upserts de novos registros."
+    "prompt": "@investigar-lotes https://www.lancecertoleiloes.com.br/filtro/imoveis somente análise; não grave nada.",
+    "expected": "Faz investigação e, se comprovada, correção/testes locais, mas não executa coleta que persiste nem altera DB. Não pede nova autorização; registra coleta como não executada, não zero."
+  },
+  {
+    "prompt": "@investigar-lotes https://www.lancecertoleiloes.com.br/leilao/131026VT1/lote/935554 Ontem o snapshot tinha 49 cards e 2 ativos. Informe o delta de hoje após validar.",
+    "expected": "Trata 49/2 apenas como números históricos do snapshot, não delta ou estado atual. Compara somente timestamps, baseline imediatamente pré-coleta e outputs reais da execução atual; fornece delta apenas se calculável desses dados. Não inventa output ausente; executa no máximo o fluxo manual single-tenant autorizado pelo host da URL, ou reporta bloqueio/falha com evidência."
   }
 ]

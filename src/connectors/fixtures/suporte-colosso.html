@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    
+    <link rel="stylesheet" href="/libs/fontawesome/css/all.min.css">
+    <script type="text/javascript">
+        var isLogado = false;
+    </script>
+
+                    
+
+        <title>LEILÃO TRT13 / PB - Leilão</title>
+
+                <link rel="stylesheet" href="/build/app.97754772.css">
+        <style>
+            :root {
+                --main-color-primary: #3c3232;
+                --main-color-secondary: #827864;
+            }
+            .logo {
+                background-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMrXtAClaEuvB2ASbuAE4OsMRfNWig3CLbDUk_EOdseSKx7NDmy3V2TrA&amp;s=10');
+            }
+            @media screen and (max-width: 767px) {
+                                .logo {
+                    background-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMrXtAClaEuvB2ASbuAE4OsMRfNWig3CLbDUk_EOdseSKx7NDmy3V2TrA&amp;s=10');
+                }
+                            }
+        </style>
+    
+    <link rel="stylesheet" href="/build/home.7f01fea9.css">
+
+        
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+</head>
+<body>
+<header>
+    <div class="center">
+        <div class="cont-logo">
+            <a href="/" class="logo">Colossos Leilões</a>
+        </div>
+
+        <div class="cont-middle">
+            <div class="cont-left">
+                <div class="menu-mobile show-mobile">
+        <a href="/login" class="btn-auth-mobile">Entrar</a>
+        <a href="/buscador" class="btn-mobile-search">
+        <i class="fa-light fa-magnifying-glass"></i>
+    </a>
+    <a href="/agenda" class="btn-mobile-calendar">
+        <i class="fa-light fa-calendar-check"></i>
+    </a>
+    <a class="btn-mobile-menu">
+        <i class="fa-regular fa-bars closed"></i>
+        <i class="fa-solid fa-times opened"></i>
+    </a>
+
+    <div id="menu-mobile" class="menu-mobile-global">
+        <div class="menu-mobile-content">
+            <div class="auth">
+                                    <a href="https://arrematante.colossoleiloes.com.br/#/cadastro" class="btn-auth btn-conta">Criar conta</a>
+                    <a href="/login" class="btn-auth btn-login">Entrar</a>
+                            </div>
+            <h4>Site</h4>
+            <ul class="mobile-categorias">
+                <li>
+                    <a href="/agenda">Agenda</a>
+                </li>
+                <li>
+                    <a href="/quem-somos">Quem Somos</a>
+                </li>
+                <li>
+                    <a href="/fale-conosco">Contato</a>
+                </li>
+            </ul>
+            <h4>Busca por categoria</h4>
+            <ul class="mobile-categorias">
+                                    <li>
+                        <a href="/buscador?categoria=6">Diversos</a>
+                                                    <ul class="m2">
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=35">Bens diversos</a>
+                                    </li>
+                                                            </ul>
+                                            </li>
+                                    <li>
+                        <a href="/buscador?categoria=2">Imóveis</a>
+                                                    <ul class="m2">
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=15">Apartamento</a>
+                                    </li>
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=16">Casas</a>
+                                    </li>
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=20">Rural</a>
+                                    </li>
+                                                            </ul>
+                                            </li>
+                                    <li>
+                        <a href="/buscador?categoria=4">Materiais/Equipamentos</a>
+                                                    <ul class="m2">
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=29">Equipamento Industrial</a>
+                                    </li>
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=32">Outros materiais</a>
+                                    </li>
+                                                            </ul>
+                                            </li>
+                                    <li>
+                        <a href="/buscador?categoria=1">Veículos</a>
+                                                    <ul class="m2">
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=8">Carros</a>
+                                    </li>
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=36">Equipamentos</a>
+                                    </li>
+                                                                    <li>
+                                        <a href="/buscador?subcategoria=14">Outros</a>
+                                    </li>
+                                                            </ul>
+                                            </li>
+                            </ul>
+        </div>
+    </div>
+
+</div>
+                <div class="cont-search">
+                    <form method="get" action="/buscador" id="globalBusca">
+                        <input type="text" name="busca" id="globalBuscaInput" placeholder="O que está buscando?" autocomplete="off">
+                        <button type="submit">
+                            <i class="fa-light fa-magnifying-glass"></i>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="cont-nav">
+                                        <div class="cont-navExplore">
+    <form id="buscadorHeaderForm" method="get" action="/buscador">
+        <div class="row-01">
+            <div class="c-input c-input-ad i-busca">
+                <label for="palavra-chave">Busca por palavra-chave</label>
+                <input id="palavra-chave" type="text" name="busca" value="" placeholder="Buscar por uma palavra específica">
+            </div><!---->
+<!--            <div class="c-input c-input-ad i-id">
+                <label for="palavra-chave">ID</label>
+                <input id="id" type="text" name="id" value="" placeholder="Buscar por uma palavra específica">
+            </div>-->
+
+            <div class="c-input c-input-ad i-categoria">
+                <label for="categoria">Categoria</label>
+                <select id="categoria" name="categoria">
+                    <option value="0" disabled selected>Todas as categorias</option>
+                </select>
+            </div><!---->
+
+            <div class="c-input c-input-ad i-subcategoria">
+                <label for="subcategoria">Subcategoria</label>
+                <select id="subcategoria" name="subcategoria">
+                    <option value="0" disabled selected>Todas as categorias</option>
+                </select>
+            </div><!---->
+
+            <div class="c-input c-input-ad i-estados">
+                <label for="uf">Estados</label>
+                <select id="uf" name="uf">
+                    <option value="0" disabled selected>Todos os estados</option>
+                </select>
+            </div><!---->
+
+            <div class="c-input c-input-ad i-cidades">
+                <label for="cidade">Cidade</label>
+                <select id="cidade" name="cidade">
+                    <option value="0" disabled selected>Todas as cidades</option>
+                </select>
+            </div><!---->
+        </div>
+
+        <div class="row-02">
+            <div class="c-input c-input-ad i-bairros">
+                <label for="bairro">Bairro</label>
+                <select id="bairro" name="bairro">
+                    <option value="0" disabled selected>Todos o bairros</option>
+                </select>
+            </div><!---->
+
+            <div class="c-input c-input-ad i-comitentes">
+                <label for="comitente">Comitente</label>
+                <select name="comitente" id="comitente">
+                    <option value="0" disabled selected>Todos os comitentes</option>
+                </select>
+            </div><!---->
+
+            <div class="c-input-ad c-checkbox">
+                <label>
+                    <input type="checkbox" name="judicial" value="1" >
+                    <span>Judiciais</span>
+                </label>
+
+                <label>
+                    <input type="checkbox" name="extrajudicial" value="1" >
+                    <span>Extrajudiciais</span>
+                </label>
+            </div><!---->
+
+            <div class="c-input c-input-ad i-valores">
+                <div class="v-1">
+                    <label for="valorInicial">Faixa de valor</label>
+                    <input id="valorInicial" type="text" name="valorInicial" placeholder="0,00"  value="">
+                    <small>R$</small>
+                </div>
+
+                <span>até</span>
+
+                <div class="v-2">
+                    <label for="valorFinal" class="label-reset">Faixa de valor</label>
+                    <input id="valorFinal" type="text" name="valorFinal" placeholder="0,00" value="">
+                    <small>R$</small>
+                </div>
+            </div><!---->
+        </div>
+
+        <div class="row-03 row-03-input">
+            <div class="c-input c-input-ad i-id">
+<!--                <label for="palavra-chave">BUSCAR POR ID:</label>-->
+                <input id="id" type="text" name="id" value="" placeholder="Buscar por ID de Lote ou Leilão">
+            </div>
+             <!-- @TODO -->
+            <button type="submit">Pesquisar</button>
+        </div>
+    </form>
+</div>                    
+                    <div class="cont-nav ps-r show-desktop">
+                        <div class="nav-item show-navCategorias">
+                            <a><!--<span>Explore por</span> -->Categorias</a>
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </div>
+
+                        <div class="cont-navCategoria">
+                            <ul class="menu">
+                                                                    <li>
+                                        <a href="/buscador?categoria=6">Diversos</a>
+                                                                                    <ul class="m2">
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=35">Bens diversos</a>
+                                                </li>
+                                                                                        </ul>
+                                                                            </li>
+                                                                    <li>
+                                        <a href="/buscador?categoria=2">Imóveis</a>
+                                                                                    <ul class="m2">
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=15">Apartamento</a>
+                                                </li>
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=16">Casas</a>
+                                                </li>
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=20">Rural</a>
+                                                </li>
+                                                                                        </ul>
+                                                                            </li>
+                                                                    <li>
+                                        <a href="/buscador?categoria=4">Materiais/Equipamentos</a>
+                                                                                    <ul class="m2">
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=29">Equipamento Industrial</a>
+                                                </li>
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=32">Outros materiais</a>
+                                                </li>
+                                                                                        </ul>
+                                                                            </li>
+                                                                    <li>
+                                        <a href="/buscador?categoria=1">Veículos</a>
+                                                                                    <ul class="m2">
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=8">Carros</a>
+                                                </li>
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=36">Equipamentos</a>
+                                                </li>
+                                                                                            <li>
+                                                    <a href="/buscador?subcategoria=14">Outros</a>
+                                                </li>
+                                                                                        </ul>
+                                                                            </li>
+                                                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cont-nav ps-r">
+                    <div class="nav-item itemLink">
+                        <a href="/quem-somos"><!--<span>Saiba</span> -->Quem Somos</a>
+                    </div>
+
+                    
+                    <div class="cont-navMore">
+                        <ul class="menu">
+                            <li class="nav-home">
+                                <a href="/">Home</a>
+                            </li>
+
+                            <li class="nav-quemSomos">
+                                <a href="#">Quem Somos</a>
+                            </li>
+
+                            <li class="nav-agenda">
+                                <a href="#eventos">Eventos</a>
+                            </li>
+
+                            
+                            <li class="nav-contato">
+                                <a href="/fale-conosco">Fale Conosco</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cont-right">
+                <div class="cont-actions">
+                                        <a href="/mapa">
+                        <div class="cont-icon">
+                            <i class="fa-solid fa-location-dot"></i>
+                        </div>
+                        <span>Ver no<strong>mapa</strong></span>
+                    </a>
+                    
+                                    </div>
+
+                <div class="cont-auth show-desktop">
+                                            <a href="/login" class="btn-auth btn-login">Entrar</a>
+                    <a href="https://arrematante.colossoleiloes.com.br/#/cadastro" class="btn-auth btn-conta">Criar conta</a>
+                                    </div>
+            </div>
+        </div>
+    </div><!-- END Center -->
+</header>
+    <section class="section-resumoEvento">
+        <div class="center">
+            <div class="row-01">
+                <ul class="pwd-pag pwd-evento-83">
+                    <li class="pwd-l1">
+                        <a href="/">Home</a>
+                    </li>
+                    <span class="pwd-span-01">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </span>
+                    <li class="pwd-l2">
+                        <a href="/#leiloes">Leilões</a> <!-- @TODO: Venda direta? -->
+                    </li>
+                    <span class="pwd-span-02">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </span>
+                    <li class="pwd-l3">
+                                                    <a href="#">Judiciais</a>
+                                            </li>
+                    <span class="pwd-span-03">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </span>
+                    <li class="pwd-l4">
+                        <a class="ativo">Leilão ID 83 / 380/2026</a>
+                    </li>
+                </ul>
+
+                <div class="c-actions">
+                    <span class="btn-action show-share">
+                        <i class="fa-regular fa-share-nodes"></i>Compartilhe
+                    </span>
+
+                    <a href="/fale-conosco" class="btn-action">
+                        <i class="fa-regular fa-circle-info"></i>Dúvidas e contato
+                    </a>
+
+                                        
+                    <div class="list-shareOptions">
+                        <ul>
+                            <li>
+                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/83/leilao-trt13-pb">
+                                    <i class="fa-brands fa-facebook-f" style="font-size: 12.5px; width: 7.31px; height: 11.7px;"></i>
+                                </a>
+                            </li>
+
+                            <li>
+                                <a href="https://twitter.com/intent/tweet?text=LEILÃO TRT13 / PB&url=https://colossoleiloes.com.br/eventos/leilao/83/leilao-trt13-pb">
+                                    <i class="fa-brands fa-x-twitter" style="font-size: 13px; width: 13px; height: 13px;"></i>
+                                </a>
+                            </li>
+
+                            <li>
+                                <a href="/cdn-cgi/l/email-protection#93ace0e6f1f9f6f0e7aedfd6dadf5010dcb3c7c1c7a2a0b3bcb3c3d1b5f1fcf7eaaefbe7e7e3e0a9bcbcf0fcfffce0e0fcfff6fafffcf6e0bdf0fcfebdf1e1bcf6e5f6fde7fce0bcfff6fafff2fcbcaba0bcfff6fafff2fcbee7e1e7a2a0bee3f1">
+                                    <i class="fa-regular fa-envelopes-bulk" style="font-size: 12.5px; width: 13.5px; height: 13.5px;"></i>
+                                </a>
+                            </li>
+
+                            <li style="margin-right: 10px;">
+                                <a href="https://api.whatsapp.com/send?text=LEILÃO TRT13 / PB - https://colossoleiloes.com.br/eventos/leilao/83/leilao-trt13-pb">
+                                    <i class="fa-brands fa-whatsapp" style="font-size: 13.5px; width: 11.81px; height: 14px;"></i>
+                                </a>
+                            </li>
+
+                            <li>
+                                <a class="cont-copiaLink">
+                                    <p>https://colossoleiloes.com.br/eventos/leilao/83/leilao-trt13-pb</p>
+                                    <i class="fa-solid fa-link" style="font-size: 12.5px; width: 14.81px; height: 12px;"></i>
+
+                                    <small>Link copiado!</small>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div><!---->
+        </div>
+    </section>
+
+    <section class="section-resumoEvento rm-pad">
+    <div class="center">
+        <div class="row-02">
+            <div class="c-left">
+                <a>
+                    <div class="cont-img">
+                                                <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/leiloes/83/sl-leilao-83-6ab4121fc6cbf-6ab4121fc7ae1.jpg" alt="Capa do leilão ID 83">
+                                            </div>
+
+                                        <span>13 lotes</span>
+                                    </a>
+            </div>
+
+            <div class="c-right">
+                <h1>LEILÃO TRT13 / PB</h1>
+                <p>Grande leilão TRT 13° Região (Paraíba). Semana da execução fiscal. 15/09/2026 as 10:00hs.</p>
+                
+                <ul class="cont-datas">
+                    
+                                        <li class="data-off">
+                        <div class="line-1">
+                            <strong>1ª Leilão</strong>
+                        </div>
+
+                        <div class="line-2">
+                                                            <div class="col-line">
+                                    <strong>A partir das</strong>
+                                    <span>15/09/2026 10:00</span>
+                                </div>
+                                                    </div>
+                    </li>
+                                                                <li class="">
+                            <div class="line-1">
+                                <strong>2ª Leilão</strong>
+                            </div>
+
+                            <div class="line-2">
+                                                                    <div class="col-line">
+                                        <strong>A partir das</strong>
+                                        <span>30/10/2026 10:00</span>
+                                    </div>
+                                                            </div>
+                        </li>
+                                                                <li class="">
+                            <div class="line-1">
+                                <strong>3ª Leilão</strong>
+                            </div>
+
+                            <div class="line-2">
+                                                                    <div class="col-line">
+                                        <strong>A partir das</strong>
+                                        <span>30/11/2026 10:00</span>
+                                    </div>
+                                                            </div>
+                        </li>
+                                    </ul>
+
+                                    <div class="c-actions">
+                                                <a href="/login?redirect=https://www.colossoleiloes.com.br/eventos/leilao/83/leilao-trt13-pb" class="action-item a-habilite cta-habilite_"><strong>Faça login</strong>&nbsp;para se habilitar</a>
+                                                <a href="https://arrematante.colossoleiloes.com.br/#/auditorio/83" class="action-item a-auditorio">Acesse o Auditório Virtual</a>
+                                                        <!--                    <a href="#" class="action-item a-edital a-semEdital">Edital em Breve</a>-->
+                        
+                                                                    </div>
+                            </div>
+        </div><!---->
+    </div><!-- END Center -->
+
+    </section><!-- END Section Resumo Evento -->
+
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript">
+    var leilaoId = 83;
+    var loteId = null;
+</script>
+<div id="app-habilitador"></div>
+    <main class="main-evento">
+    <div class="fundo-fill"></div>
+
+    <div class="center">
+        <aside class="full-filter ativo">
+            <h6>Filtros</h6>
+
+            <span class="close-fill">
+                <i class="fa-regular fa-xmark"></i>
+            </span>
+
+            <div class="body-fill">
+                <form name="filtrosForm" method="get">
+            <div class="c-block b-categorias">
+            <h5>Categorias</h5>
+
+                                        <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="15" class="auto-submit-arr"  data-nivel="1">
+                        <span>Apartamento</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="35" class="auto-submit-arr"  data-nivel="1">
+                        <span>Bens diversos</span>
+                    </div>
+
+                    <small>2</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="16" class="auto-submit-arr"  data-nivel="1">
+                        <span>Casas</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="29" class="auto-submit-arr"  data-nivel="1">
+                        <span>Equipamento Industrial</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="14" class="auto-submit-arr"  data-nivel="1">
+                        <span>Outros</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="32" class="auto-submit-arr"  data-nivel="1">
+                        <span>Outros materiais</span>
+                    </div>
+
+                    <small>2</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="subcategorias[]" data-target="subcategoria" value="20" class="auto-submit-arr"  data-nivel="1">
+                        <span>Rural</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                    </div><!-- END Block -->
+    
+            <div class="c-block b-uf">
+            <h5>UF</h5>
+
+                                        <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="ufs[]" data-target="uf" value="PB" class="auto-submit-arr"  data-nivel="2">
+                        <span>PB</span>
+                    </div>
+
+                    <small>6</small>
+                </label>
+                    </div><!-- END Block -->
+    
+            <div class="c-block b-cidade">
+            <h5>Cidade</h5>
+
+                                        <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="cidades[]" data-target="cidade" value="Bayeux" class="auto-submit-arr"  data-nivel="3">
+                        <span>Bayeux</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="cidades[]" data-target="cidade" value="Campina Grande" class="auto-submit-arr"  data-nivel="3">
+                        <span>Campina Grande</span>
+                    </div>
+
+                    <small>3</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="cidades[]" data-target="cidade" value="João Pessoa" class="auto-submit-arr"  data-nivel="3">
+                        <span>João Pessoa</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="cidades[]" data-target="cidade" value="Massaranduba" class="auto-submit-arr"  data-nivel="3">
+                        <span>Massaranduba</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                    </div><!-- END Block -->
+    
+            <div class="c-block b-bairro">
+            <h5>Bairro</h5>
+
+                                        <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="bairros[]" data-target="bairro" value="Bodocongó" class="auto-submit-arr"  data-nivel="4">
+                        <span>Bodocongó</span>
+                    </div>
+
+                    <small>2</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="bairros[]" data-target="bairro" value="Centro" class="auto-submit-arr"  data-nivel="4">
+                        <span>Centro</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="bairros[]" data-target="bairro" value="Conceição" class="auto-submit-arr"  data-nivel="4">
+                        <span>Conceição</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="bairros[]" data-target="bairro" value="Gramame" class="auto-submit-arr"  data-nivel="4">
+                        <span>Gramame</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                            <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="bairros[]" data-target="bairro" value="Manguinhos" class="auto-submit-arr"  data-nivel="4">
+                        <span>Manguinhos</span>
+                    </div>
+
+                    <small>1</small>
+                </label>
+                    </div><!-- END Block -->
+    
+            <div class="c-block b-vendedor">
+            <h5>Vendedor</h5>
+
+                                        <label>
+                    <div class="c-left">
+                        <input type="checkbox" name="comitentes[]" data-target="comitente" value="9" class="auto-submit-arr"  data-nivel="5">
+                        <span>CENTRAL REGIONAL DE EFETIVIDADE</span>
+                    </div>
+
+                    <small>9</small>
+                </label>
+                    </div><!-- END Block -->
+    
+    </form>            </div>
+        </aside>
+
+        <div class="full-itensCont ativo">
+                            <section class="section-destaques ajuste-destaque-pag">
+                </section>
+            
+            <section class="section-itensEvento">
+                <div class="r-center">
+                    <div class="row-actions">
+                        <div class="c-left">
+                                                                                                                <p>Exibindo <strong>1</strong> a <strong>9</strong> de <strong>9</strong> itens. Página <strong>1 de 1</strong>.</p>
+                        </div>
+
+                        <div class="c-right">
+                                                        <form class="action-numLote" action="/assistente/buscadorLote/">
+                                <label>Ir para o lote:</label>
+                                <input name="leilao" type="hidden" value="83">
+                                <input name="criterio" type="hidden" value="numero">
+                                <input type="text" name="valor" placeholder="Número">
+                                <button type="submit">Ir</button>
+                            </form>
+                            
+                            <div class="action-order">
+                                <form class="action-order">
+                                    <span>Ordenar por:</span>
+
+                                    <select name="order" class="auto-submit">
+                                        
+                                        <option value="numero" >Número do Lote</option>
+                                        <option value="menorValor" >Menor Valor</option>
+                                        <option value="maiorValor" >Maior Valor</option>
+                                        <option value="maisVistos" >Mais Vistos</option>
+                                        <option value="ufCidade" >Cidade/UF</option>
+                                                                            </select>
+                                </form>
+                            </div>
+
+                            <div class="action-type">
+                                <span>Tipo da lista:</span>
+
+                                <a class="btn-type show-typeList ativo">
+                                    <i class="fa-solid fa-grid-2"></i>
+                                </a>
+
+                                <a class="btn-type show-typeGrid">
+                                    <i class="fa-solid fa-list"></i>
+                                </a>
+                            </div>
+
+                            <span class="show-more">
+                                <i class="fa-regular fa-sliders"></i>
+                                Filtros
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="cont-listCards flex-itens ajusteIsFilter">
+                                                                                <article class="lote-main bem-index-596 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 1</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/596/uma-01-plotter-digital" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/598/arquivos/6a67a2edaad8a-6a67a2edaed29.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/596/uma-01-plotter-digital">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;598</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Outros materiais</h3>
+
+                                                                                                    <p>Uma (01) Plotter digital, Marca Visutec, modelo V1800</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>Campina Grande - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 18.000,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>551</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Outros materiais - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/596/uma-01-plotter-digital" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/596/uma-01-plotter-digital" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Outros materiais&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/596/uma-01-plotter-digital" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#536c202631393630276e1c2627213c20733e322736213a323a2075313c372a6e3b27272320697c7c303c3f3c20203c3f363a3f3c36207d303c3e7d31217c3625363d273c207c3f363a3f323c7c3f363a3f323c7e27212762607e23317c3f3c27367c666a657c263e327e63627e233f3c272736217e373a343a27323f">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="596">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-623 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 2</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/623/01-uma-maquina-p-montagem-de-calcados-marca-isa-sazzi-tipo-strobber-sem-uso-nova-220-volts-cor-branca-patente-requerida-220-volts" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/625/arquivos/6a7e2afe5f1bd-6a7e2afe620d3.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/623/01-uma-maquina-p-montagem-de-calcados-marca-isa-sazzi-tipo-strobber-sem-uso-nova-220-volts-cor-branca-patente-requerida-220-volts">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;625</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Equipamento Industrial</h3>
+
+                                                                                                    <p>01 (UMA) MÁQUINA P/ MONTAGEM DE CALÇADOS MARCA ISA SAZZI, TIPO STROBBER, SEM USO (NOVA) 220 VOLTS, COR BRANCA, (PATENTE REQUERIDA), 220 VOLTS.</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>Campina Grande - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 14.000,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>169</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Equipamento Industrial - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/623/01-uma-maquina-p-montagem-de-calcados-marca-isa-sazzi-tipo-strobber-sem-uso-nova-220-volts-cor-branca-patente-requerida-220-volts" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/623/01-uma-maquina-p-montagem-de-calcados-marca-isa-sazzi-tipo-strobber-sem-uso-nova-220-volts-cor-branca-patente-requerida-220-volts" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Equipamento Industrial&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/623/01-uma-maquina-p-montagem-de-calcados-marca-isa-sazzi-tipo-strobber-sem-uso-nova-220-volts-cor-branca-patente-requerida-220-volts" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#4a75393f28202f293e770f3b3f233a2b272f243e256a03242e3f393e38232b266c28252e3377223e3e3a3970656529252625393925262f2326252f3964292527642838652f3c2f243e253965262f23262b2565262f23262b25673e383e7b79673a286526253e2f657c7879657a7b673f272b67272b3b3f23242b673a672725243e2b2d2f27672e2f67292b26292b2e253967272b38292b6723392b67392b303023673e233a2567393e382528282f3867392f27673f39256724253c2b6778787a673c25263e39672925386728382b24292b673a2b3e2f243e2f67382f3b3f2f38232e2b6778787a673c25263e39">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="623">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-624 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 3</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/624/maquina-de-passar-cola-com-rolo-200-mm-marca-kahl" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/626/arquivos/6a7e71a9a000a-6a7e71aa3d0cf.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/624/maquina-de-passar-cola-com-rolo-200-mm-marca-kahl">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;626</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Bens diversos</h3>
+
+                                                                                                    <p>MÁQUINA DE PASSAR COLA, COM ROLO (200 MM); MARCA KAHL</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>Campina Grande - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 1.400,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>180</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Bens diversos - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/624/maquina-de-passar-cola-com-rolo-200-mm-marca-kahl" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/624/maquina-de-passar-cola-com-rolo-200-mm-marca-kahl" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Bens diversos&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/624/maquina-de-passar-cola-com-rolo-200-mm-marca-kahl" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#bd82cec8dfd7d8dec980ffd8d3ce9dd9d4cbd8cfced2ce9bdfd2d9c480d5c9c9cdce879292ded2d1d2ceced2d1d8d4d1d2d8ce93ded2d093dfcf92d8cbd8d3c9d2ce92d1d8d4d1dcd292d1d8d4d1dcd290c9cfc98c8e90cddf92d1d2c9d8928b8f8992d0dcccc8d4d3dc90d9d890cddccecedccf90ded2d1dc90ded2d090cfd2d1d2908f8d8d90d0d090d0dccfdedc90d6dcd5d1">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="624">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-631 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 4</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/631/01-equipamento-de-ginastica-zero-runner-octane-fitness-usado-em-otimo-estado-de-conservacao-02-ar-condicionados-split-fujitsu-inverter-42-000-btus-quente-frio-em-funcionamento" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/633/arquivos/6ab296dc3f457-6ab296dc41b32.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/631/01-equipamento-de-ginastica-zero-runner-octane-fitness-usado-em-otimo-estado-de-conservacao-02-ar-condicionados-split-fujitsu-inverter-42-000-btus-quente-frio-em-funcionamento">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;633</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Outros materiais</h3>
+
+                                                                                                    <p>01	equipamento de ginástica zero runner octane fitness, usado, em ótimo estado de conservação. 02	ar condicionados Split Fujitsu Inverter 42.000 BTUS Quente Frio em funcionamento.</p>
+                                                
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 18.400,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>84</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Outros materiais - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/631/01-equipamento-de-ginastica-zero-runner-octane-fitness-usado-em-otimo-estado-de-conservacao-02-ar-condicionados-split-fujitsu-inverter-42-000-btus-quente-frio-em-funcionamento" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/631/01-equipamento-de-ginastica-zero-runner-octane-fitness-usado-em-otimo-estado-de-conservacao-02-ar-condicionados-split-fujitsu-inverter-42-000-btus-quente-frio-em-funcionamento" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Outros materiais&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/631/01-equipamento-de-ginastica-zero-runner-octane-fitness-usado-em-otimo-estado-de-conservacao-02-ar-condicionados-split-fujitsu-inverter-42-000-btus-quente-frio-em-funcionamento" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#754a0600171f101601483a0001071a065518140110071c141c0653171a110c481d010105064f5a5a161a191a06061a19101c191a10065b161a185b17075a1003101b011a065a19101c19141a5a19101c19141a5801070144465805175a191a01105a4346445a4544581004001c051418101b011a58111058121c1b1406011c1614580f10071a5807001b1b1007581a1601141b1058131c011b10060658000614111a581018581a011c181a5810060114111a58111058161a1b061007031416141a58454758140758161a1b111c161c1a1b14111a06580605191c015813001f1c010600581c1b031007011007584147584545455817010006580400101b01105813071c1a5810185813001b161c1a1b1418101b011a">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="631">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-626 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 5</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/626/materiais-diversos" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/628/arquivos/6a8da4a7bbc7c-6a8da4a8035b8.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/626/materiais-diversos">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;628</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Bens diversos</h3>
+
+                                                                                                    <p>MATERIAIS DIVERSOS</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>João Pessoa - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 17.160,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>266</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Bens diversos - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/626/materiais-diversos" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/626/materiais-diversos" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Bens diversos&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/626/materiais-diversos" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#e9d69a9c8b838c8a9dd4ab8c879ac98d809f8c9b9a869acf8b868d90d4819d9d999ad3c6c68a8685869a9a86858c8085868c9ac78a8684c78b9bc68c9f8c879d869ac6858c80858886c6858c80858886c49d9b9dd8dac4998bc685869d8cc6dfdbdfc684889d8c9b8088809ac48d809f8c9b9a869a">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="626">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-627 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>60%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 6</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/627/peca-integrante-da-suspensao-do-caminhao-mercedes-benz-para-os-modelos-atego-1315-1518-1418-a-partir-de-2005" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/629/arquivos/6a8da8158c3ab-6a8da815905d9.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/627/peca-integrante-da-suspensao-do-caminhao-mercedes-benz-para-os-modelos-atego-1315-1518-1418-a-partir-de-2005">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;629</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Outros</h3>
+
+                                                                                                    <p>Peça integrante da suspensão do caminhão MERCEDES BENZ, para os MODELOS ATEGO 1315/1518/1418, a partir de 2005</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>Bayeux - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 13.200,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>200</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Outros - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/627/peca-integrante-da-suspensao-do-caminhao-mercedes-benz-para-os-modelos-atego-1315-1518-1418-a-partir-de-2005" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/627/peca-integrante-da-suspensao-do-caminhao-mercedes-benz-para-os-modelos-atego-1315-1518-1418-a-partir-de-2005" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Outros&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/627/peca-integrante-da-suspensao-do-caminhao-mercedes-benz-para-os-modelos-atego-1315-1518-1418-a-partir-de-2005" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#5e612d2b3c343b3d2a63112b2a2c312d783c313a2763362a2a2e2d6471713d3132312d2d31323b3732313b2d703d3133703c2c713b283b302a312d71323b37323f3171323b37323f31732a2c2a6f6d732e3c7132312a3b71686c69712e3b3d3f7337302a3b392c3f302a3b733a3f732d2b2d2e3b302d3f31733a31733d3f333730363f3173333b2c3d3b3a3b2d733c3b3024732e3f2c3f73312d7333313a3b32312d733f2a3b3931736f6d6f6b736f6b6f66736f6a6f66733f732e3f2c2a372c733a3b736c6e6e6b">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="627">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-629 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>50%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 7</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/629/um-1-apartamento-sob-n%C2%BA-201-1%C2%BA-andar-do-bloco-6-a-do-condominio-residencial-colinas-do-gramame-vi-n%C2%BA-230-situado-na-rua-marluce-belmont-cavalcante-bairro-de-gramame" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/631/arquivos/6a91cdfcc68d3-6a91cdfccd5c5.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/629/um-1-apartamento-sob-n%C2%BA-201-1%C2%BA-andar-do-bloco-6-a-do-condominio-residencial-colinas-do-gramame-vi-n%C2%BA-230-situado-na-rua-marluce-belmont-cavalcante-bairro-de-gramame">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;631</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Apartamento</h3>
+
+                                                                                                    <p>Um(1) Apartamento sob nº 201, 1º andar do bloco 6-A do Condominio Residencial Colinas do Gramame VI, nº 230, Situado na Rua Marluce Belmont Cavalcante, bairro de Gramame</p>
+                                                
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 110.000,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>250</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Apartamento - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/629/um-1-apartamento-sob-n%C2%BA-201-1%C2%BA-andar-do-bloco-6-a-do-condominio-residencial-colinas-do-gramame-vi-n%C2%BA-230-situado-na-rua-marluce-belmont-cavalcante-bairro-de-gramame" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/629/um-1-apartamento-sob-n%C2%BA-201-1%C2%BA-andar-do-bloco-6-a-do-condominio-residencial-colinas-do-gramame-vi-n%C2%BA-230-situado-na-rua-marluce-belmont-cavalcante-bairro-de-gramame" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Apartamento&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/629/um-1-apartamento-sob-n%C2%BA-201-1%C2%BA-andar-do-bloco-6-a-do-condominio-residencial-colinas-do-gramame-vi-n%C2%BA-230-situado-na-rua-marluce-belmont-cavalcante-bairro-de-gramame" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#013e7274636b6462753c4071607375606c646f756e27636e65783c69757571723b2e2e626e6d6e72726e6d64686d6e64722f626e6c2f63732e6477646f756e722e6d64686d606e2e6d64686d606e2c75737530322c71632e6d6e75642e3733382e746c2c302c6071607375606c646f756e2c726e632c6f2442332443402c3331302c302442332443402c606f6560732c656e2c636d6e626e2c372c602c656e2c626e6f656e6c686f686e2c7364726865646f6268606d2c626e6d686f60722c656e2c6673606c606c642c77682c6f2442332443402c3332312c7268757460656e2c6f602c7374602c6c60736d7462642c63646d6c6e6f752c626077606d62606f75642c63606873736e2c65642c6673606c606c64">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="629">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-622 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>50%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 8</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/622/uma-parte-de-terra-encravada-na-propriedade-prata-do-lugar-loango-zona-rural-do-municipio-de-massaranduba-com-area-registrada-de-cinquenta-e-seis-quadros-56-de-cinquenta-50-bracos-mas-declarada-de-oitenta-80-hectares" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/624/arquivos/6a7e253115285-6a7e253119aac.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/622/uma-parte-de-terra-encravada-na-propriedade-prata-do-lugar-loango-zona-rural-do-municipio-de-massaranduba-com-area-registrada-de-cinquenta-e-seis-quadros-56-de-cinquenta-50-bracos-mas-declarada-de-oitenta-80-hectares">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;624</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Rural</h3>
+
+                                                                                                    <p>UMA PARTE DE TERRA, encravada na propriedade &quot;Prata&quot;, do lugar &quot;Loango&quot; zona Rural do município de Massaranduba, com área registrada de Cinquenta e seis quadros (56) de cinquenta (50) braços, mas declarada de Oitenta (80) hectares</p>
+                                                
+                                                                                                    <div class="r2">
+                                                        <i class="fa-solid fa-location-dot"></i>
+                                                        <span>Massaranduba - PB</span>
+                                                    </div>
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 480.000,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>794</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Rural - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/622/uma-parte-de-terra-encravada-na-propriedade-prata-do-lugar-loango-zona-rural-do-municipio-de-massaranduba-com-area-registrada-de-cinquenta-e-seis-quadros-56-de-cinquenta-50-bracos-mas-declarada-de-oitenta-80-hectares" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/622/uma-parte-de-terra-encravada-na-propriedade-prata-do-lugar-loango-zona-rural-do-municipio-de-massaranduba-com-area-registrada-de-cinquenta-e-seis-quadros-56-de-cinquenta-50-bracos-mas-declarada-de-oitenta-80-hectares" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Rural&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/622/uma-parte-de-terra-encravada-na-propriedade-prata-do-lugar-loango-zona-rural-do-municipio-de-massaranduba-com-area-registrada-de-cinquenta-e-seis-quadros-56-de-cinquenta-50-bracos-mas-declarada-de-oitenta-80-hectares" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#142b6761767e71776029466166757832767b706d297c606064672e3b3b777b787b67677b78717d787b71673a777b793a76663b7162717a607b673b78717d78757b3b78717d78757b3960666025273964763b787b60713b2226263b61797539647566607139707139607166667539717a77667562757075397a753964667b64667d717075707139646675607539707b39786173756639787b757a737b396e7b7a7539666166757839707b3979617a7d777d647d7b39707139797567677566757a7061767539777b793975667175396671737d67606675707539707139777d7a6561717a607539713967717d673965617570667b6739212239707139777d7a6561717a607539212439766675777b673979756739707177787566757075397071397b7d60717a6075392c24397c71776075667167">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="622">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                                                                <article class="lote-main bem-index-630 lote-main-status-1">
+                                                                                                                                                                                                                                                                                                            
+                                <div class="cont-picture">
+                                    <div class="h-card">
+                                                                                    <div class="item-desconto">
+                                                <strong>50%</strong>
+                                                <span>desconto</span>
+                                            </div>
+                                                                            </div>
+
+                                                                            <div class="item-numeroLote">
+                                            <strong>
+                                                <span>Lote 9</span>
+                                            </strong>
+                                        </div>
+                                    
+                                    <a href="/eventos/leilao/leilao-trt13-pb/lote/630/01-um-imovel-situado-na-rua-floriano-peixoto-lote-de-terreno-n%C2%BA1-da-quadra-c-n%C2%BA447-bairro-centro-cidade-de-esperanca-pb" class="link-img">
+                                                                                    <img src="https://static.suporteleiloes.com.br/colossoleiloescombr/bens/632/arquivos/6a99caa377b6b-6a99caa3803c1.jpg" alt="" class="img-evento">
+                                                                            </a>
+                                </div>
+
+                                <div class="cont-infos">
+                                    <div class="flex-1">
+                                        <a href="/eventos/leilao/leilao-trt13-pb/lote/630/01-um-imovel-situado-na-rua-floriano-peixoto-lote-de-terreno-n%C2%BA1-da-quadra-c-n%C2%BA447-bairro-centro-cidade-de-esperanca-pb">
+                                            <div class="reset-grid">
+                                                <div class="r1">
+                                                    <strong class="strong-cod"><span>COD.</span>&nbsp;632</strong>
+
+                                                                                                            <strong class="strong-status status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+
+                                                <h3>Casas</h3>
+
+                                                                                                    <p>01(um) Imóvel situado na Rua Floriano Peixoto(lote de terreno nº1, da quadra C), nº447, bairro Centro, Cidade de Esperança/PB</p>
+                                                
+                                                                                            </div>
+
+                                            <div class="end-typeCol">
+                                                <div class="r4">
+                                                    <span>Lance Inicial</span>
+                                                    <strong class="reset-colorGrid">R$ 180.000,00</strong>
+
+                                                    <div class="mb-grid"></div>
+
+                                                    <span class="txt-grid">Lance Atual</span>
+                                                                                                            <strong class="valor-grid">-</strong>
+                                                                                                    </div>
+
+                                                <div class="r5-grid">
+                                                    <span>Status atual</span>
+                                                                                                        <strong class="status-1">Aberto para Lances</strong>
+                                                                                                    </div>
+                                            </div>
+                                        </a>
+                                    </div>
+
+                                    <div class="flex-campos">
+                                        <div class="r3">
+                                            
+                                                                                    </div>
+                                    </div>
+
+                                    <div class="f-card">
+                                        <ul class="list-itens">
+                                                                                        <li>
+                                                <i class="fa-light fa-eye"></i>
+                                                <span>817</span>
+                                            </li>
+                                            
+                                                                                                                                        <li>
+                                                    <i class="fa-light fa-user i-10"></i>
+                                                    <span>36</span>
+                                                </li>
+                                                                                        
+                                                                                        <li>
+                                                <i class="fa-light fa-gavel"></i>
+                                                <span>0</span>
+                                            </li>
+                                                                                    </ul>
+
+                                        <div class="cont-actions">
+                                            <a class="show-share">
+                                                <i class="fa-regular fa-share-nodes"></i>
+                                            </a>
+
+                                                                                        <div class="cont-share">
+                                                <a href="https://api.whatsapp.com/send?text=Casas - https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/630/01-um-imovel-situado-na-rua-floriano-peixoto-lote-de-terreno-n%C2%BA1-da-quadra-c-n%C2%BA447-bairro-centro-cidade-de-esperanca-pb" target="_blank">
+                                                    <i class="fa-brands fa-whatsapp"></i>WhatsApp
+                                                </a>
+
+                                                <a href="https://www.facebook.com/sharer/sharer.php?u=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/630/01-um-imovel-situado-na-rua-floriano-peixoto-lote-de-terreno-n%C2%BA1-da-quadra-c-n%C2%BA447-bairro-centro-cidade-de-esperanca-pb" target="_blank">
+                                                    <i class="fa-brands fa-facebook-f" style="font-size: 12px;"></i>Facebook
+                                                </a>
+
+                                                <a href="https://twitter.com/intent/tweet?text=Casas&url=https://colossoleiloes.com.br/eventos/leilao/leilao-trt13-pb/lote/630/01-um-imovel-situado-na-rua-floriano-peixoto-lote-de-terreno-n%C2%BA1-da-quadra-c-n%C2%BA447-bairro-centro-cidade-de-esperanca-pb" target="_blank">
+                                                    <i class="fa-brands fa-x-twitter"></i>Twitter
+                                                </a>
+
+                                                <a href="/cdn-cgi/l/email-protection#49763a3c2b232c2a3d740a283a283a6f2b262d3074213d3d393a7366662a2625263a3a26252c2025262c3a672a2624672b3b662c3f2c273d263a66252c2025282666252c20252826643d3b3d787a64392b6625263d2c667f7a79667978643c24642024263f2c25643a203d3c282d26642728643b3c28642f25263b2028272664392c2031263d266425263d2c642d2c643d2c3b3b2c272664276c0a7b6c0b0878642d2864383c282d3b28642a64276c0a7b6c0b087d7d7e642b28203b3b26642a2c273d3b26642a202d282d2c642d2c642c3a392c3b28272a2864392b">
+                                                    <i class="fa-regular fa-envelopes-bulk"></i>E-mail
+                                                </a>
+                                            </div>
+
+                                            <a class="favico bind-fav-lotes" data-id="630">
+                                                <i class="fa-regular fa-star"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article><!-- END Unique -->
+                                            </div>
+
+                    <div class="row-actions row-end">
+                        <div class="c-left">
+                            <p>Exibindo <strong>1</strong> a <strong>9</strong> de <strong>9</strong> itens. Página <strong>1 de 1</strong>.</p>
+                        </div>
+
+                        <div class="c-right">
+                            <div class="action-order">
+                                <form name="pageForm" method="get">
+                                    <span>Pular para página:</span>
+
+                                    <select name="page" class="auto-submit">
+                                                                                                                            <option value="1" selected>
+                                                Página 1
+                                            </option>
+                                                                            </select>
+                                </form>
+                            </div>
+
+                            
+<ul class="default-pagination">
+
+        <li class="type-arrow arrow-left double-left">
+                    <a class="disabled">
+                <i class="fa-solid fa-chevrons-left"></i>
+            </a>
+            </li>
+
+        <li class="type-arrow arrow-left">
+                    <a class="disabled">
+                <i class="fa-solid fa-chevron-left"></i>
+            </a>
+            </li>
+
+            
+            <li class="type-number">
+                            <a class="isCurrent"><span>1</span></a>
+                    </li>
+    
+        <li class="type-arrow arrow-right">
+                    <a class="disabled">
+                <i class="fa-solid fa-chevron-right"></i>
+            </a>
+            </li>
+
+        <li class="type-arrow arrow-right double-right">
+                    <a class="disabled">
+                <i class="fa-solid fa-chevrons-right"></i>
+            </a>
+            </li>
+
+</ul>
+                        </div>
+                    </div>
+                </div>
+            </section><!-- END Section List -->
+        </div>
+    </div><!-- END Center -->
+</main>
+    <div class="c-left-whats">
+        <a href="https://wa.me/5583988046631" target="_blank">
+            <img src="/build/images/whats.22d66ffd.png">
+        </a>
+    </div>
+
+    <div class="c-right-whats">
+        <a href="https://wa.me/5583988046631" target="_blank">
+            <span>Precisa de ajuda?</span>
+            <small>Entre em contato conosco.</small>
+        </a>
+    </div>
+
+<footer>
+    <div class="center">
+        <div class="row-1">
+            <div class="c-left">
+                <div class="cont-logoFooter">
+                    <a href="/" class="logo-footer" style="background-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMrXtAClaEuvB2ASbuAE4OsMRfNWig3CLbDUk_EOdseSKx7NDmy3V2TrA&amp;s=10');">Colossos Leilões</a>
+                </div>
+            </div>
+
+            <div class="c-right">
+                <div class="col col-01">
+                    <h6>Institucional</h6>
+
+                    <ul class="ul-footer">
+                        <li class="lf-01">
+                            <a href="/quem-somos">Quem Somos</a>
+                        </li>
+
+                        <li class="lf-02">
+                            <a href="/duvidas-frequentes">Dúvidas Frequentes</a>
+                        </li>
+
+                        <li class="lf-03">
+                            <a href="/imprensa">Imprensa</a>
+                        </li>
+
+                        <li class="lf-04">
+                            <a href="/legislacao">Legislação</a>
+                        </li>
+                    </ul>
+                </div><!-- END Col 01 -->
+
+                <div class="col col-02">
+                    <h6>Leilões</h6>
+
+                    <ul class="ul-footer">
+                        <li class="lf-05">
+                            <a href="/leiloes-judiciais">Judiciais</a>
+                        </li>
+
+                        <li class="lf-06">
+                            <a href="/leiloes-extrajudiciais">Extrajudiciais</a>
+                        </li>
+
+                        <li class="lf-07">
+                            <a href="/agenda">Agenda</a>
+                        </li>
+
+                        <li class="lf-08">
+                            <a href="https://arrematante.colossoleiloes.com.br/#/live">Auditório virtual</a>
+                        </li>
+                    </ul>
+                </div><!-- END Col 02 -->
+
+                <div class="col col-03">
+                    <h6>Contato</h6>
+
+                    <ul class="ul-footer">
+                        <li class="lf-09">
+                            <a href="/fale-conosco">Fale Conosco</a>
+                        </li>
+
+                        <li class="lf-10">
+                            <a href="/trabalhe-conosco">Trabalhe Conosco</a>
+                        </li>
+                    </ul>
+                </div><!-- END Col 03 -->
+
+                <div class="col col-04">
+                                            <a href="https://wa.me/5583988046631" target="_blank" class="a1">
+                            (83) 9 8804-6631
+                            <i class="fa-brands fa-whatsapp"></i>
+                        </a>
+                    
+                                                                                                <a href="tel:8321826281" class="a1" style="margin-top: 8px;">
+                                (83) 2182-6281
+                                                                    <i class="fa-solid fa-phone" style="font-size: 14px;"></i>
+                                                            </a>
+                                            
+                    <br>
+
+                                                                                                <a href="/cdn-cgi/l/email-protection#2350424e425142404c4f4c50504c63444e424a4f0d404c4e" class="a2"><span class="__cf_email__" data-cfemail="82f1e3efe3f0e3e1edeeedf1f1edc2e5efe3ebeeace1edef">[email&#160;protected]</span></a>
+                                            
+                    <br>
+
+                    <p class="p1">Av Senador Ruy Carneiro, 303 - Sl 2202, Brisamar, João Pessoa - PB&nbsp;<br>CEP 58032-100</p>
+
+                    <p class="p2">
+                        <strong>Leiloeiro Oficial</strong>
+                        Samara Araújo | JUCEP / PB 023/2019 | JUCERN / RN 017/2025
+                    </p>
+
+                    <div class="logo-desenvolvimento">
+                        <a href="https://www.suporteleiloes.com.br" class="logo-sl" target="_blank">Suporte Leilões</a>
+                    </div>
+                </div><!-- END Col 04 -->
+            </div>
+        </div><!---->
+
+        <div class="row-2">
+            <div class="f-left">
+                <p class="copy">&copy; 2026-present - Todos os direitos reservados</p>
+
+                <a href="/politica-de-privacidade">Política de Privacidade</a>
+                <a href="/aviso-de-cookies">Aviso de Cookies</a>
+                <a href="/termos-uso">Termos de Uso</a>
+            </div>
+
+            <div class="f-right">
+                <ul class="lista-social">
+                                        <li>
+                        <a href="https://www.instagram.com/colossoleiloes?igsh=Nm8wZmVxaWFmNHN3" target="_blank">
+                            <i class="fa-brands fa-instagram"></i>
+                        </a>
+                    </li>
+                    
+                    
+                                            <li>
+                            <a href="" target="_blank">
+                                <i class="fa-brands fa-facebook-f"></i>
+                            </a>
+                        </li>
+                    
+                                    </ul>
+            </div>
+        </div><!---->
+    </div><!-- END Center -->
+</footer>
+<section class="cont-cookies cookie ativo" id="cookie-banner">
+    <div class="c-left">
+        <h5>Aviso de cookies</h5>
+
+        <p>Utilizamos cookies para que o site possa funcionar, para melhorar a sua navegação, personalizar conteúdo
+            apresentado a você, bem como para obter informações estatísticas sobre o uso do site. Saiba mais no <a
+                    href="/aviso-de-cookies">Aviso de Cookies</a></p>
+    </div>
+
+    <div class="c-right">
+        <a class="a-aceite" id="aceitarTodosCookies">Aceitar todos os cookies</a>
+        <a id="btnCookieDef" href="#" class="a-preferencias">Preferências de cookies</a>
+    </div>
+</section>
+
+<section class="cont-cookies definicoes" id="cookie-config">
+    <div class="c-left">
+        <h5>Configurações de cookies</h5>
+
+        <form id="cookie-form">
+            <div class="cookie-form-item">
+                <label>
+                    <input type="checkbox" checked disabled>
+                    Cookies Essenciais (obrigatórios)
+                </label>
+            </div>
+            <div class="cookie-form-item">
+                <label>
+                    <input type="checkbox" checked id="analytics">
+                    Cookies de Análise (Google Analytics, etc)
+                </label>
+            </div>
+            <div class="cookie-form-item">
+                <label>
+                    <input type="checkbox" checked id="marketing">
+                    Cookies de Marketing (Remarketing, Facebook Ads, etc)
+                </label>
+            </div>
+            <div class="cookie-buttons">
+                <button type="button" id="preferenciaCookiesBtn">Salvar Preferências</button>
+                <a href="#" class="fechar-janela-cookies">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</section>
+<section class="modal-redirectLeilao">
+	<div class="fundo"></div>
+
+	<div class="cont-redirectLeilao">
+		<div class="bg-panel">
+			<h6>Redirecionamento de site</h6>
+
+			<h5>Atenção:</h5>
+			<p>Você será redirecionado para o site responsável pelo leilão solicitado.</p>
+			<p>Sendo assim, para participar deste leilão, será necessário cadastrar-se e habilitar-se no site de destino.</p>
+
+			<div class="flex-actions">
+				<span class="cta cta-cancele">Cancelar</span>
+				<a class="cta btn-action">Continuar</a>
+			</div>
+		</div>
+	</div>
+</section>
+
+
+        <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="text/javascript">
+                    var SL_USER = null;
+            </script>
+    <script src="/build/runtime.7576e7bf.js"></script><script src="/build/0.a11e63ec.js"></script><script src="/build/1.6edd98df.js"></script><script src="/build/app.c60458b6.js"></script>
+    <link rel="stylesheet" href="/css/extra.css?version=1787340905">
+        <script type="text/javascript">
+        (function (d,w,s,e) {var z = d.createElement(s);z.src = e;z.async = true;d.body.appendChild(z);})(document,window,'script', 'https://static.suporteleiloes.com.br/stats/client.js');
+                var stat = function (entity, entityId, event = null) {
+            try {
+                if (!event) {
+                    event = SL_EVENT_TYPES.LOAD_PAGE
+                }
+                /* eslint-disable */
+                SLEventClient && SLEventClient(event, entity, entityId, window && window.location.href || document && document.URL, SL_USER ? SL_USER.id : null)
+            } catch (e) {
+                console.error(e)
+            }
+        }
+    </script>
+
+    <script src="/build/home.9dc395e4.js"></script>
+    <script src="/build/evento.ca530d1a.js"></script>
+    <script src="/build/2.8968f2a0.js"></script><script src="/build/evento-filter.086e80b5.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            setTimeout(function () {
+                stat('leilao', 83);
+            });
+        }, 200);
+    </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"a5ff01013f98445e9ec5ac26896fba3a","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>

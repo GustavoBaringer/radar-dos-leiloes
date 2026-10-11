@@ -5,7 +5,7 @@ import type { query } from '../src/core/db.js';
 
 const originalDomains = process.env.SOLEON_DOMAINS;
 const originalTenants = process.env.SOLEON_TENANTS;
-const card = (id: number, title = `Veículo teste ${id}`) => `<div class="lote"><h4>Lote ${id}</h4><a href="/item/${id}/detalhes"></a><h5>${title}</h5><div class="label_lote aberto_lance">Aberto</div><div class="etiqueta">Lance Inicial</div><h4>R$ 100,00</h4></div>`;
+const card = (id: number, title = `Honda Civic ${id}`) => `<div class="lote"><h4>Lote ${id}</h4><a href="/item/${id}/detalhes"></a><h5>${title}</h5><div class="label_lote aberto_lance">Aberto</div><div class="etiqueta">Lance Inicial</div><h4>R$ 100,00</h4></div>`;
 const page = (ids: number[], titleFor: (id: number) => string | undefined = () => undefined) => ids.map((id) => card(id, titleFor(id))).join('');
 const result = (body: string) => ({ status: 200, body, headers: {} });
 const lotRow = (external_id: string, auction_start_utc: Date | null = null) => ({ external_id, auctioneer_name: 'Leiloeiro Teste', auction_start_utc });
@@ -181,6 +181,35 @@ try {
     collectSoleon({ limit: 100, observer: machineAbortLog.observer }, abortMachineIo)), CollectionCancellationError);
   assert.deepEqual(machineAbortLog.attempts[0].failures, ['budget']);
   assert.ok(machineAbortLog.attempts[0].finish, 'supplement cancellation still finalizes the tenant attempt');
+
+  // The diverse route has no query string; it must be requested only for the
+  // two observed tenants, and its cards use the ordinary classifiers.
+  const diverseHost = 'focoleiloes.com.br';
+  process.env.SOLEON_DOMAINS = diverseHost;
+  const diverseCalls: string[] = [];
+  const diverseCards = `<div class="lote"><a href="/item/701/detalhes"></a><h5>Compressor industrial</h5><div class="label_lote aguarde_abertura"></div></div>
+    <div class="lote"><a href="/item/702/detalhes"></a><h5>Casa residencial</h5><div class="label_lote aberto_lance"></div></div>`;
+  const diverseIo = {
+    query: fakeQuery([lotRow(`${diverseHost}:701`), lotRow(`${diverseHost}:702`)]),
+    fetchText: (async (url: string) => {
+      diverseCalls.push(url);
+      const parsed = new URL(url);
+      if (parsed.pathname.includes('/lotes/')) return result(parsed.pathname === '/lotes/diversos' ? diverseCards : '');
+      throw new Error(`unexpected diverse request ${url}`);
+    }) as any,
+  };
+  const diverse = await collectSoleon({ limit: 2 }, diverseIo);
+  assert.ok(diverseCalls.includes(`https://${diverseHost}/lotes/diversos?page=1`), 'diversos page uses valid query separator');
+  assert.equal(diverse.lots.length, 2);
+  assert.equal(diverse.lots[0].vehicleType, 'maquina');
+  assert.equal(diverse.lots[1].assetType, 'imovel');
+  process.env.SOLEON_DOMAINS = 'ordinary.soleon.test';
+  const ordinaryCalls: string[] = [];
+  await collectSoleon({ limit: 2 }, {
+    query: fakeQuery([]),
+    fetchText: (async (url: string) => { ordinaryCalls.push(url); return result(''); }) as any,
+  });
+  assert.ok(!ordinaryCalls.some((url) => url.includes('/lotes/diversos')), 'diversos is limited to observed tenants');
   console.log('SOLEON fluxo: repetição, sobreposição, cache, cancelamento e cota OK');
 } finally {
   if (originalDomains === undefined) delete process.env.SOLEON_DOMAINS; else process.env.SOLEON_DOMAINS = originalDomains;

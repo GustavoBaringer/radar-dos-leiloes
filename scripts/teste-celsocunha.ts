@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { collectCelsocunha, celsocunhaPages, parseCelsocunhaDetail, parseCelsocunhaEvent } from '../src/connectors/celsocunha.js';
+
+const eventHtml = await readFile(new URL('../fixtures/celsocunha/event14-page2.html', import.meta.url), 'utf8');
+const sucataHtml = await readFile(new URL('../fixtures/celsocunha/lot-3439.html', import.meta.url), 'utf8');
+const renaultHtml = await readFile(new URL('../fixtures/celsocunha/lot-3779.html', import.meta.url), 'utf8');
+const event = parseCelsocunhaEvent(eventHtml);
+assert.equal(event.start?.toISOString(), '2026-10-22T12:00:00.000Z');
+assert.equal(event.auctioneer, 'CELSO ALVES CUNHA');
+assert.equal(event.status, 'Aberto para Lances');
+const positive = parseCelsocunhaDetail(renaultHtml, 'https://www.celsocunhaleiloes.com.br/lote/3779/renault-logan', event);
+assert.equal(positive?.assetType, 'veiculo');
+assert.equal(positive?.minBid, 2150);
+assert.equal(positive?.currentBid, null);
+assert.equal(positive?.auctionStartUtc?.toISOString(), '2026-10-22T12:00:00.000Z');
+assert.equal(positive?.yearMake, 2015);
+assert.equal(positive?.minBid, 2150);
+assert.equal(positive?.auctioneerName, 'CELSO ALVES CUNHA');
+assert.ok(positive?.sourceCategory?.includes('AUTOMÓVEL'));
+const sucata = parseCelsocunhaDetail(sucataHtml, 'https://www.celsocunhaleiloes.com.br/lote/3439/sundown-sundown-hunter-90', event);
+assert.ok(sucata);
+assert.equal(sucata.status, 'sem_data'); // “não liberado para receber lances” is not an ending signal.
+assert.ok(sucata.sourceCategory?.includes('SUCATA'));
+assert.equal(parseCelsocunhaDetail(renaultHtml, 'https://www.celsocunhaleiloes.com.br/lote/3779/renault-logan', null)?.auctionStartUtc, null);
+assert.equal(parseCelsocunhaDetail(renaultHtml.replaceAll('/leilao/14/', '/leilao/15/'), 'https://www.celsocunhaleiloes.com.br/lote/3779/renault-logan', event), null);
+assert.equal(celsocunhaPages(eventHtml).length, 18);
+assert.equal(celsocunhaPages('<html></html>').length, 0);
+assert.equal(parseCelsocunhaDetail('<h1>Retrovisor</h1>', 'https://x/lote/2/parte'), null);
+assert.equal(parseCelsocunhaDetail(renaultHtml.replaceAll('RENAULT/LOGAN EXPR 16 M', 'Cadeira de escritório').replaceAll('AUTOMÓVEL', 'Diversos'), 'https://www.celsocunhaleiloes.com.br/lote/3779/renault-logan', event), null);
+const requests: string[] = [];
+const collect = await collectCelsocunha(100, async (url) => {
+  requests.push(url);
+  if (url.includes('/leilao/14/') && new URL(url).searchParams.get('page') === '2') return { status: 503, body: '' } as any;
+  if (url.includes('/leilao/14/')) return { status: 200, body: `<div class="data">22/10/2026 às 09:00</div><span class="status aberto">Aberto para Lances</span><p><strong>Leiloeiro:</strong> CELSO ALVES CUNHA</p><a href="/lote/3779/renault-logan">1</a><a href="/lote/3779/renault-logan">2</a><a data-page="1"></a><a data-page="2"></a>` } as any;
+  if (url.includes('/lote/3779/')) return { status: 200, body: renaultHtml } as any;
+  return { status: 503, body: '' } as any;
+});
+assert.equal(collect.lots.length, 1);
+assert.equal(collect.fetched, 1);
+assert.equal(requests.filter((u) => u.includes('/lote/3779/')).length, 1);
+assert.ok(collect.note?.includes('parcial'));
+await assert.rejects(collectCelsocunha(5, async () => { throw new Error('offline'); }));
+console.log('celsocunha: ok');

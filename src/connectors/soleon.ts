@@ -31,9 +31,15 @@ import { CollectionCancellationError, throwIfCancelled } from '../core/collectio
 const LOTES_POR_PAGINA = 30;
 const EVENTOS_MAQUINAS_POR_TENANT = 5;
 const PAGINAS_EVENTO_MAQUINA = 20;
-export const ROTAS_CATEGORIAS = ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel'] as const;
+export const ROTAS_CATEGORIAS = ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel', '/lotes/diversos'] as const;
 
 const MAQUINA_TITULO = /\b(compressor(?:es)?|m[aá]quina(?:s)?|equipamento(?:s)? industriais?|gerador(?:es)?|transformador(?:es)?|caldeira(?:s)?|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|carregadeira|betoneira|trator(?:es)?)\b/i;
+const IMOVEL_SINAL = /\b(im[oó]vel|apartamento|casa|sobrado|terreno|fazenda|s[ií]tio|ch[aá]cara|sala comercial|galp[aã]o|pr[eé]dio|vaga de garagem)\b/i;
+const SOLEON_PART_DESCRIPTION = /\bpeças?\s+(?:de\s+)?(?:motos?|motocicletas?|veículos?|carros?)\b|\b(?:carenagem|cabeçote|pistão|retrovisor|farol|parachoque)\b/i;
+
+function parecePeca(text: string): boolean {
+  return looksLikePart(text) || SOLEON_PART_DESCRIPTION.test(text);
+}
 
 /** Remove o bloco judicial: são nomes de pessoas físicas, não do produto. */
 function semPartesJudiciais(texto: string): string {
@@ -66,6 +72,15 @@ interface Card {
   rotuloValor: string | null;
   valor: number | null;
   corpo: string;
+  descricao: string;
+}
+
+interface CategoryPage {
+  path: string;
+  page: number;
+  done: boolean;
+  eventUrl?: string;
+  eventPages?: string[];
 }
 
 export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
@@ -85,17 +100,18 @@ export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
 
     // A descrição é texto operacional/jurídico em muitos tenants (inclusive
     // Bidmax); só a use quando o h5 for a categoria genérica do bem.
-    const descricao = $c
+    const descricao = semPartesJudiciais($c
       .find('div[style*="justify"]')
       .first()
       .text()
       .replace(/^\s*Descri[çc][ãa]o\s*:?\s*/i, '')
       .replace(/\s+/g, ' ')
-      .trim();
+      .replace(/\b(?:Placa|CPF|CNPJ|RENAVAM|Chassi|Executado|Exequente|Autor|R[eé]u)\s*:\s*.*$/i, '')
+      .trim());
     const textoCard = $c.text().replace(/\s+/g, ' ').trim();
     const h5 = $c.find('h5').first().text().replace(/\s+/g, ' ').trim();
-    const h5Generico = /^(ve[ií]culo|autom[oó]vel|carro|moto|motocicleta|caminhonete|caminh[aã]o|ônibus|onibus|utilit[aá]rio|im[oó]vel(?:\s+(?:rural|urbano))?|im[oó]veis|propriedade)$/i.test(h5);
-    const marcaModelo = textoCard.match(/Marca\s*\/\s*Modelo\s*:\s*(.+?)(?=\s+(?:Placa|Ano|Cor|Combust[ií]vel)\s*:|$)/i)?.[1]?.trim() ?? '';
+    const h5Generico = /^(?:lote[-\s\d]*|ve[ií]culo|autom[oó]vel|carro|moto|motocicleta|caminhonete|caminh[aã]o|ônibus|onibus|utilit[aá]rio|im[oó]vel(?:\s+(?:rural|urbano))?|im[oó]veis|propriedade)$/i.test(h5);
+    const marcaModelo = textoCard.match(/Marca\s*\/?\s*Modelo\s*:\s*(.+?)(?=(?:Placa|Ano(?:\s*\/?\s*Modelo)?|Cor|Combust[ií]vel)\s*:|$)/i)?.[1]?.trim() ?? '';
     const titulo = (!h5Generico && h5 ? h5 : marcaModelo || descricao).slice(0, 180);
     const bloco = $c.find('[class*="label_lote"]').first();
     const rotulo = $c.find('.etiqueta').first().text().trim() || $c.find('.my-auto h5').first().text().trim() || null;
@@ -111,6 +127,7 @@ export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
       rotuloValor: rotulo,
       valor: dinheiro(valorTxt),
       corpo: textoCard,
+      descricao,
     });
   });
   return out;
@@ -209,11 +226,11 @@ async function lotesJaConhecidos(lookup: typeof query = query): Promise<Map<stri
   return new Map(rows.map((r) => [r.external_id, { auctioneerName: r.auctioneer_name, auctionStartUtc: r.auction_start_utc }]));
 }
 
-async function lerDetalhe(url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch: typeof fetchText = fetchText): Promise<{ leiloeiro: string | null; auctionStartUtc: Date | null }> {
+async function lerDetalhe(url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch: typeof fetchText = fetchText): Promise<{ leiloeiro: string | null; auctionStartUtc: Date | null; failure?: string }> {
   try {
     const r = await fetch(url, { gapMs: 1100, timeoutMs: 30000 });
     observer?.response(r.status);
-    if (r.status !== 200) return { leiloeiro: null, auctionStartUtc: null };
+    if (r.status !== 200) return { leiloeiro: null, auctionStartUtc: null, failure: `detalhe HTTP ${r.status}` };
     const $ = cheerio.load(r.body);
     const auctionStartUtc = dataLeilaoUtc($('meta[property="og:description"]').attr('content') ?? '');
     return {
@@ -223,8 +240,14 @@ async function lerDetalhe(url: string, observer?: import('../core/tenant-attempt
   } catch {
     throwIfCancelled();
     observer?.failure('network');
-    return { leiloeiro: null, auctionStartUtc: null };
+    return { leiloeiro: null, auctionStartUtc: null, failure: 'falha de rede no detalhe' };
   }
+}
+
+function condicaoDo(texto: string): 'sucata' | 'conservado' | 'desconhecido' {
+  if (/\bsucata\b/i.test(texto)) return 'sucata';
+  if (/\bconservad[oa]s?\b/i.test(texto)) return 'conservado';
+  return 'desconhecido';
 }
 
 export async function collectSoleon(
@@ -237,6 +260,7 @@ export async function collectSoleon(
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
+    const partialReasons = new Set<string>();
 
     const dominios = await tenants(Number(process.env.SOLEON_TENANTS ?? 12), tenant, lookup);
     const conhecidos = await lotesJaConhecidos(lookup);
@@ -249,7 +273,36 @@ export async function collectSoleon(
       const fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
       try {
-        const categorias = ROTAS_CATEGORIAS.map((path) => ({ path, page: 1, done: false }));
+        const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+        const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost)
+          ? ROTAS_CATEGORIAS
+          : ROTAS_CATEGORIAS.slice(0, 2)).map((path) => ({ path, page: 1, done: false }));
+        if (normalizedHost === 'ccjleiloes.com.br') {
+          try {
+            const home = await fetch(`https://${host}/`, { gapMs: 1100 });
+            attempt?.response(home.status);
+            httpStatus = home.status;
+            if (home.status === 200) {
+              const $home = cheerio.load(home.body);
+              const eventUrls = new Set<string>();
+              $home('a[href*="/leilao/"][href*="/lotes"]').each((_, el) => {
+                const href = $home(el).attr('href');
+                if (!href) return;
+                try {
+                  const url = new URL(href, `https://${host}`);
+                  if (url.hostname.replace(/^www\./, '') === normalizedHost && /^\/leilao\/\d+\/lotes$/.test(url.pathname)) eventUrls.add(url.href);
+                } catch { /* ignore malformed unrelated links */ }
+              });
+              for (const url of eventUrls) categorias.push({ path: new URL(url).pathname, page: 1, done: false, eventUrl: url, eventPages: [url] });
+              if (!eventUrls.size) partialReasons.add(`${host}: home sem eventos /leilao/{id}/lotes; catálogo incompleto`);
+              else partialReasons.add(`${host}: ${eventUrls.size} eventos detectados na home; volume total desconhecido`);
+            } else partialReasons.add(`${host}: home HTTP ${home.status}; eventos não descobertos`);
+          } catch {
+            throwIfCancelled();
+            attempt?.failure('network');
+            partialReasons.add(`${host}: falha de rede na home; eventos não descobertos`);
+          }
+        }
         const vistos = new Set<string>();
         const paginasVistas = new Map<string, Set<string>>();
         while (categorias.some((c) => !c.done) && lots.length - antes < cota && lots.length < limit) {
@@ -259,16 +312,19 @@ export async function collectSoleon(
             throwIfCancelled();
             let res;
             try {
-              res = await fetch(`https://${host}${categoria.path}&page=${categoria.page}`, { gapMs: 1100 });
+             const eventUrl = categoria.eventUrl;
+             const eventPages = categoria.eventPages;
+             res = await fetch(eventUrl ? eventPages?.[categoria.page - 1] ?? eventUrl : `https://${host}${categoria.path}${categoria.path.includes('?') ? '&' : '?'}page=${categoria.page}`, { gapMs: 1100 });
             } catch {
               throwIfCancelled();
               attempt?.failure('network');
+              partialReasons.add(`${host} ${categoria.path}: falha de rede`);
               categoria.done = true;
               continue;
             }
             attempt?.response(res.status);
             httpStatus = res.status;
-            if (res.status !== 200) { categoria.done = true; continue; }
+            if (res.status !== 200) { categoria.done = true; partialReasons.add(`${host} ${categoria.path}: HTTP ${res.status}`); continue; }
 
             const paginaCards = lerCards(cheerio.load(res.body), host);
             const sig = assinaturaPagina(paginaCards);
@@ -278,20 +334,33 @@ export async function collectSoleon(
             paginasVistas.set(categoria.path, categoriasVistas);
             const cards = novosCards(paginaCards, vistos);
             fetched += cards.length;
-            if (paginaCards.length < LOTES_POR_PAGINA) categoria.done = true;
+            const eventUrl = categoria.eventUrl;
+            const eventPages = categoria.eventPages;
+            if (eventUrl && eventPages) {
+              for (const pageUrl of paginasReaisDoEvento(res.body, eventPages[categoria.page - 1] ?? eventUrl)) if (!eventPages.includes(pageUrl)) eventPages.push(pageUrl);
+              categoria.done = categoria.page >= eventPages.length;
+            } else if (paginaCards.length < LOTES_POR_PAGINA) categoria.done = true;
 
             for (let i = 0; i < cards.length; i++) {
               throwIfCancelled();
               const c = cards[i];
               if (lots.length - antes >= cota || lots.length >= limit) { truncated = true; break; }
-              const titulo = semPartesJudiciais(c.titulo || c.corpo.slice(0, 120));
-              if (!titulo || looksLikePart(titulo) || looksLikeCollectible(titulo)) { skipped++; continue; }
+              const titulo = semPartesJudiciais(c.titulo);
+              const bemTexto = `${titulo} ${c.descricao}`;
+              if (!titulo || parecePeca(bemTexto) || looksLikeCollectible(bemTexto)) { skipped++; continue; }
               const corpo = semPartesJudiciais(c.corpo);
               const parsed = parseTitle(titulo);
               const temSinalMaquina = MAQUINA_TITULO.test(titulo);
-              const kind = classifyAsset(titulo, temSinalMaquina ? 'maquina' : categoria.path.includes('/imovel') ? 'imovel' : null);
+              const diverse = categoria.path === '/lotes/diversos' || Boolean(categoria.eventUrl);
+              const temSinalImovel = IMOVEL_SINAL.test(titulo);
+              const vehicleIdentity = Boolean(parsed.brand) && !looksLikePart(titulo);
+              const routeVehicle = categoria.path.includes('/lotes/veiculo');
+              const routeProperty = categoria.path.includes('/lotes/imovel');
+              if (diverse && !temSinalMaquina && !temSinalImovel && !vehicleIdentity) { skipped++; continue; }
+              if (routeVehicle && !vehicleIdentity || routeProperty && !temSinalImovel) { skipped++; continue; }
+              const kind = classifyAsset(titulo, temSinalMaquina ? 'maquina' : routeProperty || temSinalImovel ? 'imovel' : vehicleIdentity || routeVehicle ? 'veiculo' : null);
               if (kind.assetType === 'outro') { skipped++; continue; }
-              const ehImovel = !temSinalMaquina && (kind.assetType === 'imovel' || categoria.path.includes('/imovel'));
+              const ehImovel = !temSinalMaquina && (routeProperty || temSinalImovel || kind.assetType === 'imovel');
               const posLocal = corpo.search(/Local de Exposi[çc][ãa]o/i);
               const janela = posLocal >= 0 ? corpo.slice(posLocal, posLocal + 200) : '';
               const CORTE_UI = /\s*(Aguarde|Aberto para|Encerrad|Lance Inicial|Maior Lance|Detalhes do Lote|Acompanhe ao Vivo)/i;
@@ -300,8 +369,9 @@ export async function collectSoleon(
               const km = Number(corpo.match(/\bKM\s*:?\s*([\d.]+)/i)?.[1]?.replace(/\./g, '')) || null;
               const maiorLance = /maior\s+lance/i.test(c.rotuloValor ?? '');
               const conhecido = conhecidos.get(`${host}:${c.itemId}`);
-              const precisaDetalhe = !conhecido || !conhecido.auctioneerName || (ehImovel && !conhecido.auctionStartUtc);
+              const precisaDetalhe = !conhecido || !conhecido.auctioneerName || !conhecido.auctionStartUtc;
               const detalhe = precisaDetalhe ? await lerDetalhe(c.url, attempt, fetch) : { leiloeiro: null, auctionStartUtc: null };
+              if (detalhe.failure) partialReasons.add(`${host} item/${c.itemId}: ${detalhe.failure}`);
               const leiloeiro = conhecido?.auctioneerName ?? detalhe.leiloeiro;
 
               lots.push({
@@ -312,7 +382,7 @@ export async function collectSoleon(
                 km: ehImovel ? null : km, color: ehImovel ? null : corpo.match(/\bCOR\s+([A-Za-zÀ-ú]+)/i)?.[1] ?? null,
                 fuel: ehImovel ? null : corpo.match(/\b(diesel|flex|gasolina|[áa]lcool|el[ée]trico|h[íi]brido)\b/i)?.[1] ?? null,
                 docType: /judicial|processo/i.test(corpo) ? 'judicial' : null,
-                sourceCategory: ehImovel ? 'imovel' : temSinalMaquina ? null : 'veiculo', assetType: ehImovel ? 'imovel' : kind.assetType,
+                sourceCategory: ehImovel ? 'imovel' : vehicleIdentity || routeVehicle ? 'veiculo' : temSinalMaquina ? 'maquina' : null, assetType: ehImovel ? 'imovel' : kind.assetType,
                 vehicleType: ehImovel ? null : kind.vehicleType,
                 propertyType: ehImovel ? classifyProperty(titulo, 'imovel') : null,
                 closingModel: 'sequencial', auctionStartUtc: conhecido?.auctionStartUtc ?? detalhe.auctionStartUtc, auctionEndUtc: null,
@@ -321,15 +391,16 @@ export async function collectSoleon(
                 auctioneerName: leiloeiro, sellerName: null, sellerType: classifySeller(null) as any,
                 city: cidadeUf ? campos.apararCidade(cidadeUf[1].trim()) || null : null,
                 state: cidadeUf?.[2] ?? null, yard: local, photos: c.foto ? [c.foto] : [],
-                raw: { tenant: host, itemId: c.itemId, lote: c.lote, rotuloValor: c.rotuloValor },
+                raw: { tenant: host, itemId: c.itemId, lote: c.lote, rotuloValor: c.rotuloValor, condition: condicaoDo(c.descricao) },
               });
             }
-            if (!categoria.done) categoria.page++;
+              if (!categoria.done && !eventUrl) categoria.page++;
+              else if (!categoria.done && eventUrl) categoria.page++;
           }
         }
         if (categorias.some((c) => !c.done)) truncated = true;
+        if (truncated) partialReasons.add(`${host}: limite/categoria/paginação parcial`);
 
-        const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
         const alreadyHasMachine = lots.slice(antes).some((lot) => lot.vehicleType === 'maquina');
         if (normalizedHost === 'colodeteleiloes.com.br' && !alreadyHasMachine && lots.length < limit && lots.length - antes < cota) {
           let home;
@@ -380,12 +451,14 @@ export async function collectSoleon(
                     throwIfCancelled();
                     if (lots.length >= limit || lots.length - antes >= cota) { truncated = true; break; }
                     fetched++;
-                    const title = semPartesJudiciais(c.titulo || c.corpo.slice(0, 120));
-                    if (!title || looksLikePart(title) || looksLikeCollectible(title) || !MAQUINA_TITULO.test(title)) { skipped++; continue; }
+                    const title = semPartesJudiciais(c.titulo);
+                    const bemTexto = `${title} ${c.descricao}`;
+                    if (!title || parecePeca(bemTexto) || looksLikeCollectible(bemTexto) || !MAQUINA_TITULO.test(bemTexto)) { skipped++; continue; }
                     const kind = classifyAsset(title, 'maquina');
                     if (kind.assetType === 'outro' || kind.vehicleType !== 'maquina') { skipped++; continue; }
                     const known = conhecidos.get(`${host}:${c.itemId}`);
-                    const detail = !known || !known.auctioneerName ? await lerDetalhe(c.url, attempt, fetch) : { leiloeiro: null, auctionStartUtc: known.auctionStartUtc };
+                    const detail = !known || !known.auctioneerName || !known.auctionStartUtc ? await lerDetalhe(c.url, attempt, fetch) : { leiloeiro: null, auctionStartUtc: known.auctionStartUtc };
+                    if (detail.failure) partialReasons.add(`${host} item/${c.itemId}: ${detail.failure}`);
                     const body = semPartesJudiciais(c.corpo);
                     const location = campos.localDeTexto(body);
                     const maiorLance = /maior\s+lance/i.test(c.rotuloValor ?? '');
@@ -397,7 +470,7 @@ export async function collectSoleon(
                       currentBid: maiorLance ? c.valor : null, minBid: maiorLance ? null : c.valor,
                       auctioneerName: known?.auctioneerName ?? detail.leiloeiro,
                       sellerType: classifySeller(null) as any, city: location?.city ?? null, state: location?.uf ?? null,
-                      photos: c.foto ? [c.foto] : [], raw: { tenant: host, itemId: c.itemId, evento: eventInfo.title, machineSupplement: true },
+                      photos: c.foto ? [c.foto] : [], raw: { tenant: host, itemId: c.itemId, evento: eventInfo.title, machineSupplement: true, condition: condicaoDo(c.descricao) },
                     });
                   }
                   if (pagesSeen.size >= PAGINAS_EVENTO_MAQUINA && nextPages.length) truncated = true;
@@ -419,7 +492,8 @@ export async function collectSoleon(
       if (lots.length >= limit) break;
     }
 
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+    if (lots.length >= limit) partialReasons.add(`limite solicitado (${limit}) atingido; catálogo parcial`);
+    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus, note: partialReasons.size ? [...partialReasons].join('; ') : undefined };
 }
 
 export const soleon: Connector = {
