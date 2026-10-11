@@ -1,3 +1,4 @@
+import * as cheerio from 'cheerio';
 import { fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
@@ -7,6 +8,8 @@ import { CollectionCancellationError, throwIfCancelled } from '../core/collectio
 
 const HOST = 'https://www.leiloesfreire.com.br';
 const DOMAIN = 'leiloesfreire.com.br';
+const MAX_EVENTOS_ATIVOS = 50;
+const MAX_PAGINAS_EVENTO = 20;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 interface Card {
@@ -42,6 +45,31 @@ export function statusDe(v: string): LotStatus {
   if (/vendid|arrematad/.test(t)) return 'vendido';
   if (/encerrad|cancelad/.test(t)) return 'encerrado';
   return 'sem_data';
+}
+
+export function eventosAtivos(html: string): string[] {
+  const $ = cheerio.load(html), out = new Set<string>();
+  $('article.single_product').each((_, el) => {
+    const card = $(el), status = card.find('.leilao_situacao').text().replace(/\s+/g, ' ').trim();
+    if (/encerrad|cancelad|suspens|vendid|arrematad|desert/i.test(status) ||
+        !/aberto|lance|disputa|aguard|agendad|breve/i.test(status)) return;
+    card.find('a[href*="/leilao/"]').each((_, a) => {
+      const url = new URL($(a).attr('href') ?? '', HOST);
+      const match = /^\/leilao\/(\d+)$/.exec(url.pathname);
+      if (url.hostname === new URL(HOST).hostname && match) out.add(`${HOST}/leilao/${match[1]}`);
+    });
+  });
+  return [...out];
+}
+
+function paginasReaisEvento(html: string, eventUrl: string): string[] {
+  const base = new URL(eventUrl), $ = cheerio.load(html), out = new Set<string>();
+  $('a[href*="page="]').each((_, el) => {
+    const url = new URL($(el).attr('href') ?? '', base);
+    const page = Number(url.searchParams.get('page'));
+    if (url.hostname === base.hostname && url.pathname === base.pathname && Number.isInteger(page) && page > 1) out.add(url.href);
+  });
+  return [...out];
 }
 export function relancarCancelamento(error: unknown): void {
   if (error instanceof CollectionCancellationError) throw error;
@@ -100,17 +128,7 @@ export function mapearLote(card: Card, evento: string, dataEvento: Date | null):
   };
 }
 
-export const leiloesfreire: Connector = {
-  def: {
-    id: 'leiloesfreire',
-    name: 'Leilões Freire',
-    platform: 'Leilões Freire Laravel',
-    method: 'html',
-    tier: 3,
-    siteUrl: HOST,
-    notes: 'Listagem /leiloes aponta eventos; página de evento traz cards com foto, título, preço e status.',
-  },
-  async collect({ limit, tenant, observer }): Promise<CollectResult> {
+export async function collectLeiloesFreire({ limit, tenant, observer }: Parameters<Connector['collect']>[0], request: typeof fetchText = fetchText): Promise<CollectResult> {
     normalizarTenantFreire(tenant);
     const lots: CanonicalLot[] = [];
     const vistos = new Set<string>();
@@ -120,7 +138,7 @@ export const leiloesfreire: Connector = {
       let home;
       try {
         throwIfCancelled();
-        home = await fetchText(`${HOST}/leiloes`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+        home = await request(`${HOST}/leiloes`, { headers: { 'user-agent': UA }, gapMs: 1100 });
         throwIfCancelled();
       } catch (error) {
         throwIfCancelled();
@@ -132,36 +150,54 @@ export const leiloesfreire: Connector = {
       httpStatus = home.status;
       if (home.status !== 200) return { lots, fetched, skipped, httpStatus };
 
-      const todosEventos = [...new Set([...home.body.matchAll(/href="https:\/\/www\.leiloesfreire\.com\.br\/leilao\/(\d+)"/g)].map((m) => m[1]))];
-      const eventos = todosEventos.slice(0, 6);
+      const todosEventos = eventosAtivos(home.body);
+      const eventos = todosEventos.slice(0, MAX_EVENTOS_ATIVOS);
       truncated = todosEventos.length > eventos.length;
-      for (const ev of eventos) {
+      for (const eventUrl of eventos) {
         throwIfCancelled();
         if (lots.length >= limit) { truncated = true; break; }
-        let r;
-        try {
-          r = await fetchText(`${HOST}/leilao/${ev}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+        const ev = /\/leilao\/(\d+)$/.exec(eventUrl)?.[1] ?? '';
+        const pages = [eventUrl], pagesSeen = new Set<string>(), signatures = new Set<string>();
+        let dataEvento: Date | null = null;
+        while (pages.length && pagesSeen.size < MAX_PAGINAS_EVENTO) {
           throwIfCancelled();
-        } catch (error) {
-          throwIfCancelled();
-          relancarCancelamento(error);
-          attempt?.failure('network');
-          continue;
+          const url = pages.shift()!;
+          if (pagesSeen.has(url)) continue;
+          pagesSeen.add(url);
+          let r;
+          try {
+            r = await request(url, { headers: { 'user-agent': UA }, gapMs: 1100 });
+            throwIfCancelled();
+          } catch (error) {
+            throwIfCancelled();
+            relancarCancelamento(error);
+            attempt?.failure('network');
+            continue;
+          }
+          attempt?.response(r.status);
+          httpStatus = r.status;
+          if (r.status !== 200) continue;
+          dataEvento ??= dataBr(r.body.match(/\d{2}\/\d{2}\/\d{4}\s+às\s+\d{2}:\d{2}/)?.[0]);
+          const cards = lerCards(r.body), signature = cards.map((card) => card.id).join(',');
+          const nextPages = paginasReaisEvento(r.body, eventUrl);
+          if (signature && signatures.has(signature)) {
+            if (nextPages.some((next) => !pagesSeen.has(next))) truncated = true;
+            break;
+          }
+          if (signature) signatures.add(signature);
+          for (const card of cards) {
+            throwIfCancelled();
+            if (lots.length >= limit) { truncated = true; break; }
+            if (vistos.has(card.id)) continue;
+            vistos.add(card.id);
+            fetched++;
+            const lot = mapearLote(card, ev, dataEvento);
+            if (!lot) { skipped++; continue; }
+            lots.push(lot);
+          }
+          for (const next of nextPages) if (!pagesSeen.has(next)) pages.push(next);
         }
-        attempt?.response(r.status);
-        httpStatus = r.status;
-        if (r.status !== 200) continue;
-        const dataEvento = dataBr(r.body.match(/\d{2}\/\d{2}\/\d{4}\s+às\s+\d{2}:\d{2}/)?.[0]);
-        for (const card of lerCards(r.body)) {
-          throwIfCancelled();
-          if (lots.length >= limit) { truncated = true; break; }
-          if (vistos.has(card.id)) continue;
-          vistos.add(card.id);
-          fetched++;
-          const lot = mapearLote(card, ev, dataEvento);
-          if (!lot) { skipped++; continue; }
-          lots.push(lot);
-        }
+        if (pages.length) truncated = true;
       }
       return { lots, fetched, skipped, httpStatus };
     } catch (error) {
@@ -174,5 +210,17 @@ export const leiloesfreire: Connector = {
     } finally {
       await attempt?.finish({ fetched, skipped, returned: lots.length, truncated });
     }
+}
+
+export const leiloesfreire: Connector = {
+  def: {
+    id: 'leiloesfreire',
+    name: 'Leilões Freire',
+    platform: 'Leilões Freire Laravel',
+    method: 'html',
+    tier: 3,
+    siteUrl: HOST,
+    notes: 'Listagem /leiloes aponta eventos ativos; página de evento traz cards com foto, título, preço e status.',
   },
+  collect: collectLeiloesFreire,
 };

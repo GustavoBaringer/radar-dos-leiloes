@@ -1,0 +1,17 @@
+[Unit]
+Description=Radar dos Leilões tenant collection worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+WorkingDirectory=@RADAR_REPO_ROOT@
+ExecStart=@NODE_ABSOLUTE_PATH@ --env-file=.env --import tsx src/queue/tenant-worker.ts
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=700s
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

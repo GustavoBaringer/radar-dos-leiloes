@@ -1,4 +1,5 @@
 import { rotateTenants } from './tenant-rotation.js';
+import { isIP } from 'node:net';
 /**
  * Plataforma **Sua Plataforma de Leilão** — white-label ASP.NET atrás de
  * Cloudflare, servindo dezenas de leiloeiros com o mesmo contrato.
@@ -12,11 +13,13 @@ import { rotateTenants } from './tenant-rotation.js';
  * não documentada muda sem aviso — por isso o conector checa a forma da
  * resposta em vez de confiar nela.
  */
-import { fetchJson } from './http.js';
+import { fetchJson, type FetchOpts } from './http.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
 import * as campos from '../core/campos.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import type { CollectOptions } from './types.js';
 
 const PAGINA = 200;
 
@@ -199,17 +202,107 @@ function mapLot(l: any, host: string): CanonicalLot | null {
 }
 
 /** Tenants: os domínios que a descoberta marcou como desta plataforma. */
-async function tenants(limite: number): Promise<string[]> {
+function raizDomain(value: string): string {
+  if (typeof value !== 'string' || !value || value.length > 253 || /[^\x21-\x7e]/.test(value) || /[/:@?#\\]/.test(value)) {
+    throw new Error('Invalid tenant domain');
+  }
+  const host = value.replace(/\.$/, '').toLowerCase().replace(/^www\./, '');
+  if (!host || isIP(host) || !host.includes('.') || host.split('.').some((label) =>
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) throw new Error('Invalid tenant domain');
+  return host;
+}
+
+async function tenants(limite: number, tenant: string | undefined, lookup: (sql: string, params?: any[]) => Promise<any[]>): Promise<string[]> {
+  const requestedRoot = tenant === undefined ? undefined : raizDomain(tenant);
   const explicitos = String(process.env.SUAPLATAFORMA_DOMAINS ?? '').trim();
-  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((d) => d.startsWith('www.') ? d : `www.${d}`);
-  const rows = await query<{ domain: string }>(
+  const rows = explicitos
+    ? explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((domain) => ({ domain }))
+    : await lookup(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'sua-plataforma' AND http_status = 200
       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
   // O host serve em www.; o domínio pelado devolve 301, e POST que segue
   // redirect degrada para GET — a resposta viria 200 e vazia.
-  return rotateTenants(rows.map((r) => (r.domain.startsWith('www.') ? r.domain : `www.${r.domain}`)), limite);
+  const population = rows.map((r) => `www.${raizDomain(r.domain)}`);
+  if (requestedRoot !== undefined) {
+    const match = population.find((host) => raizDomain(host) === requestedRoot);
+    if (!match) throw new Error(`single-tenant '${tenant}' fora da população elegível de suaplataforma`);
+    return [match];
+  }
+  return rotateTenants(population, limite);
+}
+
+export async function collectSuaPlataforma(
+  { limit, assetTypes, observer, tenant }: CollectOptions,
+  io: {
+    fetchJson: (url: string, opts?: FetchOpts) => Promise<{ status: number; data: any; raw: string }>;
+    query: (sql: string, params?: any[]) => Promise<any[]>;
+  } = { fetchJson, query },
+): Promise<CollectResult> {
+  const lots: CanonicalLot[] = [];
+  let fetched = 0;
+  let skipped = 0;
+  let httpStatus = 0;
+
+  for (const host of await tenants(Number(process.env.SUAPLATAFORMA_TENANTS ?? 40), tenant, io.query)) {
+    if (lots.length >= limit) break;
+    const attempt = await observer?.start(raizDomain(host));
+    const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
+    let truncated = false;
+    try {
+      for (let pagina = 1; pagina <= 40; pagina++) {
+        throwIfCancelled();
+        if (lots.length >= limit) { truncated = true; break; }
+        let r;
+        try {
+          r = await io.fetchJson(`https://${host}/ApiEngine/GetLotes/${pagina}/${PAGINA}`, {
+            method: 'POST', gapMs: 1100, timeoutMs: 60000,
+            headers: { 'content-type': 'application/json', referer: `https://${host}/busca` }, body: '{}',
+          });
+        } catch (error) {
+          if (error instanceof CollectionCancellationError) throw error;
+          throwIfCancelled();
+          attempt?.failure('network');
+          break;
+        }
+        attempt?.response(r.status);
+        httpStatus = r.status;
+        if (r.status !== 200) break;
+        const data = r.data;
+        if (!data || !Array.isArray(data.Lotes) || !Number.isSafeInteger(data.CountTotal) || data.CountTotal < 0) {
+          attempt?.failure('parser');
+          break;
+        }
+        const itens: any[] = data.Lotes;
+        if (!itens.length) break;
+        fetched += itens.length;
+
+        let ativosNaPagina = 0;
+        for (const it of itens) {
+          throwIfCancelled();
+          if (lots.length >= limit) { truncated = true; break; }
+          const ativo = ATIVOS.has(statusDe(String(it?.GetLoteRealTime?.[0]?.Lote_SubStatus_Label ?? '')));
+          if (ativo) ativosNaPagina++;
+          const m = mapLot(it, host);
+          if (m && (!assetTypes || assetTypes.includes(m.assetType as string))) lots.push(m);
+          else skipped++;
+        }
+        if (truncated) break;
+        if (lots.length >= limit) { truncated = true; break; }
+        // ponytail: assumes active lots sort before terminal lots; full history scans need an API sort/filter contract.
+        if (!ativosNaPagina || itens.length < PAGINA) break;
+        if (pagina === 40 && pagina * PAGINA < data.CountTotal) truncated = true;
+      }
+    } catch (error) {
+      if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+      else attempt?.failure('parser');
+      throw error;
+    } finally {
+      await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
+    }
+  }
+  return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
 }
 
 export const suaplataforma: Connector = {
@@ -224,56 +317,5 @@ export const suaplataforma: Connector = {
       'White-label multi-tenant. POST /ApiEngine/GetLotes/{pagina}/{qtd}. Ativos vêm primeiro: para de paginar na primeira página sem ativo. GetBusca responde 200 vazio.',
   },
 
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
-    const lots: CanonicalLot[] = [];
-    let fetched = 0;
-    let skipped = 0;
-    let status = 0;
-
-    for (const host of await tenants(Number(process.env.SUAPLATAFORMA_TENANTS ?? 40))) {
-      if (lots.length >= limit) break;
-
-      for (let pagina = 1; pagina <= 40; pagina++) {
-        if (lots.length >= limit) break;
-        let r;
-        try {
-          r = await fetchJson<any>(`https://${host}/ApiEngine/GetLotes/${pagina}/${PAGINA}`, {
-            method: 'POST',
-            gapMs: 1100,
-            timeoutMs: 60000,
-            headers: { 'content-type': 'application/json', referer: `https://${host}/busca` },
-            body: '{}',
-          });
-        } catch {
-          break;
-        }
-        status = r.status;
-        const itens: any[] = r.data?.Lotes ?? [];
-        // 200 com corpo vazio é a resposta de tenant morto nesta plataforma —
-        // o código HTTP não denuncia, só a forma do corpo.
-        if (r.status !== 200 || !Array.isArray(itens) || !itens.length) break;
-        fetched += itens.length;
-
-        let ativosNaPagina = 0;
-        for (const it of itens) {
-          if (lots.length >= limit) break;
-          const ativo = ATIVOS.has(statusDe(String(it?.GetLoteRealTime?.[0]?.Lote_SubStatus_Label ?? '')));
-          if (ativo) ativosNaPagina++;
-          const m = mapLot(it, host);
-          if (m && (!assetTypes || assetTypes.includes(m.assetType as string))) lots.push(m);
-          else skipped++;
-        }
-
-        // MEDIDO: a listagem vem ordenada com os ativos primeiro (página 1 só
-        // com aberto/aguardando, página 5 já toda arrematada). Parar na
-        // primeira página sem nenhum ativo troca 39 requisições por tenant por
-        // 2 a 4 — o catálogo histórico do maior tenant tem 7.625 lotes e 95%
-        // deles é encerrado que seria descartado no mapeamento.
-        if (!ativosNaPagina) break;
-        if (itens.length < PAGINA) break;
-      }
-    }
-
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status };
-  },
+  async collect(opts): Promise<CollectResult> { return collectSuaPlataforma(opts); },
 };

@@ -12,7 +12,7 @@ import { consultaFreio } from '../core/freio.js';
 import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
 import { refreshBatch } from './refresh-batch.js';
-import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, registerTenantSchedulers, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
+import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
 import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
 import {
   executeCollection,
@@ -511,12 +511,6 @@ async function agendar(
   }
 }
 
-export async function registerTenantSchedules(queue: Queue = collectQueue) {
-  const enabled = await query<{ id: string }>(`SELECT id FROM sources WHERE enabled = true`);
-  const allowed = new Set(enabled.map((x) => x.id).filter(enabledSource));
-  await registerTenantSchedulers(queue as any, 'America/Sao_Paulo', allowed, DEPLOY.sourceTimeouts);
-}
-
 /** Reagenda as três filas (idempotente). Chamado só por `createWorkerHub().start()`. */
 async function agendarTudo() {
   // Agenda: coleta completa 3x/dia por fonte, refresh de lote quente a cada 2 min.
@@ -630,7 +624,6 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       );
 
       await agendarTudo();
-      await registerTenantSchedules();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
     },

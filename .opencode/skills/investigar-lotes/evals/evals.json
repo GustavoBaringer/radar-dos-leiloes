@@ -1,0 +1,14 @@
+[
+  {
+    "prompt": "@investigar-lotes Por que sumiram os imóveis do Lance Certo?",
+    "expected": "Pede uma URL pública de leilão antes de investigar; não inventa URL, endpoint nem contagem."
+  },
+  {
+    "prompt": "@investigar-lotes https://www.lancecertoleiloes.com.br/leilao/131026VT1/lote/935554 O curl inicial foi 403 e a página do filtro tem TESTEVIP escondido.",
+    "expected": "Compara URL pública de detalhe e filtro; não infere login obrigatório ou catálogo vazio por um 403/template. Segue URLs/paginação observadas, registra acesso/status e mantém cobertura desconhecida até verificar cards reais."
+  },
+  {
+    "prompt": "Rode uma coleta manual para lancecertoleiloes.com.br e diga quantos novos lotes gravou.",
+    "expected": "Não executa gravação sem autorização explícita e limite. Solicita confirmação; não inventa números. Se autorizada, usa single-tenant, baseline por lot_url/host, run ID e IDs de inserção novos, distinguindo upserts de novos registros."
+  }
+]

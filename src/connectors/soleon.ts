@@ -3,7 +3,7 @@ import { fetchText } from './http.js';
 import type { Connector, CollectOptions, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
-import { parseTitle, classifyAsset, classifyProperty, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifyAsset, classifyProperty, classifySeller, looksLikeCollectible, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
@@ -29,7 +29,11 @@ import { CollectionCancellationError, throwIfCancelled } from '../core/collectio
  */
 
 const LOTES_POR_PAGINA = 30;
+const EVENTOS_MAQUINAS_POR_TENANT = 5;
+const PAGINAS_EVENTO_MAQUINA = 20;
 export const ROTAS_CATEGORIAS = ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel'] as const;
+
+const MAQUINA_TITULO = /\b(compressor(?:es)?|m[aá]quina(?:s)?|equipamento(?:s)? industriais?|gerador(?:es)?|transformador(?:es)?|caldeira(?:s)?|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|carregadeira|betoneira|trator(?:es)?)\b/i;
 
 /** Remove o bloco judicial: são nomes de pessoas físicas, não do produto. */
 function semPartesJudiciais(texto: string): string {
@@ -76,7 +80,8 @@ export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
 
     // Layout A usa <img>; layout B esconde a foto no style do link.
     const style = $c.find('a[style*="background"]').first().attr('style') ?? '';
-    const foto = $c.find('.image-lote img').attr('src') ?? style.match(/url\(['"]?([^'")]+)/)?.[1] ?? null;
+    const fotoRaw = $c.find('.image-lote img').attr('src') ?? style.match(/url\(['"]?([^'")]+)/)?.[1] ?? null;
+    const foto = fotoRaw && !/sem-imagem-lote/i.test(fotoRaw) ? fotoRaw : null;
 
     // A descrição é texto operacional/jurídico em muitos tenants (inclusive
     // Bidmax); só a use quando o h5 for a categoria genérica do bem.
@@ -123,6 +128,32 @@ export function assinaturaPagina(cards: Card[]): string {
   return cards.map((card) => card.itemId).join(',');
 }
 
+function eventosDeMaquinas(html: string, host: string): Array<{ url: string; title: string }> {
+  const $ = cheerio.load(html), out = new Map<string, string>();
+  $('.box-leilao').each((_, el) => {
+    const card = $(el);
+    const status = card.find('.label_leilao').text().replace(/\s+/g, ' ').trim();
+    if (/encerrad|cancelad|suspens|finaliz|vendid/i.test(status) || !/andamento|aberto|aguard|agendad|breve/i.test(status)) return;
+    const title = card.find('.card-title').first().text().replace(/\s+/g, ' ').trim();
+    if (!MAQUINA_TITULO.test(`${title} ${card.find('.card-text').text()}`)) return;
+    const href = card.find('a[href*="/leilao/"][href*="/lotes"]').first().attr('href');
+    if (!href) return;
+    const url = new URL(href, `https://${host}`);
+    if (url.hostname.replace(/^www\./, '') === host.replace(/^www\./, '') && /\/leilao\/\d+\/lotes$/.test(url.pathname)) out.set(url.href, title);
+  });
+  return [...out].map(([url, title]) => ({ url, title }));
+}
+
+function paginasReaisDoEvento(html: string, eventUrl: string): string[] {
+  const base = new URL(eventUrl), $ = cheerio.load(html), out = new Set<string>();
+  $('a[href*="page="]').each((_, el) => {
+    const url = new URL($(el).attr('href') ?? '', base);
+    const page = Number(url.searchParams.get('page'));
+    if (url.hostname === base.hostname && url.pathname === base.pathname && Number.isInteger(page) && page > 1) out.add(url.href);
+  });
+  return [...out];
+}
+
 export function dataLeilaoUtc(texto: string): Date | null {
   const data = texto.match(/Leil[aã]o:\s*(\d{2})\/(\d{2})\/(\d{4})\s*[àa]s\s*(\d{1,2}):(\d{2})/i);
   if (!data) return null;
@@ -141,16 +172,26 @@ async function tenants(limitTenants: number, tenant?: string, lookup: typeof que
     if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população explícita de SOLEON_DOMAINS`);
     return apenas;
   }
+  // Modo tenant explícito: o operador pediu este domínio; coleta mesmo
+  // com has_lots=false (a bandeira pode estar desatualizada). Basta
+  // ser um site soleon conhecido.
+  if (tenant) {
+    const alvo = tenant.replace(/^www\./, '').replace(/\.$/, '').toLowerCase();
+    const rows = await lookup<{ domain: string }>(
+      `SELECT domain FROM discovered_sites
+        WHERE platform = 'soleon'
+          AND lower(regexp_replace(domain,'^www\.','')) = $1`,
+      [alvo],
+    );
+    if (!rows.length) throw new Error(`single-tenant '${tenant}' não é site soleon conhecido`);
+    return [tenant];
+  }
   const rows = await lookup<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE platform = 'soleon' AND http_status = 200 AND has_lots IS NOT FALSE
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  const escolhidos = await dueTenants({ sourceId: 'soleon', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limitTenants, track: process.env.TENANT_LEDGER_ENABLED === '1' });
-  if (!tenant) return escolhidos;
-  const apenas = filterTenantPopulation(escolhidos, tenant);
-  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de soleon`);
-  return apenas;
+  return dueTenants({ sourceId: 'soleon', candidates: rows.map((r) => r.domain), limit: limitTenants, track: process.env.TENANT_LEDGER_ENABLED === '1' });
 }
 
 /**
@@ -244,11 +285,13 @@ export async function collectSoleon(
               const c = cards[i];
               if (lots.length - antes >= cota || lots.length >= limit) { truncated = true; break; }
               const titulo = semPartesJudiciais(c.titulo || c.corpo.slice(0, 120));
-              if (!titulo || looksLikePart(titulo)) { skipped++; continue; }
+              if (!titulo || looksLikePart(titulo) || looksLikeCollectible(titulo)) { skipped++; continue; }
               const corpo = semPartesJudiciais(c.corpo);
               const parsed = parseTitle(titulo);
-              const kind = classifyAsset(titulo, categoria.path.includes('/imovel') ? 'imovel' : null);
-              const ehImovel = kind.assetType === 'imovel' || categoria.path.includes('/imovel');
+              const temSinalMaquina = MAQUINA_TITULO.test(titulo);
+              const kind = classifyAsset(titulo, temSinalMaquina ? 'maquina' : categoria.path.includes('/imovel') ? 'imovel' : null);
+              if (kind.assetType === 'outro') { skipped++; continue; }
+              const ehImovel = !temSinalMaquina && (kind.assetType === 'imovel' || categoria.path.includes('/imovel'));
               const posLocal = corpo.search(/Local de Exposi[çc][ãa]o/i);
               const janela = posLocal >= 0 ? corpo.slice(posLocal, posLocal + 200) : '';
               const CORTE_UI = /\s*(Aguarde|Aberto para|Encerrad|Lance Inicial|Maior Lance|Detalhes do Lote|Acompanhe ao Vivo)/i;
@@ -269,7 +312,8 @@ export async function collectSoleon(
                 km: ehImovel ? null : km, color: ehImovel ? null : corpo.match(/\bCOR\s+([A-Za-zÀ-ú]+)/i)?.[1] ?? null,
                 fuel: ehImovel ? null : corpo.match(/\b(diesel|flex|gasolina|[áa]lcool|el[ée]trico|h[íi]brido)\b/i)?.[1] ?? null,
                 docType: /judicial|processo/i.test(corpo) ? 'judicial' : null,
-                sourceCategory: ehImovel ? 'imovel' : 'veiculo', assetType: ehImovel ? 'imovel' : 'veiculo',
+                sourceCategory: ehImovel ? 'imovel' : temSinalMaquina ? null : 'veiculo', assetType: ehImovel ? 'imovel' : kind.assetType,
+                vehicleType: ehImovel ? null : kind.vehicleType,
                 propertyType: ehImovel ? classifyProperty(titulo, 'imovel') : null,
                 closingModel: 'sequencial', auctionStartUtc: conhecido?.auctionStartUtc ?? detalhe.auctionStartUtc, auctionEndUtc: null,
                 sourceTz: 'America/Sao_Paulo', status: c.status,
@@ -284,6 +328,86 @@ export async function collectSoleon(
           }
         }
         if (categorias.some((c) => !c.done)) truncated = true;
+
+        const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+        const alreadyHasMachine = lots.slice(antes).some((lot) => lot.vehicleType === 'maquina');
+        if (normalizedHost === 'colodeteleiloes.com.br' && !alreadyHasMachine && lots.length < limit && lots.length - antes < cota) {
+          let home;
+          try {
+            throwIfCancelled();
+            home = await fetch(`https://${host}/`, { gapMs: 1100 });
+            throwIfCancelled();
+          } catch (error) {
+            throwIfCancelled();
+            attempt?.failure('network');
+          }
+          if (home) {
+            attempt?.response(home.status);
+            httpStatus = home.status;
+            if (home.status === 200) {
+              const allEvents = eventosDeMaquinas(home.body, host);
+              const machineEvents = allEvents.slice(0, EVENTOS_MAQUINAS_POR_TENANT);
+              if (allEvents.length > machineEvents.length) truncated = true;
+              for (const eventInfo of machineEvents) {
+                if (lots.length >= limit || lots.length - antes >= cota) { truncated = true; break; }
+                const pages = [eventInfo.url], pagesSeen = new Set<string>(), pageSigs = new Set<string>();
+                while (pages.length && pagesSeen.size < PAGINAS_EVENTO_MAQUINA) {
+                  throwIfCancelled();
+                  const pageUrl = pages.shift()!;
+                  if (pagesSeen.has(pageUrl)) continue;
+                  pagesSeen.add(pageUrl);
+                  let res;
+                  try {
+                    res = await fetch(pageUrl, { gapMs: 1100 });
+                    throwIfCancelled();
+                  } catch (error) {
+                    throwIfCancelled();
+                    attempt?.failure('network');
+                    continue;
+                  }
+                  attempt?.response(res.status);
+                  httpStatus = res.status;
+                  if (res.status !== 200) continue;
+                  const pageCards = lerCards(cheerio.load(res.body), host);
+                  const sig = assinaturaPagina(pageCards);
+                  const nextPages = paginasReaisDoEvento(res.body, pageUrl);
+                  if (sig && pageSigs.has(sig)) {
+                    if (nextPages.some((next) => !pagesSeen.has(next))) truncated = true;
+                    break;
+                  }
+                  if (sig) pageSigs.add(sig);
+                  for (const c of novosCards(pageCards, vistos)) {
+                    throwIfCancelled();
+                    if (lots.length >= limit || lots.length - antes >= cota) { truncated = true; break; }
+                    fetched++;
+                    const title = semPartesJudiciais(c.titulo || c.corpo.slice(0, 120));
+                    if (!title || looksLikePart(title) || looksLikeCollectible(title) || !MAQUINA_TITULO.test(title)) { skipped++; continue; }
+                    const kind = classifyAsset(title, 'maquina');
+                    if (kind.assetType === 'outro' || kind.vehicleType !== 'maquina') { skipped++; continue; }
+                    const known = conhecidos.get(`${host}:${c.itemId}`);
+                    const detail = !known || !known.auctioneerName ? await lerDetalhe(c.url, attempt, fetch) : { leiloeiro: null, auctionStartUtc: known.auctionStartUtc };
+                    const body = semPartesJudiciais(c.corpo);
+                    const location = campos.localDeTexto(body);
+                    const maiorLance = /maior\s+lance/i.test(c.rotuloValor ?? '');
+                    lots.push({
+                      sourceId: 'soleon', externalId: `${host}:${c.itemId}`, lotUrl: c.url, titleRaw: title,
+                      sourceCategory: null, assetType: kind.assetType, vehicleType: kind.vehicleType,
+                      closingModel: 'sequencial', auctionStartUtc: known?.auctionStartUtc ?? detail.auctionStartUtc, auctionEndUtc: null,
+                      sourceTz: 'America/Sao_Paulo', status: c.status,
+                      currentBid: maiorLance ? c.valor : null, minBid: maiorLance ? null : c.valor,
+                      auctioneerName: known?.auctioneerName ?? detail.leiloeiro,
+                      sellerType: classifySeller(null) as any, city: location?.city ?? null, state: location?.uf ?? null,
+                      photos: c.foto ? [c.foto] : [], raw: { tenant: host, itemId: c.itemId, evento: eventInfo.title, machineSupplement: true },
+                    });
+                  }
+                  if (pagesSeen.size >= PAGINAS_EVENTO_MAQUINA && nextPages.length) truncated = true;
+                  for (const next of nextPages) if (!pagesSeen.has(next)) pages.push(next);
+                }
+                if (pages.length) truncated = true;
+              }
+            }
+          }
+        }
         if (lots.length >= limit) truncated = true;
       } catch (error) {
         if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');

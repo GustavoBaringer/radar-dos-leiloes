@@ -3,6 +3,7 @@ import { Redis, type RedisOptions } from 'ioredis';
 
 export const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6380';
 export const QUEUE_COLLECT = 'collect';
+export const QUEUE_COLLECT_TENANT = 'collect-tenant';
 export const QUEUE_REFRESH = 'refresh';
 export const QUEUE_DISCOVER = 'discover';
 export const CHANNEL_UPDATES = 'lot-updates';
@@ -40,6 +41,10 @@ export function makeWsRedis(url: string) {
 
 export function createCollectQueue(connection: Redis = makeRedis()) {
   return new Queue<CollectJob>(QUEUE_COLLECT, { connection });
+}
+
+export function createTenantCollectQueue(connection: Redis = makeRedis()) {
+  return new Queue<CollectJob>(QUEUE_COLLECT_TENANT, { connection, defaultJobOptions: { attempts: 1 } });
 }
 
 export function makeEvents(name: string) {

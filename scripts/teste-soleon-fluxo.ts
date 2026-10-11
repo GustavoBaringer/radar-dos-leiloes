@@ -102,6 +102,85 @@ try {
   assert.equal(quotaLog.attempts[1].host, 'quota-b.soleon.test', 'collection advances to the next tenant');
   assert.ok(quotaCalls.some((url) => url.startsWith('https://quota-b.soleon.test/')), 'next tenant is actually requested');
   assert.equal(quotaResult.lots.length, 130);
+
+  // Colodete's active homepage links an equipment-only event not present in the two global categories.
+  process.env.SOLEON_DOMAINS = 'colodeteleiloes.com.br';
+  const equipmentHost = 'colodeteleiloes.com.br';
+  const root = `<html><div class="box-leilao"><a href="https://${equipmentHost}/leilao/1715/lotes"><h6 class="card-title">Leilão Justiça do Trabalho - Spin</h6></a><div class="ativo label_leilao">Em Andamento</div><div class="card-text">Veículo Chevrolet Spin</div></div>
+  <div class="box-leilao"><a href="https://${equipmentHost}/leilao/1716/lotes"><h6 class="card-title">Leilão Justiça do Trabalho - Compressor Industrial</h6></a><div class="ativo label_leilao">Em Andamento</div><div class="card-text">Compressor Industrial</div></div>
+  <div class="box-leilao"><a href="https://${equipmentHost}/leilao/1600/lotes"><h6 class="card-title">Compressor antigo</h6></a><div class="label_leilao">Encerrado</div></div></html>`;
+  const equipmentCard = `<div class="lote"><h4>Lote 001</h4><a href="/item/14157/detalhes?page=1" style="background:url('https://colodeteleiloes.com.br/site/images/sem-imagem-lote.jpg')"></a>
+  <h5>COMPRESSOR INDUSTRIAL</h5><div style="text-align: justify !important"><b>Descrição:</b> Compressor Wayne, 25 pés, reservatório 250 litros.</div>
+  <div class="label_lote aguarde_abertura">Aguarde Abertura</div><div class="etiqueta">Lance Inicial</div><h4>R$6.000,00</h4></div>`;
+  const equipmentCalls: string[] = [];
+  const detailDates = new Date('2026-11-17T17:00:00Z');
+  const equipmentIo = {
+    query: fakeQuery([]),
+    fetchText: (async (url: string) => {
+      equipmentCalls.push(url);
+      const parsed = new URL(url);
+      if (parsed.pathname === '/') return result(root);
+      if (parsed.pathname.includes('/lotes/veiculo')) return result(card(14156, 'CHEVROLET SPIN'));
+      if (parsed.pathname.includes('/lotes/imovel')) return result('');
+      if (parsed.pathname === '/leilao/1716/lotes') return result(equipmentCard + card(14156, 'CHEVROLET SPIN'));
+      if (parsed.pathname === '/item/14156/detalhes' || parsed.pathname === '/item/14157/detalhes') {
+        return result('<meta property="og:description" content="Leilão:17/11/2026 às14:00"><h5>LEILOEIRO OFICIAL</h5>Mauro Colodete<br>');
+      }
+      throw new Error(`unexpected equipment request ${url}`);
+    }) as any,
+  };
+  const equipmentFirst = await collectSoleon({ limit: 100 }, equipmentIo);
+  const compressor = equipmentFirst.lots.find((lot) => lot.externalId === `${equipmentHost}:14157`);
+  assert.ok(compressor, 'home -> active event 1716 -> item 14157 is collected');
+  assert.equal(compressor.assetType, 'veiculo');
+  assert.equal(compressor.vehicleType, 'maquina');
+  assert.equal(compressor.status, 'agendado');
+  assert.equal(compressor.auctionStartUtc?.toISOString(), '2026-11-17T17:00:00.000Z');
+  assert.deepEqual(compressor.photos, [], 'sem-imagem-lote placeholder is not emitted as a lot photo');
+  assert.equal(equipmentFirst.lots.filter((lot) => lot.externalId === `${equipmentHost}:14156`).length, 1,
+    'overlap between global and event listings is deduplicated');
+  assert.ok(!equipmentCalls.some((url) => url.includes('/leilao/1715/lotes') || url.includes('/leilao/1600/lotes')),
+    'non-equipment and ended events are not fetched for the targeted supplement');
+  assert.equal(equipmentCalls.filter((url) => url.includes('/item/')).length, 2);
+
+  const equipmentKnown = [14156, 14157].map((id) => lotRow(`${equipmentHost}:${id}`, detailDates));
+  let repeatDetailCalls = 0;
+  const equipmentRepeatIo = {
+    query: fakeQuery(equipmentKnown),
+    fetchText: (async (url: string) => {
+      if (url.includes('/item/')) repeatDetailCalls++;
+      if (url.endsWith('/')) return result(root);
+      const parsed = new URL(url);
+      if (parsed.pathname.includes('/lotes/veiculo')) return result(card(14156, 'CHEVROLET SPIN'));
+      if (parsed.pathname.includes('/lotes/imovel')) return result('');
+      if (parsed.pathname === '/leilao/1716/lotes') return result(equipmentCard + card(14156, 'CHEVROLET SPIN'));
+      throw new Error(`unexpected repeated equipment request ${url}`);
+    }) as any,
+  };
+  const equipmentRepeat = await collectSoleon({ limit: 100 }, equipmentRepeatIo);
+  assert.equal(repeatDetailCalls, 0, 'known name/date metadata prevents per-item detail refetch on recurrence');
+  assert.equal(equipmentRepeat.lots.find((lot) => lot.externalId === `${equipmentHost}:14157`)?.vehicleType, 'maquina');
+
+  const equipmentAbort = new AbortController();
+  const machineAbortLog = observerLog();
+  const abortMachineIo = {
+    query: fakeQuery([]),
+    fetchText: (async (url: string) => {
+      const parsed = new URL(url);
+      if (parsed.pathname.includes('/lotes/veiculo') || parsed.pathname.includes('/lotes/imovel')) return result('');
+      if (parsed.pathname === '/') return result(root);
+      if (parsed.pathname === '/leilao/1716/lotes') {
+        const error = new CollectionCancellationError('deadline');
+        equipmentAbort.abort(error);
+        throw error;
+      }
+      throw new Error(`request after cancellation: ${url}`);
+    }) as any,
+  };
+  await assert.rejects(withCollectionCancellation({ signal: equipmentAbort.signal }, () =>
+    collectSoleon({ limit: 100, observer: machineAbortLog.observer }, abortMachineIo)), CollectionCancellationError);
+  assert.deepEqual(machineAbortLog.attempts[0].failures, ['budget']);
+  assert.ok(machineAbortLog.attempts[0].finish, 'supplement cancellation still finalizes the tenant attempt');
   console.log('SOLEON fluxo: repetição, sobreposição, cache, cancelamento e cota OK');
 } finally {
   if (originalDomains === undefined) delete process.env.SOLEON_DOMAINS; else process.env.SOLEON_DOMAINS = originalDomains;

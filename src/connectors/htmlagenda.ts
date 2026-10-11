@@ -13,7 +13,8 @@ const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos
 const ESCOPO = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|sala|loja|fazenda|rural|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento|sucata/i;
 const ESCOPO_ASP = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|fazenda|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento/i;
 const FORA_ESCOPO = /numism[aá]tica|filatelia|cart[õo]es?\s+postais|eucalol|brinquedos?|colecion[aá]veis|porcelana|moedas?/i;
-const REVIEWED_TENANTS = ['c3leiloes.com.br', 'leiloescostaesilva.com.br', 'tbaracajuleiloes.com.br'];
+const MONITORED_ONLY = ['coliseumleiloes.com.br', 'leiloesbrasilpe.com.br', 'albuquerqueleiloes.com.br', 'ghvmleiloes.com.br', 'portaldosleiloes.com.br'];
+const REVIEWED_TENANTS = ['c3leiloes.com.br', 'leiloescostaesilva.com.br', 'tbaracajuleiloes.com.br', ...MONITORED_ONLY];
 const BLOCKED = /sistema indispon[ií]vel|acesso negado|access denied|captcha|verifica[cç][aã]o de seguran[cç]a/i;
 
 export function isBlockedPage(body: string): boolean { return BLOCKED.test(texto(body)); }
@@ -219,6 +220,96 @@ async function loteDeUrl(host: string, url: string, observer?: import('../core/t
   };
 }
 
+type HtmlAgendaFetch = typeof fetchText;
+
+/** Domains with useful health signals but no reviewed lot-publication contract. */
+export function isMonitorOnlyDomain(domain: string): boolean {
+  return MONITORED_ONLY.includes(domain.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase());
+}
+
+export async function collectHtmlAgendaMonitor(host: string, attempt: import('../core/tenant-attempts.js').TenantAttempt | undefined, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
+  let fetched = 0, skipped = 0, httpStatus = 0;
+  let failureMarked = false;
+  const fail = (kind: 'network' | 'parser' | 'budget') => { failureMarked = true; attempt?.failure(kind); };
+  const base = `https://${host}`;
+  const get = async (path: string) => {
+    let r;
+    try { r = await fetcher(`${base}${path}`, { headers: { 'user-agent': UA }, gapMs: 900 }); }
+    catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
+      fail('network');
+      throw error;
+    }
+    httpStatus = r.status;
+    attempt?.response(r.status);
+    if (r.status !== 200) throw new Error(`HTMLAGENDA monitor ${host}: HTTP ${r.status} em ${path}`);
+    if (isBlockedPage(r.body)) {
+      fail('parser');
+      throw blockedPageError(r.status);
+    }
+    return r.body;
+  };
+  try {
+    if (host === 'albuquerqueleiloes.com.br') await get('/');
+    else if (host === 'ghvmleiloes.com.br') {
+      const html = await get('/');
+      const $ = cheerio.load(html);
+      const publicTargets = $('a[href]').toArray().map((a) => $(a).attr('href') ?? '')
+        .filter((href) => /leil|lote/i.test(href) && !/rss|feed/i.test(href));
+      if (!publicTargets.length) {
+        throw new Error('HTMLAGENDA monitor ghvmleiloes.com.br: vínculo de catálogo GHVM não confirmado');
+      }
+      throw new Error('HTMLAGENDA monitor ghvmleiloes.com.br: contrato de catálogo público pendente de revisão');
+    } else if (host === 'portaldosleiloes.com.br') {
+      const home = await get('/');
+      let body = home;
+      // Only the known public listing route is inspected; no lots are ever published for this tenant.
+      if (!/lei-?lote|lotes|nenhum lote/i.test(texto(home))) body = `${home} ${await get('/lotes')}`;
+      const $ = cheerio.load(body);
+      const observed = new Set<string>();
+      $('a[href]').each((_, a) => {
+        const href = $(a).attr('href') ?? '';
+        if (/lei-?lote|\/lotes?\//i.test(href) && !/demo|modelo|juce000/i.test(`${href} ${$(a).text()}`)) observed.add(href);
+      });
+      const badges = texto(body).match(/\b\d+\s+(?:lei-?lotes?|lotes?)\b/gi) ?? [];
+      fetched = observed.size + badges.length;
+      skipped = fetched;
+    } else if (host === 'coliseumleiloes.com.br') {
+      await get('/');
+      const pages = await Promise.all([
+        get('/agenda/site/agenda-leiloes.php?tipoLeilao=1'),
+        get('/agenda/site/agenda-leiloes.php?tipoLeilao=3'),
+      ]);
+      for (const body of pages) {
+        if (/\/lotes?\//i.test(body) && !/EM\s*LOTEAMENTO\s*\(\s*Aguarde\s+os\s+lotes/i.test(texto(body))) {
+          throw new Error('HTMLAGENDA monitor coliseumleiloes.com.br: links de lotes encontrados, contrato pendente de revisão');
+        }
+        if (!/EM\s*LOTEAMENTO\s*\(\s*Aguarde\s+os\s+lotes|nenhum (?:lote|bem)|sem lotes/i.test(texto(body))) {
+          throw new Error('HTMLAGENDA monitor coliseumleiloes.com.br: status público de lotes não reconhecido');
+        }
+      }
+    } else if (host === 'leiloesbrasilpe.com.br') {
+      const home = await get('/');
+      const $ = cheerio.load(home);
+      const href = $('a[href]').toArray().map((a) => $(a).attr('href') ?? '')
+        .find((value) => /^\/leilao\/\d+\/?$/i.test(value));
+      const paths = [...new Set(['/leiloes', '/leilao/3', ...(href ? [href] : [])])].slice(0, 3);
+      const pages = await Promise.all(paths.map(get));
+      const combined = texto(pages.join(' '));
+      if (!/nenhum bem cadastrado|\bEM\s+BREVE\b/i.test(combined)) {
+        throw new Error('HTMLAGENDA monitor leiloesbrasilpe.com.br: catálogo de bens ainda sem contrato confirmado');
+      }
+    }
+    return { lots: [], fetched, skipped, httpStatus, note: 'Monitoramento sem publicação: contrato de lotes não revisado.' };
+  } catch (error) {
+    if (!failureMarked && error instanceof CollectionCancellationError) fail(error.kind === 'deadline' ? 'budget' : 'network');
+    else if (!failureMarked && !/HTTP \d+/.test(error instanceof Error ? error.message : '')) fail('parser');
+    throw error;
+  } finally {
+    await attempt?.finish({ fetched, skipped, returned: 0 });
+  }
+}
+
 export const htmlagenda: Connector = {
   def: { id: 'htmlagenda', name: 'HTML Agenda Genérico', platform: 'HTML Agenda', method: 'html', tier: 5, siteUrl: 'https://sites-de-leiloeiros', notes: 'Conector conservador para sites server-rendered com links /lote, /lotes, /leilao ou /eventos/leilao; só grava títulos de imóvel/veículo/máquina/equipamento.' },
   async collect({ limit, observer, tenant }): Promise<CollectResult> {
@@ -232,7 +323,17 @@ export const htmlagenda: Connector = {
       const attempt = await observer?.start(host);
       const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
+      let monitorAttemptFinished = false;
       try {
+      const normalizedHost = host.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase();
+      if (isMonitorOnlyDomain(normalizedHost)) {
+        monitorAttemptFinished = true;
+        const monitored = await collectHtmlAgendaMonitor(normalizedHost, attempt, fetchText);
+        fetched += monitored.fetched;
+        skipped += monitored.skipped;
+        httpStatus = monitored.httpStatus || httpStatus;
+        continue;
+      }
       const base = `https://${host}`;
       const urls = new Set<string>();
       let homeBody = '';
@@ -270,11 +371,13 @@ export const htmlagenda: Connector = {
       }
       if (lots.length >= limit) truncated = true;
       } catch (error) {
-        if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
-        else attempt?.failure('parser');
+        if (!isMonitorOnlyDomain(host)) {
+          if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+          else attempt?.failure('parser');
+        }
         throw error;
       } finally {
-        await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
+        if (!monitorAttemptFinished) await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
     }
     return { lots, fetched, skipped, httpStatus };
