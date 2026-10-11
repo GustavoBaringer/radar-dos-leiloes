@@ -68,7 +68,7 @@ export function Cobertura() {
         <table className="report">
           <thead>
             <tr>
-              <th>Fonte</th><th>Lotes</th><th>Com fim por lote</th>
+              <th>Fonte</th><th>Site</th><th>Lotes</th><th>Com fim por lote</th>
               <th>Com lance</th><th>Com km</th><th>Última coleta</th>
             </tr>
           </thead>
@@ -76,6 +76,11 @@ export function Cobertura() {
             {dados.bySource.map((s) => (
               <tr key={s.source_id}>
                 <td>{s.name}</td>
+                <td>
+                  {s.site_url
+                    ? <a href={s.site_url} target="_blank" rel="noopener noreferrer">{s.site_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')}</a>
+                    : '—'}
+                </td>
                 <td className="mono">{s.lots.toLocaleString('pt-BR')}</td>
                 <td className="mono">{s.com_fim} ({pct(s.com_fim, s.lots)}%)</td>
                 <td className="mono">{s.com_lance} ({pct(s.com_lance, s.lots)}%)</td>

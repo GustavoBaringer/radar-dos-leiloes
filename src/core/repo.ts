@@ -641,12 +641,12 @@ export async function getStats() {
            COUNT(*) FILTER (WHERE asset_type='outro')::int AS outros
     FROM lots`);
   const bySource = await query(`
-    SELECT l.source_id, s.name, COUNT(*)::int AS lots,
+    SELECT l.source_id, s.name, s.site_url, COUNT(*)::int AS lots,
            COUNT(*) FILTER (WHERE l.auction_end_utc IS NOT NULL)::int AS com_fim,
            COUNT(*) FILTER (WHERE l.current_bid IS NOT NULL)::int AS com_lance,
            COUNT(*) FILTER (WHERE l.km IS NOT NULL)::int AS com_km,
            MAX(l.collected_at) AS ultima_coleta
-    FROM lots l JOIN sources s ON s.id = l.source_id GROUP BY 1,2 ORDER BY 3 DESC`);
+    FROM lots l JOIN sources s ON s.id = l.source_id GROUP BY 1,2,3 ORDER BY 4 DESC`);
   const runs = await query(`
     SELECT source_id, job, started_at, finished_at, ok, fetched, upserted, skipped, error, http_status
     FROM collection_runs ORDER BY started_at DESC LIMIT 20`);

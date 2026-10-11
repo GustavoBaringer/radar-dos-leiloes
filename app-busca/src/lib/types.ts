@@ -132,7 +132,7 @@ export interface Stats {
     veiculos: number; imoveis: number; outros: number;
   };
   bySource: Array<{
-    source_id: string; name: string; lots: number; com_fim: number;
+    source_id: string; name: string; site_url: string | null; lots: number; com_fim: number;
     com_lance: number; com_km: number; ultima_coleta: string | null;
   }>;
   runs: Array<{
