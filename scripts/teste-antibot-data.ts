@@ -172,7 +172,7 @@ test('facet failures wait for every started query before rejecting', async () =>
     });
   });
   await assert.rejects(searchLots({ page: 1 }, queryFn), /fixture facet error/);
-  assert.equal(completed, 10);
+  assert.equal(completed, 11);
 });
 
 test('internal normalization rejects non-boolean values without coercion', () => {
