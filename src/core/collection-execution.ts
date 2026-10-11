@@ -18,6 +18,8 @@ export interface CollectionExecutionOptions {
   limit: number;
   job?: string;
   metadata?: CollectionMetadata;
+  tenant?: string;
+  forceTenantObserver?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
   checkEmptyHttpFailure?: boolean;
@@ -31,7 +33,7 @@ export interface CollectionExecutionDependencies {
   startRun: (sourceId: string, job: string, limit: number) => Promise<number>;
   finishRun: (runId: number, data: CollectionRunData) => Promise<unknown>;
   upsertLots: (lots: CollectResult['lots']) => Promise<UpsertOutcome>;
-  observerForCollection: (context: { runId: number; sourceId: string } & CollectionMetadata) => unknown;
+  observerForCollection: (context: { runId: number; sourceId: string } & CollectionMetadata, forceEnabled?: boolean) => unknown;
   processarAposColeta: (novos: number[], publish?: (payload: unknown) => Promise<unknown>) => Promise<CollectionNotifications>;
   publishNotification?: (payload: unknown) => Promise<unknown>;
   logError?: (message: string, error: unknown) => void;
@@ -97,10 +99,10 @@ export async function executeCollection(
     const connector = deps.lookupConnector(options.sourceId);
     if (!connector) throw new Error(`fonte desconhecida: ${options.sourceId}`);
     const metadata = options.metadata ?? { origin: 'unknown' as const };
-    const observer = deps.observerForCollection({ runId, sourceId: options.sourceId, ...metadata });
+    const observer = deps.observerForCollection({ runId, sourceId: options.sourceId, ...metadata }, options.forceTenantObserver ? true : undefined);
     result = await withCollectionCancellation({ signal: options.signal, timeoutMs: options.timeoutMs }, () => {
       throwIfCancelled();
-      const coleta = connector.collect({ limit: options.limit, ...(observer ? { observer: observer as never } : {}) });
+      const coleta = connector.collect({ limit: options.limit, ...(options.tenant !== undefined ? { tenant: options.tenant } : {}), ...(observer ? { observer: observer as never } : {}) });
       return comPrazo(collectionSignal(), coleta);
     });
     throwIfAborted(options.signal);

@@ -1,4 +1,3 @@
-import { rotateTenants } from './tenant-rotation.js';
 /**
  * Plataforma **Suporte Leilões** — white-label multi-tenant, HTML com JSON embutido.
  *
@@ -17,6 +16,10 @@ import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
 import * as campos from '../core/campos.js';
+import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
+import { eventoEncerrado, eventosAtivos, eventNextPages, ofertaLinks, parseSuporteOferta } from './suporte-oferta.js';
+import type { TenantAttempt } from '../core/tenant-attempts.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 /** 1 = Veículos, 2 = Imóveis. Confirmado idêntico em 6 tenants. */
@@ -40,15 +43,119 @@ const num = (v: unknown): number | null => {
  */
 const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes.leilao.br', 'e-leiloeiro.leilao.br', 'magalhaesleiloes.com.br']);
 
-async function tenants(limite: number): Promise<string[]> {
+async function eligibleTenants(limite: number, tenant?: string): Promise<string[]> {
   const explicitos = String(process.env.SUPORTELEILOES_DOMAINS ?? '').trim();
-  if (explicitos) return explicitos.split(',').map((d) => d.trim()).filter((d) => d && !FORA.has(d));
-  const rows = await query<{ domain: string }>(
-    `SELECT domain FROM discovered_sites
-      WHERE platform = 'suporte-leiloes' AND http_status = 200 AND has_lots IS NOT FALSE
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
-  );
-  return rotateTenants(rows.map((r) => r.domain).filter((d) => !FORA.has(d)), limite);
+  const candidates = explicitos ? explicitos.split(',').map((d) => d.trim()).filter((d) => d && !FORA.has(d))
+    : (await query<{ domain: string }>(`SELECT domain FROM discovered_sites WHERE platform='suporte-leiloes' AND http_status=200 AND has_lots IS NOT FALSE ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`)).map(r => r.domain).filter(d => !FORA.has(d));
+  const due = await dueTenants({ sourceId: 'suporteleiloes', candidates, limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  if (!tenant) return due;
+  const selected = filterTenantPopulation(due, tenant);
+  if (!selected.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de suporteleiloes`);
+  return selected;
+}
+
+export async function collectOfertaTenant(host: string, limit: number, assetTypes: string[] | undefined, attempt: TenantAttempt | undefined,
+  request: typeof fetchText = fetchText) {
+  let fetched = 0, skipped = 0, lastStatus = 0, truncated = false;
+  const lots: CanonicalLot[] = [], seen = new Set<string>(), events = new Map<string, string>();
+  const homeEventUrls = new Set<string>();
+  const get = async (url: string, record = true) => {
+    throwIfCancelled();
+    try { const r = await request(url, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 30000 }); lastStatus = r.status; if (record) attempt?.response(r.status); return r; }
+    catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
+      attempt?.failure('network'); return null;
+    }
+  };
+  const listing = await get(`https://${host}/leiloes`, false);
+  let listingHtml = '';
+  if (listing?.status === 200) {
+    attempt?.response(listing.status);
+    if (!ehSuporteLeiloes(listing.body)) {
+      attempt?.failure('parser');
+      return { lots, fetched, skipped, lastStatus, truncated };
+    }
+    listingHtml = listing.body;
+    if (/Marco\s+Tul[ií]o/i.test(listing.body) && eventosAtivos(listingHtml, host).length === 0) {
+      // This tenant returns a valid but structurally empty /leiloes page in some variants; only use live homepage cards/offers as fallback.
+      const home = await get(`https://${host}/`);
+      if (home?.status === 200 && ehSuporteLeiloes(home.body)) {
+        ofertaLinks(home.body, host).forEach((url) => events.set(url, ''));
+        eventosAtivos(home.body, host).forEach((url) => homeEventUrls.add(url));
+      } else if (home?.status === 200) attempt?.failure('parser');
+    }
+  } else if (listing?.status === 404) {
+    // /leiloes can be absent on older tenants; do not let this expected route miss poison a successful home fallback.
+    const home = await get(`https://${host}/`);
+    if (!home || home.status !== 200 || !ehSuporteLeiloes(home.body)) {
+      if (home?.status === 200) attempt?.failure('parser');
+      return { lots, fetched, skipped, lastStatus, truncated };
+    }
+    const homeOffers = ofertaLinks(home.body, host);
+    const homeEvents = eventosAtivos(home.body, host);
+    homeOffers.forEach((url) => events.set(url, ''));
+    if (!homeOffers.length && !homeEvents.length && /marco\s+tu[lú]io/i.test(home.body)) {
+      // The known Marco tenant omits active cards from home; only then inspect its legacy agenda, still filtering card status.
+      const agenda = await get(`https://${host}/agenda`);
+      if (agenda?.status === 200 && ehSuporteLeiloes(agenda.body)) listingHtml = agenda.body;
+      else if (agenda?.status === 200) attempt?.failure('parser');
+    } else {
+      homeEvents.forEach((url) => homeEventUrls.add(url));
+    }
+  } else {
+    if (listing) attempt?.response(listing.status);
+    return { lots, fetched, skipped, lastStatus, truncated };
+  }
+
+  const eventUrls = [...new Set([...eventosAtivos(listingHtml, host), ...homeEventUrls])];
+  for (const eventUrl of eventUrls) {
+    throwIfCancelled();
+    if (lots.length >= limit) { truncated = true; break; }
+    const pages = [eventUrl], pageSeen = new Set<string>();
+    while (pages.length && pageSeen.size < 10) {
+      const pageUrl = pages.shift()!;
+      if (pageSeen.has(pageUrl)) continue;
+      pageSeen.add(pageUrl);
+      const event = await get(pageUrl);
+      if (!event || event.status !== 200) continue;
+      if (eventoEncerrado(event.body)) continue;
+      for (const url of ofertaLinks(event.body, host)) events.set(url, eventUrl);
+      for (const next of eventNextPages(event.body, host, pageUrl)) if (!pageSeen.has(next)) pages.push(next);
+      if (pages.length && pageSeen.size >= 10) truncated = true;
+    }
+  }
+  for (const [url] of events) {
+    throwIfCancelled();
+    if (lots.length >= limit) { truncated = true; break; }
+    if (seen.has(url)) continue; seen.add(url);
+    const r = await get(url);
+    if (!r || r.status !== 200) { skipped++; continue; }
+    fetched++;
+    const lot = parseSuporteOferta(r.body, host, url);
+    if (!lot || (assetTypes?.length && !assetTypes.includes(String(lot.assetType)))) { skipped++; continue; }
+    lots.push(lot);
+  }
+  return { lots, fetched, skipped, lastStatus, truncated };
+}
+
+export async function collectSuporteTenant(host: string, limit: number, assetTypes: string[] | undefined,
+  observer: import('../core/tenant-attempts.js').TenantObserver | undefined, request: typeof fetchText = fetchText) {
+  const attempt = await observer?.start(host);
+  const before = { fetched: 0, skipped: 0, returned: 0, truncated: false };
+  try {
+    const result = await collectOfertaTenant(host, limit, assetTypes, attempt, request);
+    before.fetched = result.fetched;
+    before.skipped = result.skipped;
+    before.returned = result.lots.length;
+    before.truncated = result.truncated || result.lots.length >= limit;
+    return result;
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+    else attempt?.failure('parser');
+    throw error;
+  } finally {
+    await attempt?.finish(before);
+  }
 }
 
 /** A assinatura que separa tenant genuíno de falso positivo da descoberta. */
@@ -85,13 +192,16 @@ function dataDoBloco(v: any): Date | null {
   return Number.isFinite(t) ? new Date(t) : null;
 }
 
-async function lerLeilao(urlDeUmLote: string): Promise<DadosDoLeilao | null> {
+async function lerLeilao(urlDeUmLote: string, attempt?: TenantAttempt): Promise<DadosDoLeilao | null> {
   let r;
   try {
     r = await fetchText(urlDeUmLote, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 30000 });
-  } catch {
+  } catch (error) {
+    if (error instanceof CollectionCancellationError) throw error;
+    attempt?.failure('network');
     return null;
   }
+  attempt?.response(r.status);
   if (r.status !== 200) return null;
   // `var lote = {...};` — JSON válido, produzido por json_encode do PHP.
   const m = /var\s+lote\s*=\s*(\{[\s\S]*?\});\s*\n/.exec(r.body);
@@ -277,63 +387,19 @@ export const suporteleiloes: Connector = {
       'White-label multi-tenant, duas gerações de front (v1 Laravel implementada, v2 Next.js pendente). A coluna platform tem falso positivo: superbid.net. Validar assinatura antes de coletar.',
   },
 
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
+  async collect({ limit, assetTypes, observer, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let status = 0;
 
-    const cats = CATEGORIAS.filter(([, a]) => !assetTypes || assetTypes.includes(a));
-    // Cache de evento por slug, vivo durante o ciclo inteiro: o mesmo leilão
-    // aparece nas duas categorias e em várias páginas.
-    const eventos = new Map<string, DadosDoLeilao | null>();
-
-    for (const host of await tenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60))) {
+    for (const host of await eligibleTenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60), tenant)) {
       if (lots.length >= limit) break;
-      let assinaturaOk: boolean | null = null;
-
-      for (const [cat, asset] of cats) {
-        if (lots.length >= limit) break;
-        let paginas = 1;
-
-        for (let page = 1; page <= paginas && page <= 30; page++) {
-          if (lots.length >= limit) break;
-          let r;
-          try {
-            r = await fetchText(`https://${host}/buscador?categoria=${cat}&page=${page}`, {
-              headers: { 'user-agent': UA },
-              gapMs: 1100,
-              timeoutMs: 30000,
-            });
-          } catch {
-            break;
-          }
-          status = r.status;
-          if (r.status !== 200) break;
-
-          // A assinatura é conferida uma vez por tenant, na primeira resposta:
-          // é o que impede o conector de coletar superbid.net com o parser errado.
-          if (assinaturaOk === null) assinaturaOk = ehSuporteLeiloes(r.body);
-          if (!assinaturaOk) break;
-
-          if (page === 1) paginas = ultimaPagina(r.body);
-          const cards = lerCards(r.body, host);
-          if (!cards.length) break;
-          fetched += cards.length;
-
-          for (const c of cards) {
-            if (lots.length >= limit) break;
-            // UMA requisição por LEILÃO, não por lote: o prazo e o leiloeiro são
-            // do evento, e o slug da URL identifica o evento. Numa página de 12
-            // cards do mesmo leilão isso é 1 requisição extra, não 12.
-            const slug = slugDoLeilao(c.url);
-            if (slug && !eventos.has(slug)) eventos.set(slug, await lerLeilao(c.url));
-            lots.push(mapCard(c, asset, host, slug ? (eventos.get(slug) ?? null) : null));
-          }
-          if (cards.length < POR_PAGINA) break;
-        }
-        if (assinaturaOk === false) break;
-      }
+      const result = await collectSuporteTenant(host, limit - lots.length, assetTypes, observer);
+      lots.push(...result.lots);
+      fetched += result.fetched;
+      skipped += result.skipped;
+      status = result.lastStatus || status;
     }
 
     return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status };

@@ -7,7 +7,7 @@ export const QUEUE_REFRESH = 'refresh';
 export const QUEUE_DISCOVER = 'discover';
 export const CHANNEL_UPDATES = 'lot-updates';
 
-export interface CollectJob { sourceId: string; limit: number }
+export interface CollectJob { sourceId: string; limit: number; tenant?: string; timeoutMs?: number }
 export interface RefreshJob { reason: string }
 export interface DiscoverJob { qual: 'fenaju' | 'sonda'; limite?: number }
 

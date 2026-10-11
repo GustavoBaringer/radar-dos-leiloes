@@ -12,6 +12,7 @@ import { consultaFreio } from '../core/freio.js';
 import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
 import { refreshBatch } from './refresh-batch.js';
+import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, registerTenantSchedulers, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
 import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
 import {
   executeCollection,
@@ -25,7 +26,8 @@ import {
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
 } from './queues.js';
 
-const publisher = makeRedis();
+let publisher: ReturnType<typeof makeRedis> | undefined;
+const getPublisher = () => publisher ??= makeRedis();
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
 for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
@@ -49,7 +51,7 @@ export function createWorkerDeps(overrides: Partial<CollectionExecutionDependenc
     upsertLots,
     observerForCollection,
     processarAposColeta,
-    publishNotification: (payload) => publisher.publish(CHANNEL_UPDATES, JSON.stringify(payload)),
+    publishNotification: (payload) => getPublisher().publish(CHANNEL_UPDATES, JSON.stringify(payload)),
     logError: (mensagem, erro) => console.error(mensagem, erro),
     ...overrides,
   };
@@ -59,6 +61,7 @@ export interface WorkerCollectOptions {
   sourceId: string;
   limit: number;
   metadata?: CollectionMetadata;
+  tenant?: string;
   /** Shutdown do worker ou perda de lock: o `kind` do motivo vira o do erro. */
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -66,6 +69,16 @@ export interface WorkerCollectOptions {
   queueJob?: Pick<Job<CollectJob>, 'id' | 'name' | 'token'>;
   publish?: CollectionExecutionOptions['publish'];
   authorizePersistence?: CollectionExecutionOptions['authorizePersistence'];
+}
+
+export async function assertTenantSourceEnabled(
+  sourceId: string,
+  lookup: (sourceId: string) => Promise<boolean> = async (id) => {
+    const rows = await query<{ enabled: boolean }>('SELECT enabled FROM sources WHERE id = $1', [id]);
+    return rows[0]?.enabled === true;
+  },
+) {
+  await assertTenantSourceIsEnabled(sourceId, lookup);
 }
 
 /**
@@ -81,7 +94,8 @@ export async function executeWorkerCollect(
   options: WorkerCollectOptions,
   deps: CollectionExecutionDependencies = createWorkerDeps(),
 ): Promise<CollectionExecutionResult> {
-  const { queueJob, publish, authorizePersistence, ...resto } = options;
+  const { queueJob, publish, authorizePersistence, tenant, ...resto } = options;
+  if (tenant !== undefined) assertTenantCoveragePair(options.sourceId, tenant);
   const autorizar = async () => {
     if (queueJob && !queueJob.token) {
       throw new CollectionCancellationError('lock_lost', `job ${queueJob.id ?? queueJob.name} sem token de lock`);
@@ -91,10 +105,10 @@ export async function executeWorkerCollect(
   return executeCollection(
     {
       ...resto,
-      job: 'collect',
+      ...(tenant !== undefined ? tenantExecutionOptions(options.sourceId, tenant) : { job: 'collect' }),
       checkEmptyHttpFailure: true,
       ...(queueJob || authorizePersistence ? { authorizePersistence: autorizar } : {}),
-      publish: publish ?? ((evento) => publisher.publish(CHANNEL_UPDATES, JSON.stringify(evento))),
+      publish: publish ?? ((evento) => getPublisher().publish(CHANNEL_UPDATES, JSON.stringify(evento))),
     },
     deps,
   );
@@ -115,21 +129,27 @@ async function runCollect(
   limit: number,
   metadata: CollectionMetadata = { origin: 'unknown' },
   exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {},
+  tenant?: string,
 ) {
   const operation = async () => {
     throwIfAborted(exec.signal);
     if (!enabledSource(sourceId)) throw new Error(`Source outside WORKER_SOURCES: ${sourceId}`);
+    if (tenant !== undefined) {
+      assertTenantCoveragePair(sourceId, tenant);
+      await assertTenantSourceEnabled(sourceId);
+    }
     const connector = getConnector(sourceId);
     const bounded = boundedCollection(DEPLOY, sourceId, connector?.def.method ?? 'html', limit);
     limit = bounded.limit;
-    const freio = await consultaFreio(sourceId);
-  if (!freio.permite) {
-    console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
-    return { fetched: 0, upserted: 0, skipped: 0, freado: true };
-  }
-  // startRun, validação da fonte, HTTP vazio, upsert e finishRun vivem no
-  // executor compartilhado (mesmo caminho da CLI, ver [[collection-execution]]).
-  const r = await executeWorkerCollect({ sourceId, limit, metadata, timeoutMs: bounded.timeoutMs, ...exec });
+    const freio = tenant === undefined ? await consultaFreio(sourceId) : { permite: true, seguidas: 0, motivo: 'normal' as const };
+    if (!freio.permite) {
+      console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
+      return { fetched: 0, upserted: 0, skipped: 0, freado: true };
+    }
+    // startRun, validação da fonte, HTTP vazio, upsert e finishRun vivem no
+    // executor compartilhado (mesmo caminho da CLI, ver [[collection-execution]]).
+    const timeoutMs = tenant === undefined ? bounded.timeoutMs : DEPLOY.sourceTimeouts[sourceId] ?? TENANT_DEFAULT_TIMEOUT_MS;
+    const r = await executeWorkerCollect({ sourceId, limit, metadata, timeoutMs, tenant, ...exec });
     return { fetched: r.result.fetched, upserted: r.upserted, skipped: r.result.skipped };
   };
   return DEPLOY.serial ? serialCollect(operation) : operation();
@@ -157,7 +177,7 @@ const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
     return await runCollect(job.data.sourceId, job.data.limit, collectionJobContext(job, 'cron'), {
       signal: controller.signal,
       queueJob: job,
-    });
+    }, job.data.tenant);
   } catch (err: any) {
     console.error(`[collect] ${job.data.sourceId} falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
@@ -272,7 +292,7 @@ async function cicloAoVivo() {
       if (m) mudancas.push(m);
       await new Promise((r) => setTimeout(r, 150));
     }
-    if (mudancas.length) await publisher.publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: mudancas }));
+    if (mudancas.length) await getPublisher().publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: mudancas }));
     if (lidos) console.log(`[aovivo] ${lidos} lidos · ${mudancas.length} lances novos · ${semCanalLotes.size} sem canal`);
   } catch (e: any) {
     console.error('[aovivo] falhou:', e.message);
@@ -290,7 +310,7 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
   // 50 min era o que punha o vlance em 30 coletas por hora.
   for (const row of await query<{ source_id: string; fim: Date; ultima: Date | null }>(`
     SELECT l.source_id, min(l.auction_end_utc) AS fim,
-           (SELECT max(r.started_at) FROM collection_runs r WHERE r.source_id = l.source_id) AS ultima
+            (SELECT max(r.started_at) FROM collection_runs r WHERE r.source_id = l.source_id AND r.job <> 'collect:tenant') AS ultima
       FROM lots l
      WHERE l.closing_model = 'timer_por_lote'
        AND l.status IN ('aberto','agendado')
@@ -323,7 +343,7 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
                                    AND now() + interval '${ANTES_DA_ABERTURA_H} hours'
        AND NOT EXISTS (
          SELECT 1 FROM collection_runs r
-          WHERE r.source_id = l.source_id
+           WHERE r.source_id = l.source_id AND r.job <> 'collect:tenant'
             AND r.started_at > now() - interval '${DESCANSO_PREGAO_MIN} minutes')`)) {
     const c = connectors.find((x) => x.def.id === row.source_id);
     if (c && enabledSource(row.source_id)) quentes.set(row.source_id, c.def.method === 'api' ? 15000 : 1200);
@@ -386,7 +406,7 @@ async function cicloDeEncerramento() {
       // Mesmo canal do lance e da coleta: a tela avisa sem recarregar. O ciclo
       // roda a cada minuto e quase sempre fecha zero — publicar o zero encheria
       // a tela de aviso vazio.
-      await publisher.publish(
+      await getPublisher().publish(
         CHANNEL_UPDATES,
         JSON.stringify({ type: 'encerrados', total, porPrazo: r.porPrazo, porAusencia: r.porAusencia }),
       );
@@ -418,7 +438,7 @@ async function cicloDeVerificacao() {
           `${r.vivos} vivos, ${r.indeterminados} sem resposta`,
       );
       if (r.encerrados) {
-        await publisher.publish(
+        await getPublisher().publish(
           CHANNEL_UPDATES,
           JSON.stringify({ type: 'encerrados', total: r.encerrados, origem: 'verificacao' }),
         );
@@ -440,6 +460,8 @@ async function cicloDeVerificacao() {
 async function limparAgendamentosOrfaos() {
   for (const r of await collectQueue.getRepeatableJobs()) {
     const id = r.name.replace(/^collect:/, '');
+    const schedulerId = String((r as any).key ?? (r as any).id ?? '');
+    if (r.name.startsWith('collect:tenant:') || isTenantSchedulerId(schedulerId)) continue;
     if (!getConnector(id)) {
       await collectQueue.removeRepeatableByKey(r.key);
       console.log(`[agenda] removido job órfão ${r.name} (sem conector)`);
@@ -475,7 +497,7 @@ async function agendar(
   const meus = new Set(itens.map((i) => i.id));
   for (const s of await fila.getJobSchedulers(0, 200, true)) {
     const chave = (s as any).key ?? (s as any).id;
-    if (chave && !meus.has(chave)) {
+    if (chave && !meus.has(chave) && !isTenantSchedulerId(chave)) {
       await fila.removeJobScheduler(chave);
       console.log(`[agenda] agendador legado removido de ${fila.name}: ${chave}`);
     }
@@ -487,6 +509,12 @@ async function agendar(
       { name: i.nome, data: i.data, opts: { removeOnComplete: i.manter, removeOnFail: i.manter } },
     );
   }
+}
+
+export async function registerTenantSchedules(queue: Queue = collectQueue) {
+  const enabled = await query<{ id: string }>(`SELECT id FROM sources WHERE enabled = true`);
+  const allowed = new Set(enabled.map((x) => x.id).filter(enabledSource));
+  await registerTenantSchedulers(queue as any, 'America/Sao_Paulo', allowed, DEPLOY.sourceTimeouts);
 }
 
 /** Reagenda as três filas (idempotente). Chamado só por `createWorkerHub().start()`. */
@@ -602,6 +630,7 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       );
 
       await agendarTudo();
+      await registerTenantSchedules();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
     },
