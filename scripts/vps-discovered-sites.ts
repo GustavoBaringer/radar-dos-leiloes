@@ -20,6 +20,7 @@ const ALVOS = [
   'albuquerqueleiloes.com.br', 'portaldosleiloes.com.br', 'ericosobral.com.br',
   'colodeteleiloes.com.br', 'joserodovalholeiloes.com.br', 'leiloesbrasilpe.com.br',
   'patiorochaleiloes.com.br', 'vlleiloes.com.br', 'realizaleiloes.com.br',
+  'arremateleiloes.com.br', 'abrantesleiloes.com', 'josenildolimaleiloeiro.com.br',
   'c3leiloes.com.br', 'abaleiloes.com.br', 'lancese.com.br',
   'argleiloes.com.br', 'marcotulioleiloes.com.br', 'leiloescostaesilva.com.br',
   'tbaracajuleiloes.com.br', 'fabiobarbosaleiloes.com.br', 'leiloespb.com.br',
@@ -50,6 +51,15 @@ try {
     `UPDATE discovered_sites SET http_status = 200, has_lots = true, checked_at = now()
       WHERE lower(domain) = 'atlanticoleiloes.com.br' AND http_status IS DISTINCT FROM 200`,
   );
+  // Sentido OPOSTO: aqui o `true` está errado. Confirmado em 11/10/2026 que o
+  // Arremata é agregador informativo (o próprio exemplo vem marcado como
+  // "ilustrativo") e não publica catálogo de lotes. Enquanto a flag ficar
+  // `true`, qualquer conector que passe a ler `platform = portalzuk` herda uma
+  // mentira; hoje nada coleta porque o portalzuk não tem população de tenant.
+  const b2 = await query(
+    `UPDATE discovered_sites SET has_lots = false, checked_at = now()
+      WHERE lower(domain) = 'arremateleiloes.com.br' AND has_lots IS DISTINCT FROM false`,
+  );
   // Ambos usam o padrão /eventos/leilao/ da plataforma Suporte.
   const c = await query(
     `INSERT INTO discovered_sites (domain, platform, http_status, has_lots, title, note)
@@ -67,7 +77,7 @@ try {
            checked_at = now()`,
   );
   await query('COMMIT');
-  console.log('aplicado: has_lots=%d, atlantico=%d, inserts/updates=%d', a.length, b.length, c.length);
+  console.log('aplicado: has_lots=%d, atlantico=%d, arremata=%d, inserts/updates=%d', a.length, b.length, b2.length, c.length);
 } catch (err) {
   await query('ROLLBACK').catch(() => {});
   console.error('falhou, transação desfeita:', err instanceof Error ? err.message : err);
