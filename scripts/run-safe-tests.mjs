@@ -26,6 +26,7 @@ const files = [
   'scripts/teste-tenant-rotation.ts',
   'scripts/teste-antibot-ws.ts',
   'scripts/teste-brands-contrato.ts',
+  'scripts/teste-smtp-tls.ts',
   'scripts/teste-host-contrato.mjs',
   'scripts/teste-nest-brands-contrato.mjs',
 ];

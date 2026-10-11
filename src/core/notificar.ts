@@ -107,10 +107,11 @@ export async function enviarEmail(disparos: Disparo[], deps?: EmailDependencies)
     return { enviados: 0, pendentes: agruparDisparos(alvos).length };
   }
 
-  const transporte = deps ? { sendMail: deps.send } : (await import('nodemailer')).createTransport({
+const transporte = deps ? { sendMail: deps.send } : (await import('nodemailer')).createTransport({
     host: env.SMTP_HOST,
     port: Number(env.SMTP_PORT ?? 587),
     secure: env.SMTP_SECURE === 'true',
+    requireTLS: true,
     auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
   });
   const mark = deps?.mark ?? marcarNotificado;
