@@ -205,7 +205,7 @@ export function Alertas({
               lot={h}
               aoAbrir={aoAbrirLote}
               destaque={!h.seen}
-              favoritado={typeof h.favorited === 'boolean' ? h.favorited : favoritos.has(h.id) ? true : undefined}
+              favoritado={favoritos.has(h.id)}
               aoFavoritar={aoFavoritar}
               rodape={
                 <div className="hit-alerta">

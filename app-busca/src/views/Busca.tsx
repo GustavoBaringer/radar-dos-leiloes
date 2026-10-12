@@ -241,7 +241,7 @@ export function Busca({
             aoAbrir={aoAbrirLote}
             lanceAoVivo={lancesAoVivo[lot.id]}
             piscando={piscando.has(lot.id)}
-            favoritado={typeof lot.favorited === 'boolean' ? lot.favorited : favoritos.has(lot.id) ? true : undefined}
+            favoritado={favoritos.has(lot.id)}
             aoFavoritar={aoFavoritar}
           />
         </Fragment>
