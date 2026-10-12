@@ -1,11 +1,25 @@
 # Proxy de imagens e publicação da main
 
-O proxy não tem cota de requisições/minuto, seja com cache ou sem cache.
-Continuam os limites de dois processamentos de imagem, quatro leituras, cache
-limitado, download de até 20 MiB, validação de host/raster e prazo de 15 segundos.
-Os cartões visíveis carregam em pares e retentam falhas temporárias, para evitar
-saturar o proxy ao navegar pelas páginas. Saturação por tráfego concorrente pode
-retornar 503; não há 429 por quantidade de imagens.
+**Decisão temporária de 2026-10-12 (dono do projeto): o proxy fica sem limite
+de requisições.** Nem cota por minuto — já removida em `c6dd64d`, que apagou as
+políticas `image` e `imageMiss` — nem teto de concorrência. No servidor,
+`runMiss()` parou de competir pelo orçamento de quatro leituras e
+`tryAcquireImageJob()` concede sempre (`src/core/antibot/resources.ts`,
+`src/core/antibot/images.ts`); no navegador, os cartões deixaram de carregar em
+pares e pedem as fotos de uma vez (`app-busca/src/lib/image-queue.ts`).
+
+Continuam valendo: allowlist de hosts derivada dos lotes, validação de raster,
+download de até 20 MiB, prazo de 15 segundos, cache em memória limitado e as
+retentativas com espera do cartão. As outras rotas da API seguem com o teto de
+quatro leituras — ele não é do proxy de imagens.
+
+Não existe mais caminho que devolva 503/429 por quantidade de imagens: o único
+503 possível vem de `acquireDegradedWork()`, que só corta em `ANTIBOT_MODE=enforce`
+com o Redis degradado. O preço conhecido é saturação de CPU/memória do sharp sem
+backpressure. Antes de virar permanente, conferir `images` em
+`/api/security/metrics`. Para reverter, restaurar `IMAGE_LIMIT = 2` com o
+semáfora em `resources.ts`, a lease de leitura em `runMiss()` e o limite 2 da
+fila do navegador.
 
 Administradores consultam `/api/security/metrics`: `images` contém volume,
 picos por minuto e por cliente, cache, falhas, sobrecarga e tempos de resposta.

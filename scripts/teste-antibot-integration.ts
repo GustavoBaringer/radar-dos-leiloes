@@ -54,7 +54,7 @@ test('policy mapping is exact by route template and covers aliases and write rou
 });
 
 test('shared read resources enforce four immediate leases and release after awaited work', async () => {
-  const pool = createResourcePool({ maxResources: 4, maxImageJobs: 2 });
+  const pool = createResourcePool({ maxResources: 4 });
   const held = Array.from({ length: 4 }, () => pool.tryAcquireResource()!);
   assert.equal(pool.tryAcquireResource(), null);
   held.forEach((lease) => lease.release());

@@ -25,16 +25,18 @@ test('route policy aliases use one IP group for image/ws and shared GET/write gr
   ]) assert.equal(ROUTE_POLICIES[route], 'write');
 });
 
-test('shared resource pool has no queue, bounded overrides, and idempotent release', () => {
+test('read leases stay capped and image jobs have no cap (temporary decision)', () => {
   assert.throws(() => createResourcePool({ maxResources: 5 }), /maxResources/);
-  assert.throws(() => createResourcePool({ maxImageJobs: 3 }), /maxImageJobs/);
-  const pool = createResourcePool({ maxResources: 2, maxImageJobs: 1 });
+  const pool = createResourcePool({ maxResources: 2 });
   const a = pool.tryAcquireResource()!;
   const b = pool.tryAcquireResource()!;
   assert.equal(pool.tryAcquireResource(), null);
   a.release(); a.release();
   assert.ok(pool.tryAcquireResource());
-  const image = pool.tryAcquireImageJob()!;
-  assert.equal(pool.tryAcquireImageJob(), null);
-  image.release();
+  // Imagem não tem teto: toda requisição recebe lease e liberar é no-op.
+  const images = Array.from({ length: 50 }, () => pool.tryAcquireImageJob());
+  assert.ok(images.every(Boolean));
+  images.forEach((lease) => { lease!.release(); lease!.release(); });
+  assert.ok(pool.tryAcquireImageJob());
+  b.release();
 });

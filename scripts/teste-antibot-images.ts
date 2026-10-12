@@ -34,7 +34,6 @@ function harness(overrides: Partial<Parameters<typeof createImageService>[0]> = 
   const service = createImageService({
     safeHostChecker: (url) => url.hostname === 'images.example.test' || url.hostname === 'cdn.example.test',
     request: (url, options) => requestImpl(url, options),
-    tryAcquireResource: resources.tryAcquireResource,
     tryAcquireImageJob: resources.tryAcquireImageJob,
     acquireDegradedWork: () => ({ release() {} }),
     ...overrides,
@@ -131,7 +130,7 @@ test('cache tracks TTL, replacement bytes, eviction and bypasses slots on hit', 
   await h.service.close();
 });
 
-test('leases are no-queue and stay held until Sharp-like processor settles after abort', async () => {
+test('image jobs have no cap and the degraded lease is held until the processor settles after abort', async () => {
   const pool = createResourcePool();
   const held: ReturnType<typeof lease>[] = [];
   let releaseProcessor!: () => void;
@@ -140,11 +139,11 @@ test('leases are no-queue and stay held until Sharp-like processor settles after
   const processing = new Promise<void>((resolve) => { releaseProcessor = resolve; });
   let active = 0;
   const h = harness({
-    tryAcquireResource: () => {
+    tryAcquireImageJob: pool.tryAcquireImageJob,
+    acquireDegradedWork: () => {
       const l = lease(); held.push(l); active++;
       return { release: () => { l.value.release(); active--; } };
     },
-    tryAcquireImageJob: pool.tryAcquireImageJob,
     processImage: async (input, contentType) => {
       processorStarted(); await processing; return { buffer: input, contentType };
     },
@@ -153,17 +152,28 @@ test('leases are no-queue and stay held until Sharp-like processor settles after
   const work = h.service.get('https://images.example.test/slow', null, { signal: abort.signal });
   await started;
   abort.abort();
-  assert.equal(active, 1, 'HTTP abort must not free the read lease while image processing continues');
-  const extra = pool.tryAcquireImageJob();
-  assert.ok(extra);
-  assert.equal(pool.tryAcquireImageJob(), null, 'image slots have no queue');
-  extra.release();
+  assert.equal(active, 1, 'HTTP abort must not free the degraded lease while image processing continues');
+  // Sem teto de jobs por decisão temporária: várias fotos simultâneas passam.
+  for (const extra of Array.from({ length: 25 }, () => pool.tryAcquireImageJob())) {
+    assert.ok(extra);
+    extra!.release(); extra!.release();
+  }
   releaseProcessor();
   assert.deepEqual(await work, { kind: 'source-failure', reason: 'client-aborted' });
   assert.equal(active, 0);
   assert.equal(held[0].releases(), 1);
-  const first = pool.tryAcquireImageJob()!; first.release(); first.release();
   assert.ok(pool.tryAcquireImageJob());
+  await h.service.close();
+});
+
+test('degraded budget exhaustion still returns overload instead of starting the fetch', async () => {
+  let started = 0;
+  const h = harness({
+    acquireDegradedWork: () => null,
+    request: async () => { started++; return response([png]); },
+  });
+  assert.deepEqual(await h.service.get('https://images.example.test/saturated'), { kind: 'overload' });
+  assert.equal(started, 0);
   await h.service.close();
 });
 
@@ -206,14 +216,14 @@ test('real Sharp validates dimensions and decodes full-resolution images without
   await h.service.close(); await noResize.service.close();
 });
 
-test('resource pool defaults are bounded and release is idempotent', () => {
+test('read leases stay capped while image jobs are never capped', () => {
   const pool = createResourcePool();
   const leases = Array.from({ length: 4 }, () => pool.tryAcquireResource());
   assert.ok(leases.every(Boolean));
   assert.equal(pool.tryAcquireResource(), null);
   leases[0]!.release(); leases[0]!.release();
   assert.ok(pool.tryAcquireResource());
-  const images = Array.from({ length: 2 }, () => pool.tryAcquireImageJob());
+  const images = Array.from({ length: 50 }, () => pool.tryAcquireImageJob());
   assert.ok(images.every(Boolean));
-  assert.equal(pool.tryAcquireImageJob(), null);
+  assert.ok(pool.tryAcquireImageJob());
 });

@@ -1581,7 +1581,6 @@ const hostImageService = createImageService({
   safeHostChecker: (url) => url.protocol === 'https:' && hostPermitido(url.host),
   refererForHost: (host) => IMG_REFERER.get(host) ?? `https://${host}/`,
   dispatcherForHost: (host) => dependencies.runtime.hostsTlsIncomplete.has(host) ? insecureSemRedirect() : undefined,
-  tryAcquireResource,
   tryAcquireImageJob,
   acquireDegradedWork: () => antibot.acquireDegradedWork(),
 });

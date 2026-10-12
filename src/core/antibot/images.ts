@@ -1,3 +1,20 @@
+/**
+ * DECISÃO TEMPORÁRIA — 2026-10-12, dono do projeto.
+ *
+ * O proxy de imagens não tem mais limite de requisições. A cota por minuto já
+ * tinha saído em c6dd64d (políticas `image`/`imageMiss` apagadas); agora também
+ * saíram os tetos de concorrência: `runMiss()` não adquire mais a lease de
+ * leitura compartilhada e `tryAcquireImageJob()` concede sempre
+ * (`core/antibot/resources.ts`). Não existe mais caminho que devolva 503/429 por
+ * quantidade de imagens — só `acquireDegradedWork()`, que corta apenas em
+ * `ANTIBOT_MODE=enforce` com o Redis degradado.
+ *
+ * Continuam valendo: allowlist de hosts, validação de raster, 20 MiB, prazo de
+ * 15 s e o cache em memória limitado. O risco assumido é saturar CPU/memória do
+ * sharp sem backpressure; medir `images` em `/api/security/metrics` antes de
+ * decidir se isso vira permanente. Para reverter, restaurar a lease de leitura
+ * em `runMiss()` e o teto de 2 jobs em `resources.ts`.
+ */
 import { request as undiciRequest, type Dispatcher } from 'undici';
 import sharp from 'sharp';
 import type { ResourceLease } from './resources.js';
@@ -92,7 +109,7 @@ export interface ImageServiceOptions {
   dispatcherForHost?: (host: string) => Dispatcher | undefined;
   request?: ImageRequester;
   processImage?: ImageProcessor;
-  tryAcquireResource: () => ResourceLease | null;
+  /** Always granted since 2026-10-12 (temporary decision): the image path has no job cap. */
   tryAcquireImageJob: () => ResourceLease | null;
   acquireDegradedWork: () => ResourceLease | null;
   clock?: () => number;
@@ -345,7 +362,6 @@ export function createImageService(options: ImageServiceOptions): ImageService {
 
   async function runMiss(key: string, url: URL, width: number | null, context: ImageRequestContext): Promise<ImageOutcome> {
     const clientSignal = context.signal;
-    let resourceLease: ResourceLease | null = null;
     let imageLease: ResourceLease | null = null;
     let degradedLease: ResourceLease | null = null;
     let controller: AbortController | undefined;
@@ -361,8 +377,9 @@ export function createImageService(options: ImageServiceOptions): ImageService {
       if (clientSignal?.aborted) return { kind: 'source-failure', reason: 'client-aborted' };
 
       try {
-        resourceLease = options.tryAcquireResource();
-        if (!resourceLease) return { kind: 'overload' };
+        // Sem teto de requisições (decisão temporária de 2026-10-12): a imagem
+        // não compete mais pelo orçamento de leituras com as demais rotas. Só o
+        // orçamento degradado ainda pode recusar o trabalho.
         imageLease = options.tryAcquireImageJob();
         if (!imageLease) return { kind: 'overload' };
         degradedLease = options.acquireDegradedWork();
@@ -404,7 +421,6 @@ export function createImageService(options: ImageServiceOptions): ImageService {
       if (controller) activeControllers.delete(controller);
       degradedLease?.release();
       imageLease?.release();
-      resourceLease?.release();
     }
   }
 
