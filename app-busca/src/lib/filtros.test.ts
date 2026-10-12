@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { urlDoAlerta, urlDoEstado, estadoDaUrl } from './filtros';
+import { urlDoAlerta, urlDoEstado, estadoDaUrl, paramsDaBusca } from './filtros';
 
 /** O critério de verdade: a URL do alerta, lida de volta pela tela, reproduz os filtros. */
 function confere(q: string | null, filters: Record<string, any>) {
@@ -22,6 +22,28 @@ test('tipo de bem + valor mínimo/máximo + ano', () => {
   assert.equal(e.priceMax, '90000');
   assert.equal(e.yearMin, '2020');
   assert.equal(e.yearMax, '2024');
+});
+
+test('aplicar Filtro carros conservados preserva o ano numérico salvo na API', () => {
+  const filters = {
+    docType: 'judicial,recuperado_financiamento,conservado,extrajudicial',
+    yearMin: 2021, assetType: 'veiculo', vehicleType: 'carro,suv',
+  };
+  const { url, e } = confere('', filters);
+  assert.equal(e.yearMin, '2021');
+  assert.equal(new URLSearchParams(url.split('?')[1]).get('yearMin'), '2021');
+  assert.equal(new URLSearchParams(paramsDaBusca(e)).get('yearMin'), '2021');
+  assert.deepEqual(e.multi.vehicleType, ['carro', 'suv']);
+  assert.deepEqual(e.multi.docType, filters.docType.split(','));
+});
+
+test('restaura limites numéricos de preço e ano, incluindo zero', () => {
+  const { e } = confere(null, { priceMin: 0, priceMax: 90000, yearMin: 2021, yearMax: 2024 });
+  assert.equal(e.priceMin, '0');
+  assert.equal(e.priceMax, '90000');
+  assert.equal(e.yearMin, '2021');
+  assert.equal(e.yearMax, '2024');
+  assert.equal(confere(null, { yearMin: NaN, yearMax: Infinity }).url, '/busca');
 });
 
 test('múltiplas facetas com vários valores', () => {

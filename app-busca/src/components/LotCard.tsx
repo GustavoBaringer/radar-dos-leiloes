@@ -30,6 +30,8 @@ function specsDe(lot: Lot): Array<{ ico: ReactNode; txt: string }> {
   const s: Array<{ ico: ReactNode; txt: string }> = [];
   if (lot.year_model) {
     s.push({ ico: <Calendar aria-hidden />, txt: lot.year_make && lot.year_make !== lot.year_model ? `${lot.year_make}/${lot.year_model}` : String(lot.year_model) });
+  } else if (lot.year_make) {
+    s.push({ ico: <Calendar aria-hidden />, txt: `${lot.year_make} (fabricação)` });
   }
   if (lot.km != null) s.push({ ico: <Gauge aria-hidden />, txt: `${lot.km.toLocaleString('pt-BR')} km` });
   if (lot.area) s.push({ ico: <Ruler aria-hidden />, txt: `${Math.round(lot.area)} m²` });

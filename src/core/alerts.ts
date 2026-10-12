@@ -107,8 +107,8 @@ function condicoes(a: Alerta, base: number): { sql: string[]; params: any[] } {
   emLista('auctioneer_name', f.auctioneer);
   if (f.priceMin != null) sql.push(`COALESCE(current_bid, min_bid) >= ${ph(Number(f.priceMin))}`);
   if (f.priceMax != null) sql.push(`COALESCE(current_bid, min_bid) <= ${ph(Number(f.priceMax))}`);
-  if (f.yearMin != null) sql.push(`year_model >= ${ph(Number(f.yearMin))}`);
-  if (f.yearMax != null) sql.push(`year_model <= ${ph(Number(f.yearMax))}`);
+  if (f.yearMin != null) sql.push(`COALESCE(year_model, year_make) >= ${ph(Number(f.yearMin))}`);
+  if (f.yearMax != null) sql.push(`COALESCE(year_model, year_make) <= ${ph(Number(f.yearMax))}`);
   if (f.onlyWithPhoto) sql.push('photo_count > 0');
   emLista('doc_type', f.docType);
   if (f.belowAppraisal) sql.push('appraisal > COALESCE(current_bid, min_bid) AND COALESCE(current_bid, min_bid) > 0 AND NOT bid_suspect');

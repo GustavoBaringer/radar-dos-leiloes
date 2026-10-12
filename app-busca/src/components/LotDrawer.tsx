@@ -284,7 +284,7 @@ export function LotDrawer({
                       ? (LABEL_PROPERTY[lot.property_type] ?? lot.property_type)
                       : null,
                 ],
-                ['Ano', lot.year_model ? `${lot.year_make ?? ''}${lot.year_make ? '/' : ''}${lot.year_model}` : null],
+                ['Ano', lot.year_model ? `${lot.year_make ?? ''}${lot.year_make ? '/' : ''}${lot.year_model}` : lot.year_make ? `${lot.year_make} (fabricação)` : null],
                 ['Quilometragem', lot.km != null ? `${lot.km.toLocaleString('pt-BR')} km` : null],
                 ['Área', lot.area ? `${lot.area} m²` : null],
                 ['Cor', lot.color ? (LABEL_COR[lot.color] ?? lot.color) : null],

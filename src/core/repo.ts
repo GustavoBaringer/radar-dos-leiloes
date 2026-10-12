@@ -390,8 +390,8 @@ function montaFiltro(p: SearchParams) {
   if (!p.assetType && !tiposVeiculo.length) P(`asset_type <> 'outro'`);
   if (p.priceMin != null) P('COALESCE(current_bid, min_bid) >= ?', p.priceMin);
   if (p.priceMax != null) P('COALESCE(current_bid, min_bid) <= ?', p.priceMax);
-  if (p.yearMin != null) P('year_model >= ?', p.yearMin);
-  if (p.yearMax != null) P('year_model <= ?', p.yearMax);
+  if (p.yearMin != null) P('COALESCE(year_model, year_make) >= ?', p.yearMin);
+  if (p.yearMax != null) P('COALESCE(year_model, year_make) <= ?', p.yearMax);
   if (p.onlyWithDate) P('(auction_start_utc IS NOT NULL OR auction_end_utc IS NOT NULL)');
   if (p.onlyWithPhoto) P('photo_count > 0');
   if (p.endsWithin === 'hoje' || p.endsWithin === '7d') {

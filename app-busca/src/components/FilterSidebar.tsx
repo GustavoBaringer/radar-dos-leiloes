@@ -200,15 +200,15 @@ export function FilterSidebar({ estado, facetas, rotulosServidor, aoMudar, aoLim
       {!ehImovel && (
         <Secao titulo="Veículo">
           {lista('vehicleType')}
-          <span className="f-sub">Ano do modelo</span>
+          <span className="f-sub" title="Usa o ano de fabricação quando o ano do modelo não está informado.">Ano do veículo</span>
           <div className="f-faixa">
             <CampoNumero
-              placeholder="De" aria-label="Ano do modelo, de"
+              placeholder="De" aria-label="Ano do veículo, de"
               valor={estado.yearMin} aoAplicar={(v) => aoMudar({ yearMin: v, page: 1 })}
             />
             <span aria-hidden>–</span>
             <CampoNumero
-              placeholder="Até" aria-label="Ano do modelo, até"
+              placeholder="Até" aria-label="Ano do veículo, até"
               valor={estado.yearMax} aoAplicar={(v) => aoMudar({ yearMax: v, page: 1 })}
             />
           </div>

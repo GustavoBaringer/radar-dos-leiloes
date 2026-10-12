@@ -142,7 +142,11 @@ export function urlDoAlerta(a: { q: string | null; filters?: Record<string, unkn
   const f = a.filters ?? {};
   const e: EstadoBusca = { ...ESTADO_VAZIO, multi: { ...ESTADO_VAZIO.multi } };
   e.q = a.q ?? '';
-  for (const id of CAMPOS_FILTRO) if (typeof f[id] === 'string' && f[id]) e[id] = f[id];
+  for (const id of CAMPOS_FILTRO) {
+    const value = f[id];
+    if (typeof value === 'string' && value) e[id] = value;
+    else if (id !== 'assetType' && typeof value === 'number' && Number.isFinite(value)) e[id] = String(value);
+  }
   for (const id of MULTI_IDS) if (typeof f[id] === 'string' && f[id]) e.multi[id] = f[id].split(',').filter(Boolean);
   const flag = (v: unknown) => v === true || v === 'true' || v === '1';
   e.onlyWithDate = flag(f.onlyWithDate);
