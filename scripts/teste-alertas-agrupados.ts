@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agruparDisparos, mensagemResumo } from '../src/core/alerta-resumo.js';
 import { avaliarAlertas, type Disparo } from '../src/core/alerts.js';
-import { enviarPush, enviarEmail } from '../src/core/notificar.js';
+import { enviarPush, enviarEmail, aplicarLimitesDeEntrega } from '../src/core/notificar.js';
 import type { query } from '../src/core/db.js';
 
 const disparo = (lotId: number, alertId = 1, ownerId = 7): Disparo => ({
@@ -139,6 +139,47 @@ test('casamento processa mais de 50 lotes e retorna só hits novos em reavaliaç
   assert.equal(first.length, 74);
   assert.equal(agruparDisparos(first)[0].length, 74);
   assert.equal((await avaliarAlertas(lots.map((l) => l.id), queryFn)).length, 0);
+});
+
+test('teto de entrega adia por alerta e por canal sem perder o agrupamento', async () => {
+  const agora = Date.now();
+  const entregues: Record<string, string> = { '7:push': new Date(agora - 60_000).toISOString() };
+  let consultas = 0;
+  const queryFn = (async (sql: string, params: any[]) => {
+    assert.match(sql, /max\(created_at\)/);
+    consultas++;
+    return [{ ultimo: entregues[`${params[0]}:${params[1]}`] ?? null }];
+  }) as typeof query;
+
+  // Três lotes do alerta 7 (janela de push ainda aberta, e-mail nunca entregue)
+  // e um do alerta 9, que entregou push há 10 minutos (janela de 6h fechada).
+  const entrada = [disparo(1), disparo(2), disparo(3), disparo(9, 3)];
+  const r = await aplicarLimitesDeEntrega(entrada, { push: 360, email: 1440 }, { query: queryFn });
+
+  // Alerta 7 entra inteiro: push e e-mail têm janelas independentes e abertas.
+  assert.equal(r.disparos.length, 4);
+  assert.deepEqual(r.disparos.map((d) => d.channels), entrada.map(() => ['sino', 'push', 'email']));
+  assert.equal(r.adiados, 0);
+  // Três lotes do mesmo alerta não consultam três vezes.
+  assert.equal(consultas, 4);
+
+  // Fecha as duas janelas do alerta 7 e manda o alerta 7 de novo: adia tudo.
+  const fechadas = (async (sql: string, params: any[]) => {
+    assert.match(sql, /max\(created_at\)/);
+    return [{ ultimo: new Date(agora - 60_000).toISOString() }];
+  }) as typeof query;
+  const depois = await aplicarLimitesDeEntrega([disparo(4)], { push: 360, email: 1440 }, { query: fechadas });
+  assert.equal(depois.disparos.length, 0);
+  assert.equal(depois.adiados, 2, 'push e e-mail contam um adiado por canal');
+
+  // Sem limites (coleta regular) nada é adiado, nem com entrega recente.
+  const livre = await aplicarLimitesDeEntrega([disparo(5)], {}, { query: queryFn });
+  assert.equal(livre.disparos.length, 1);
+  assert.equal(livre.adiados, 0);
+
+  // Janela vencida reabre: o último aviso tem 7 horas.
+  const antigo = (async () => [{ ultimo: new Date(agora - 7 * 3600_000).toISOString() }]) as typeof query;
+  assert.equal((await aplicarLimitesDeEntrega([disparo(6)], { push: 360 }, { query: antigo })).disparos.length, 1);
 });
 
 test('clique no push navega a aba existente até os resultados antes de focar', async () => {

@@ -7,6 +7,7 @@ import { finishRun, startRun, upsertLots } from '../core/repo.js';
 import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
 import { executeCollection, type CollectionExecutionDependencies } from '../core/collection-execution.js';
 import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { processarAposColeta } from '../core/pos-coleta.js';
 import { DAILY_SITES, dailySite, dailyScheduleItems } from './daily-coverage.js';
 import { makeRedis, type CollectJob } from './runtime.js';
 
@@ -79,10 +80,22 @@ export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Prom
   const queue = new Queue<CollectJob>(DAILY_QUEUE, { connection });
   let worker: Worker<CollectJob> | undefined;
   const controllers = new Map<string, AbortController>();
+  /**
+   * A cobertura daily TEM aviso de alerta; o que ela não pode é despejar um por
+   * site: são 158 domínios entre 00:00 e 10:28 e o mesmo modelo aparece em
+   * vários. O teto é por alerta e por canal — push a cada 6h, e-mail uma vez ao
+   * dia — e o aviso seguinte junta o que entrou no meio da janela. O hit é sempre
+   * gravado, então nada se perde na tela: some só da notificação.
+   *
+   * A coleta regular não usa limite nenhum: lá cada lote novo é um aviso por si.
+   */
+  const limites = {
+    push: Number(process.env.COBERTURA_PUSH_MINUTOS ?? 360),
+    email: Number(process.env.COBERTURA_EMAIL_MINUTOS ?? 1440),
+  };
   const execution: CollectionExecutionDependencies = {
     lookupConnector: getConnector, startRun, finishRun, upsertLots, observerForCollection,
-    // Coverage catch-up must not send a burst of notifications to subscribers.
-    processarAposColeta: async () => ({ disparos: 0, push: 0, emails: 0, pendentesEmail: 0 }),
+    processarAposColeta: (novos: number[]) => processarAposColeta(novos, undefined, limites),
     logError: (message, error) => console.error(message, error),
   };
   return {
@@ -94,7 +107,11 @@ export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Prom
         const id = job.id!; const controller = new AbortController(); controllers.set(id, controller);
         try {
           const result = await processDailyJob(job, execution, controller.signal, browserGate);
-          console.log(`[daily] ${job.data.tenant}: run=${result.runId} fetched=${result.result.fetched} mapped=${result.result.lots.length} upserted=${result.upserted} skipped=${result.result.skipped}`);
+          const n = result.notifications;
+          const avisos = n && n.disparos
+            ? ` · alertas ${n.disparos} · push ${n.push} · e-mail ${n.emails}${n.adiados ? ` · adiados ${n.adiados}` : ''}`
+            : '';
+          console.log(`[daily] ${job.data.tenant}: run=${result.runId} fetched=${result.result.fetched} mapped=${result.result.lots.length} upserted=${result.upserted} skipped=${result.result.skipped}${avisos}`);
           return { runId: result.runId, fetched: result.result.fetched, upserted: result.upserted };
         } finally { controllers.delete(id); }
       }, { connection, concurrency: 1 });

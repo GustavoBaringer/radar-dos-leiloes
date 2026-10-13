@@ -1,5 +1,5 @@
 import { avaliarAlertas } from './alerts.js';
-import { enviarPush, enviarEmail } from './notificar.js';
+import { aplicarLimitesDeEntrega, enviarPush, enviarEmail, type LimitesEntrega } from './notificar.js';
 
 /**
  * O que acontece DEPOIS de gravar lotes, seja qual for o caminho de coleta.
@@ -15,11 +15,14 @@ export interface ResultadoPosColeta {
   push: number;
   emails: number;
   pendentesEmail: number;
+  /** Disparos casados, com canal adiado pelo teto de entrega. O hit continua gravado. */
+  adiados?: number;
 }
 
 export async function processarAposColeta(
   novos: number[],
   publicar?: (payload: unknown) => Promise<unknown>,
+  limites?: LimitesEntrega,
 ): Promise<ResultadoPosColeta> {
   const vazio = { disparos: 0, push: 0, emails: 0, pendentesEmail: 0 };
   if (!novos.length) return vazio;
@@ -29,9 +32,20 @@ export async function processarAposColeta(
     if (!disparos.length) return vazio;
 
     if (publicar) await publicar({ type: 'alertas', disparos });
-    const push = await enviarPush(disparos);
-    const email = await enviarEmail(disparos);
-    return { disparos: disparos.length, push, emails: email.enviados, pendentesEmail: email.pendentes };
+    // O hit já está no banco antes daqui: o teto decide só o que sai por push e
+    // e-mail agora. Quem chama sem limite entrega cada lote novo como aviso.
+    const janela = limites
+      ? await aplicarLimitesDeEntrega(disparos, limites)
+      : { disparos, adiados: 0 };
+    const push = await enviarPush(janela.disparos);
+    const email = await enviarEmail(janela.disparos);
+    return {
+      disparos: disparos.length,
+      push,
+      emails: email.enviados,
+      pendentesEmail: email.pendentes,
+      adiados: janela.adiados,
+    };
   } catch (err: any) {
     // Falha de aviso não derruba a coleta: o lote já está gravado e o aviso
     // pode ser reprocessado; o inverso não é verdade.

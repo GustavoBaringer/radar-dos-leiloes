@@ -13,7 +13,7 @@ import {
 
 export type CollectionMetadata = Pick<TenantObserverContext, 'origin' | 'jobId' | 'scheduledAt'>;
 export type CollectionRunData = { ok: boolean; fetched?: number; upserted?: number; skipped?: number; error?: string; httpStatus?: number };
-export type CollectionNotifications = { disparos: number; push: number; emails: number; pendentesEmail: number };
+export type CollectionNotifications = { disparos: number; push: number; emails: number; pendentesEmail: number; adiados?: number };
 
 export interface CollectionExecutionOptions {
   sourceId: string;

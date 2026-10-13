@@ -63,6 +63,79 @@ const inscricoesDoDono = (ownerId: number, deps: PushDependencies) => deps.query
   [ownerId],
 );
 
+/**
+ * Teto de entrega por alerta e por canal, em minutos.
+ *
+ * A cobertura diária visita 158 domínios entre 00:00 e 10:28: um modelo popular
+ * em vários sites gera um disparo por site, e o usuário leva dezenas de avisos
+ * sobre o mesmo carro. O limite é POR ALERTA: a janela só reabre quando passa o
+ * tempo, e o aviso seguinte junta tudo o que entrou no meio.
+ *
+ * Zero (ou ausente) desliga o teto — é o caso das coletas regulares, onde cada
+ * lote novo é um aviso por si.
+ */
+export type LimitesEntrega = { push?: number; email?: number };
+
+/**
+ * Quando foi o último aviso ENTREGUE deste alerta neste canal.
+ *
+ * `alert_hits.created_at` é a hora do disparo e `notified` guarda os canais que
+ * saíram: `max()` dos hits que já têm o canal é, na prática, a última entrega —
+ * sem coluna nova e sem migração.
+ */
+async function ultimaEntrega(alertId: number, canal: string, deps: { query: typeof query }): Promise<number | null> {
+  const [r] = await deps.query<{ ultimo: string | null }>(
+    'SELECT max(created_at)::text AS ultimo FROM alert_hits WHERE alert_id = $1 AND $2 = ANY(notified)',
+    [alertId, canal],
+  );
+  return r?.ultimo ? Date.parse(r.ultimo) : null;
+}
+
+/**
+ * Separa o que entra na entrega agora do que fica para a próxima janela.
+ *
+ * O hit já foi gravado por `avaliarAlertas` — isto só decide **push e e-mail**.
+ * Push e e-mail têm janelas independentes: o mesmo lote pode sair por push agora
+ * e esperar o e-mail da próxima janela, sem perder nenhum dos dois.
+ */
+export async function aplicarLimitesDeEntrega(
+  disparos: Disparo[],
+  limites: LimitesEntrega,
+  deps: { query: typeof query } = { query },
+): Promise<{ disparos: Disparo[]; adiados: number }> {
+  const janela = new Map<string, number>();
+  const dentroDaJanela = async (alertId: number, canal: 'push' | 'email', minutos: number) => {
+    const chave = `${alertId}:${canal}`;
+    const marcado = janela.get(chave);
+    if (marcado !== undefined) return marcado;
+    const ultima = await ultimaEntrega(alertId, canal, deps);
+    const fechado = ultima != null && Date.now() - ultima < minutos * 60_000;
+    janela.set(chave, fechado ? 1 : 0);
+    return fechado;
+  };
+
+  const entrega = new Map<string, Disparo>();
+  let adiados = 0;
+  for (const d of disparos) {
+    const canais = d.channels.filter((c): c is 'push' | 'email' => c === 'push' || c === 'email');
+    const livres: string[] = [];
+    for (const canal of canais) {
+      const minutos = limites[canal] ?? 0;
+      // O resultado fica memoizado por alerta+canal: dozens de lotes do mesmo
+      // disparo passam juntos na notificação agrupada, sem consumir janelas
+      // diferentes entre si.
+      if (minutos > 0 && await dentroDaJanela(d.alertId, canal, minutos)) { adiados++; continue; }
+      livres.push(canal);
+    }
+    if (!livres.length) continue;
+    entrega.set(`${d.alertId}:${d.lotId}`, {
+      ...d,
+      channels: livres.length === d.channels.length ? d.channels : [...d.channels.filter((c) => c === 'sino'), ...livres],
+    });
+  }
+  return { disparos: [...entrega.values()], adiados };
+}
+
 export async function enviarPush(disparos: Disparo[], deps: PushDependencies = pushDependencies) {
   if (!deps.enabled || !disparos.length) return 0;
   const alvos = disparos.filter((d) => d.channels.includes('push'));

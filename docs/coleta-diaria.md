@@ -21,8 +21,14 @@ do refresh de lotes próximos de encerrar; a agenda diária não adia os demais 
 Ao iniciar, o worker repõe os domínios sem tentativa diária registrada naquele dia.
 Essa recuperação inicial consulta até cinco lotes por site, com 45 segundos, para
 registrar cobertura sem bloquear a fila diária por catálogos muito grandes. Os jobs
-diários recorrentes mantêm os limites completos. Nenhuma notificação em massa é enviada
-por essa fila de cobertura; os ciclos existentes de alertas permanecem independentes.
+diários recorrentes mantêm os limites completos. A cobertura também dispara alerta:
+o que ela não pode é despejar um aviso por site, com 158 domínios na mesma
+manhã e o mesmo modelo aparecendo em vários. O teto de entrega é por alerta e por
+canal — push a cada 6 horas (`COBERTURA_PUSH_MINUTOS`) e e-mail uma vez ao dia
+(`COBERTURA_EMAIL_MINUTOS`) — e o aviso seguinte junta o que entrou no meio da
+janela. O `alert_hits` é sempre gravado: o que a janela adia é a notificação, não
+o registro, então nada some da tela de alertas. A coleta regular não usa limite
+nenhum; cada lote novo é um aviso por si.
 
 Domínios explicitamente marcados `monitorOnly` são consultados e registram falha com
 motivo de falta de catálogo/adaptador revisado, em vez de retornar sucesso fictício.
