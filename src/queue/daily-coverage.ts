@@ -385,8 +385,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "leiloesbrasilpe.com.br",
     "sourceId": "htmlagenda",
-    "required120": false,
-    "monitorOnly": true
+    "required120": false
   },
   {
     "domain": "leiloescostaesilva.com.br",
