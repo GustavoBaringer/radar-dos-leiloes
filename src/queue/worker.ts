@@ -311,7 +311,7 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
   // 50 min era o que punha o vlance em 30 coletas por hora.
   for (const row of await query<{ source_id: string; fim: Date; ultima: Date | null }>(`
     SELECT l.source_id, min(l.auction_end_utc) AS fim,
-            (SELECT max(r.started_at) FROM collection_runs r WHERE r.source_id = l.source_id AND r.job <> 'collect:tenant') AS ultima
+            (SELECT max(r.started_at) FROM collection_runs r WHERE r.source_id = l.source_id AND r.job NOT IN ('collect:tenant','collect:daily')) AS ultima
       FROM lots l
      WHERE l.closing_model = 'timer_por_lote'
        AND l.status IN ('aberto','agendado')
@@ -344,7 +344,7 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
                                    AND now() + interval '${ANTES_DA_ABERTURA_H} hours'
        AND NOT EXISTS (
          SELECT 1 FROM collection_runs r
-           WHERE r.source_id = l.source_id AND r.job <> 'collect:tenant'
+           WHERE r.source_id = l.source_id AND r.job NOT IN ('collect:tenant','collect:daily')
             AND r.started_at > now() - interval '${DESCANSO_PREGAO_MIN} minutes')`)) {
     const c = connectors.find((x) => x.def.id === row.source_id);
     if (c && enabledSource(row.source_id)) quentes.set(row.source_id, c.def.method === 'api' ? 15000 : 1200);

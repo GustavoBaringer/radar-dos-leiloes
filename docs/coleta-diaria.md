@@ -15,6 +15,8 @@ plataforma. Limite e prazo não garantem catálogo completo: o registro informa 
 descartes e estado parcial/falha. Uma execução vazia com HTTP 200 também deixa registro.
 Erros antes do adapter iniciar, fontes desabilitadas e falhas de gravação são registrados
 na tentativa e em `collection_runs.error`. URLs de outros domínios não são persistidas.
+Coletas individuais não contam como atualização de toda a plataforma no descanso
+do refresh de lotes próximos de encerrar; a agenda diária não adia os demais sites.
 
 Ao iniciar, o worker repõe os domínios sem tentativa diária registrada naquele dia.
 Essa recuperação inicial consulta até cinco lotes por site, com 45 segundos, para
