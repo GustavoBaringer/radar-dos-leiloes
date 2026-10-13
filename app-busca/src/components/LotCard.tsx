@@ -3,7 +3,7 @@ import { type ReactNode, useCallback } from 'react';
 import { ArrowUpRight, BedDouble, Calendar, Gauge, Heart, MapPin, Ruler } from 'lucide-react';
 import type { Lot } from '@/lib/types';
 import { LABEL_ASSET, LABEL_DOC, LABEL_PROPERTY, LABEL_VEHICLE, SRC_LABEL } from '@/lib/labels';
-import { contagem, fracaoDaAvaliacao, img, money, nopicDe, rotuloLance, titulo, whenLabel } from '@/lib/format';
+import { contagem, fracaoDaAvaliacao, img, money, nomeOrigem, nopicDe, rotuloLance, titulo, whenLabel } from '@/lib/format';
 import { useAgora } from '@/hooks/useAgora';
 
 /**
@@ -66,7 +66,7 @@ export function LotCard({
   const agora = useAgora(fimMs != null && fimMs > 0 && fimMs < 3_600_000);
   const when = whenLabel(lot, agora);
   const prazo = contagem(lot, agora) ?? when.text;
-  const fonte = SRC_LABEL[lot.source_id] ?? lot.source_id;
+  const fonte = nomeOrigem(lot.auctioneer_site_name, lot.auctioneer_name, lot.auctioneer_domain, lot.lot_url, SRC_LABEL[lot.source_id] ?? lot.source_id);
   const abrir = useCallback(() => aoAbrir(lot.id), [aoAbrir, lot.id]);
 
   return (
@@ -100,9 +100,9 @@ export function LotCard({
             <span><Heart aria-hidden fill={favoritado ? 'currentColor' : 'none'} /></span>
           </button>
         )}
-        <span className="lc-fonte"><i aria-hidden>{fonte.charAt(0)}</i>{fonte}</span>
-        {lot.auctioneer_name && (
-          <span className="lc-cred" title={`Foto publicada por ${lot.auctioneer_name}`}>foto: {lot.auctioneer_name}</span>
+        <span className="lc-fonte" title={fonte}><i aria-hidden>{fonte.charAt(0)}</i><span>{fonte}</span></span>
+        {lot.auctioneer_name?.trim() && (
+          <span className="lc-cred" title={`Foto publicada por ${lot.auctioneer_name.trim()}`}>foto: {lot.auctioneer_name.trim()}</span>
         )}
       </div>
 

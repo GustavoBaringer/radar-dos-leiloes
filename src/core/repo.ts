@@ -287,12 +287,15 @@ export interface SearchResponse {
 
 // HTTP(S) only; split authority before path/query/fragment, remove www/port,
 // then expose only valid DNS domains. chr(63) avoids confusing SQL bind markers.
-const SITE_AUTHORITY = `split_part(split_part(split_part(CASE
-  WHEN lower(lot_url) LIKE 'https://%' THEN substring(lot_url from 9)
-  WHEN lower(lot_url) LIKE 'http://%' THEN substring(lot_url from 8)
+export function lotSiteHostSql(urlColumn = 'lot_url'): string {
+  const SITE_AUTHORITY = `split_part(split_part(split_part(CASE
+  WHEN lower(${urlColumn}) LIKE 'https://%' THEN substring(${urlColumn} from 9)
+  WHEN lower(${urlColumn}) LIKE 'http://%' THEN substring(${urlColumn} from 8)
 END, '/', 1), chr(63), 1), chr(35), 1)`;
-const SITE_HOST_CANDIDATE = `regexp_replace(regexp_replace(lower(${SITE_AUTHORITY}), '^www[.]', ''), ':[0-9]+$', '')`;
-export const LOT_SITE_HOST_SQL = `(CASE WHEN ${SITE_HOST_CANDIDATE} ~ '^([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})([.]([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})){1,}$' THEN ${SITE_HOST_CANDIDATE} END)`;
+  const SITE_HOST_CANDIDATE = `regexp_replace(regexp_replace(lower(${SITE_AUTHORITY}), '^www[.]', ''), ':[0-9]+$', '')`;
+  return `(CASE WHEN ${SITE_HOST_CANDIDATE} ~ '^([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})([.]([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})){1,}$' THEN ${SITE_HOST_CANDIDATE} END)`;
+}
+export const LOT_SITE_HOST_SQL = lotSiteHostSql();
 
 /**
  * A busca roda no nosso índice, nunca é repassada à fonte.
@@ -507,7 +510,9 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
 
   const [{ count }] = await queryFn(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params) as { count: number }[];
   const items = await queryFn(
-    `SELECT id, source_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
+    `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
+            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${LOT_SITE_HOST_SQL} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            title_raw, title_display, brand, model, version, year_make, year_model,
             km, doc_type, closing_model, auction_start_utc, auction_end_utc, source_tz, status,
             current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect, asset_type, vehicle_type, property_type,
             source_category, auctioneer_name, auctioneer_reg,
@@ -608,7 +613,9 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
 
 export async function getLot(id: number, opcoes: { interno?: boolean } = {}, queryFn: QueryFunction = query) {
   const [lot] = await queryFn(
-    `SELECT id, source_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
+    `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
+            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${LOT_SITE_HOST_SQL} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            title_raw, title_display, brand, model, version, year_make, year_model,
             km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
             source_tz, status, current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect,
             asset_type, vehicle_type, property_type, source_category, auctioneer_name, auctioneer_reg,

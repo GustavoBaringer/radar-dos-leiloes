@@ -7,6 +7,8 @@ export interface PublicLot {
   id: number;
   source_id: string;
   lot_url: string | null;
+  auctioneer_site_name?: string;
+  auctioneer_domain?: string;
   title_raw: string;
   title_display: string | null;
   brand: string | null;
@@ -163,6 +165,10 @@ function lotFields(source: Row, includeDetail: boolean, interno = false): Public
     lot.collected_at = date(source.collected_at);
     lot.first_seen_at = date(source.first_seen_at);
   }
+  const siteName = text(source.auctioneer_site_name)?.trim();
+  const domain = text(source.auctioneer_domain)?.trim();
+  if (siteName) lot.auctioneer_site_name = siteName;
+  if (domain) lot.auctioneer_domain = domain;
   if (typeof source.favorited === 'boolean') lot.favorited = source.favorited;
   if (includeDetail) {
     lot.color = text(source.color);

@@ -631,9 +631,10 @@
   .lc-fav svg { width: 17px; height: 17px }
   .lc-fav:hover span { transform: scale(1.1) }
   .lc-fav[aria-pressed="true"] span { background: #fb7185; color: #fff }
-  .lc-fonte { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: #fff; pointer-events: none }
-  .lc-fonte i { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 6px; font-style: normal; font-size: 10px; font-weight: 700; background: linear-gradient(110deg, var(--brand-core), var(--brand-signal)) }
-  .lc-cred { position: absolute; z-index: 2; right: 12px; bottom: 12px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: color-mix(in srgb, var(--brand-ink-soft) 90%, transparent) }
+  .lc-fonte { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: inline-flex; align-items: center; gap: 7px; max-width: calc(55% - 14px); font-size: 12px; font-weight: 600; color: #fff; pointer-events: none }
+  .lc-fonte > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .lc-fonte i { width: 18px; height: 18px; flex: 0 0 18px; display: grid; place-items: center; border-radius: 6px; font-style: normal; font-size: 10px; font-weight: 700; background: linear-gradient(110deg, var(--brand-core), var(--brand-signal)) }
+  .lc-cred { position: absolute; z-index: 2; right: 12px; bottom: 12px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: color-mix(in srgb, var(--brand-ink-soft) 90%, transparent) }
 
   .lc-corpo { display: grid; gap: 12px; align-content: start; flex: 1; padding: 18px 20px 16px }
   .lc-tipo { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-signal); font-weight: 700 }

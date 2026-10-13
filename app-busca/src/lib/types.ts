@@ -12,6 +12,8 @@ export interface Lot {
   id: number;
   source_id: string;
   lot_url: string | null;
+  auctioneer_site_name?: string;
+  auctioneer_domain?: string;
   favorited?: boolean;
   title_raw: string;
   title_display: string | null;

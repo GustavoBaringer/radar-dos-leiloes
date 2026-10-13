@@ -8,6 +8,24 @@ const NUM = new Intl.NumberFormat('pt-BR');
 export const money = (v: number | null | undefined) => (v == null ? null : BRL.format(v));
 export const numero = (v: number | null | undefined) => (v == null ? '—' : NUM.format(v));
 
+/** Nome exibido para a origem; domínio fornecido pelo backend também é validado como host. */
+export function nomeOrigem(siteName: string | null | undefined, nome: string | null | undefined, domain: string | null | undefined, lotUrl: string | null | undefined, sourceId: string): string {
+  const oficial = siteName?.trim();
+  if (oficial) return oficial;
+  const pessoa = nome?.trim();
+  if (pessoa) return pessoa;
+  const hostname = (value: string) => {
+    try {
+      const url = new URL(value.includes('://') ? value : `https://${value}`);
+      return url.protocol === 'http:' || url.protocol === 'https:' ? url.hostname.replace(/^www\./i, '') : '';
+    } catch { return ''; }
+  };
+  const host = domain?.trim() ? hostname(domain.trim()) : '';
+  if (host) return host;
+  const urlHost = lotUrl ? hostname(lotUrl) : '';
+  return urlHost || sourceId;
+}
+
 export const dataBr = (v: string | null | undefined) =>
   v
     ? new Date(v).toLocaleString('pt-BR', {
