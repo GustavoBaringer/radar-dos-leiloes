@@ -19,7 +19,12 @@ export interface PublicLot {
   closing_model: string;
   auction_start_utc: string | null;
   auction_end_utc: string | null;
-  source_tz: string | null;
+  /**
+   * Procedência — dado interno de coleta, fora da allowlist pública. Só vem
+   * quando o chamador confirma `interno` (administrador, e só no detalhe do
+   * lote). Ausente é o padrão: quem esquece de pedir não vaza nada.
+   */
+  source_tz?: string | null;
   status: string;
   current_bid: number | null;
   min_bid: number | null;
@@ -44,8 +49,10 @@ export interface PublicLot {
   photo_count: number;
   financeable: boolean | null;
   has_report: boolean | null;
-  collected_at: string | null;
-  first_seen_at: string | null;
+  /** Ver `source_tz`: só com `interno`. */
+  collected_at?: string | null;
+  /** Ver `source_tz`: só com `interno`. */
+  first_seen_at?: string | null;
   is_novo: boolean;
   effective_status: string;
   discount_pct: number | null;
@@ -115,7 +122,7 @@ function photosOf(value: unknown): string[] {
   return photos;
 }
 
-function lotFields(source: Row, includeDetail: boolean): PublicLot {
+function lotFields(source: Row, includeDetail: boolean, interno = false): PublicLot {
   const id = number(source.id);
   if (id === null || !Number.isSafeInteger(id) || id <= 0) throw new TypeError('Identificador de lote inválido.');
   const photos = photosOf(source.photos);
@@ -129,7 +136,7 @@ function lotFields(source: Row, includeDetail: boolean): PublicLot {
     year_make: number(source.year_make), year_model: number(source.year_model), km: number(source.km),
     doc_type: text(source.doc_type), closing_model: text(source.closing_model) ?? '',
     auction_start_utc: date(source.auction_start_utc), auction_end_utc: date(source.auction_end_utc),
-    source_tz: text(source.source_tz), status: text(source.status) ?? '',
+    status: text(source.status) ?? '',
     current_bid: number(source.current_bid), min_bid: number(source.min_bid), bid_increment: number(source.bid_increment),
     appraisal: number(source.appraisal), fees_pct: number(source.fees_pct), bid_suspect: bool(source.bid_suspect),
     asset_type: text(source.asset_type) ?? '', vehicle_type: text(source.vehicle_type), property_type: text(source.property_type),
@@ -140,10 +147,22 @@ function lotFields(source: Row, includeDetail: boolean): PublicLot {
     photo_count: number(source.photo_count) ?? photos.length,
     financeable: typeof source.financeable === 'boolean' ? source.financeable : null,
     has_report: typeof source.has_report === 'boolean' ? source.has_report : null,
-    collected_at: date(source.collected_at), first_seen_at: date(source.first_seen_at),
     is_novo: bool(source.is_novo), effective_status: text(source.effective_status) ?? text(source.status) ?? '',
     discount_pct: number(source.discount_pct),
   };
+  /**
+   * Procedência: quando o lote entrou no índice e quando foi coletado, mais o
+   * fuso que a fonte publica. É informação de operação — revela o ritmo com que
+   * o índice cresce — e nada da tela pública ou do cartão depende dela. Fica,
+   * então, atrás de `interno`, que só o detalhe do lote pede e só para admin.
+   * `is_novo` continua saiu para todos: é um badge de dois dias, não um dado de
+   * coleta.
+   */
+  if (interno) {
+    lot.source_tz = text(source.source_tz);
+    lot.collected_at = date(source.collected_at);
+    lot.first_seen_at = date(source.first_seen_at);
+  }
   if (typeof source.favorited === 'boolean') lot.favorited = source.favorited;
   if (includeDetail) {
     lot.color = text(source.color);
@@ -161,9 +180,15 @@ function lotFields(source: Row, includeDetail: boolean): PublicLot {
   return lot;
 }
 
-/** Public card projection. Unknown and internal row properties are never copied. */
-export function toPublicLot(value: unknown): PublicLot {
-  return lotFields(rowOf(value), true);
+/**
+ * Public card projection. Unknown and internal row properties are never copied.
+ *
+ * `interno` é opt-in e nasce falso: a procedência só entra quando o chamador
+ * disse que é administrador. Lista, faceta, alerta, favorito e hit nunca pedem —
+ * a tela pública do lote também não.
+ */
+export function toPublicLot(value: unknown, opcoes: { interno?: boolean } = {}): PublicLot {
+  return lotFields(rowOf(value), true, opcoes.interno === true);
 }
 
 /** Public alert-hit serializer: only Lot fields and documented hit metadata. */

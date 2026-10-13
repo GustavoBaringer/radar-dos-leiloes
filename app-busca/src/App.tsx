@@ -444,6 +444,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         aoFechar={() => fecharGaveta()}
         favoritado={lote ? (favoriteContext.known.get(lote.id) ?? lote.favorited) : undefined}
         aoFavoritar={alternarFavorito}
+        mostrarProcedencia={papel === 'admin'}
       />
       <DialogoAlerta
         alvo={alvoDialogo}

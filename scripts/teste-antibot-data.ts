@@ -126,12 +126,30 @@ test('detail SELECT is an explicit public projection and returns only allowliste
     statements.push(sql);
     return sql.includes('bid_history') ? [{ bid: 50_000, observed_at: '2026-10-03T00:00:00Z', secret: 'drop' }] : [lotFixture()];
   });
-  const lot = await getLot(17, queryFn);
+  const lot = await getLot(17, {}, queryFn);
   assert.ok(lot);
   assert.doesNotMatch(statements[0], /SELECT \*/i);
   assert.equal('raw' in lot, false);
   assert.equal('external_id' in lot, false);
   assert.deepEqual(lot.bid_history, [{ bid: 50_000, observed_at: '2026-10-03T00:00:00Z' }]);
+});
+
+test('procedência fica fora do DTO público e só volta para administrador', async () => {
+  const queryFn = fakeQuery((sql) =>
+    sql.includes('bid_history') ? [] : [lotFixture()]);
+  const publico = await getLot(17, {}, queryFn);
+  assert.ok(publico);
+  for (const campo of ['source_tz', 'collected_at', 'first_seen_at']) {
+    assert.equal(campo in publico, false, `${campo} não pode sair para não administrador`);
+  }
+  // `is_novo` é badge de dois dias, não dado de coleta: sai para todos.
+  assert.equal(publico.is_novo, true);
+
+  const admin = await getLot(17, { interno: true }, queryFn);
+  assert.ok(admin);
+  assert.equal(admin.source_tz, 'America/Sao_Paulo');
+  assert.equal(admin.first_seen_at, '2026-10-02T12:00:00.000Z');
+  assert.equal(new Date(admin.collected_at!).toISOString(), '2026-10-02T12:00:00.000Z');
 });
 
 test('map SQL caps rows at 1000 but preserves full counts and reports omissions', async () => {

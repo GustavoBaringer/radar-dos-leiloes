@@ -25,7 +25,11 @@ export interface Lot {
   closing_model: ClosingModel;
   auction_start_utc: string | null;
   auction_end_utc: string | null;
-  source_tz: string | null;
+  /**
+   * Procedência: o servidor só manda para administrador (`interno`), e só no
+   * detalhe. No resto — cartão, busca, vitrines, alertas, favoritos — não vem.
+   */
+  source_tz?: string | null;
   status: LotStatus;
   current_bid: number | null;
   min_bid: number | null;
@@ -50,8 +54,8 @@ export interface Lot {
   photo_count: number;
   financeable: boolean | null;
   has_report: boolean | null;
-  collected_at: string;
-  first_seen_at: string;
+  collected_at?: string;
+  first_seen_at?: string;
   is_novo: boolean;
   effective_status: LotStatus;
   discount_pct: number | null;

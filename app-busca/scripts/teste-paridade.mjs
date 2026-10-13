@@ -238,9 +238,12 @@ const semJs = await ctx.request.get(`${API}/lote/chevrolet-onix-2018-recuperado-
 const htmlSsr = await semJs.text();
 const temLd = htmlSsr.includes('application/ld+json');
 const temTitulo = /<title>[^<]*leilão[^<]*<\/title>/i.test(htmlSsr);
-const temConteudo = /Procedência do dado/.test(htmlSsr);
-if (temLd && temTitulo && temConteudo) ok('13. SSR do lote', `${htmlSsr.length} bytes com JSON-LD e conteúdo renderizado`);
-else falha('13. SSR do lote', `ld=${temLd} title=${temTitulo} conteudo=${temConteudo}`);
+const temConteudo = /painel-corpo/.test(htmlSsr);
+// Procedência é bloco de administrador: o SSR do link compartilhado, servido a
+// anônimo e aos robôs, não pode conter esse dado interno de coleta.
+const semProcedencia = !/Procedência do dado/.test(htmlSsr);
+if (temLd && temTitulo && temConteudo && semProcedencia) ok('13. SSR do lote', `${htmlSsr.length} bytes com JSON-LD e conteúdo renderizado`);
+else falha('13. SSR do lote', `ld=${temLd} title=${temTitulo} conteudo=${temConteudo} semProcedencia=${semProcedencia}`);
 
 /* 14 — lista de espera
    O formulário vive na LANDING (vanilla, intocada); o app de busca não o tem.

@@ -767,7 +767,9 @@ app.get<{ Params: { slug: string } }>('/lote/:slug', withReadResources(async (re
   // /api/lot/:id entrega — o SELECT curto de antes só servia para montar meta,
   // e renderizar com menos campos aqui do que o cliente tem faria a hidratação
   // divergir campo a campo.
-  const lot = id !== null ? await dependencies.data.getLot(id) : null;
+  // A procedência (quando entrou, quando foi coletado, fuso da fonte) é dado
+  // interno: entra só para administrador, e o `publico` abaixo nunca é um.
+  const lot = id !== null ? await dependencies.data.getLot(id, { interno: papelDe(req) === 'admin' }) : null;
   // Nunca entrega a casca do SPA numa URL inválida: ela poderia montar a busca
   // mantendo `/lote/<id>` na barra. O destino canônico de rota/lote inexistente
   // é a busca.
@@ -980,7 +982,7 @@ app.get('/api/home', withReadResources(async (req) => {
     ),
   ]);
   const eu = await donoDe(req);
-  const recentesPublicos = await accountContext.decorateLots(eu.userId, recentes.map(toPublicLot));
+  const recentesPublicos = await accountContext.decorateLots(eu.userId, recentes.map((row) => toPublicLot(row)));
   return { recentes: recentesPublicos, leiloeiros, fontes, total, totalLeiloeiros, ufs };
 }));
 
@@ -1099,8 +1101,8 @@ app.get('/api/vitrine', withReadResources(async () => {
     ...agregados[0],
     ufs,
     leiloeiros,
-    recentes: recentes.map(toPublicLot),
-    heroes: heroes.map(toPublicLot),
+    recentes: recentes.map((row) => toPublicLot(row)),
+    heroes: heroes.map((row) => toPublicLot(row)),
     categorias: CATEGORIAS.map(({ onde: _onde, ...rest }, i) => ({
       ...rest,
       total: c[`c${i}`] ?? 0,
@@ -1222,7 +1224,7 @@ app.get('/api/home/leiloeiro', withReadResources(async (req, reply) => {
     [nome],
   );
   const eu = await donoDe(req);
-  return accountContext.decorateLots(eu.userId, lots.map(toPublicLot));
+  return accountContext.decorateLots(eu.userId, lots.map((row) => toPublicLot(row)));
 }));
 
 app.get('/api/search', withReadResources(async (req) => {
@@ -1250,7 +1252,7 @@ app.get('/api/lot/:id', withReadResources(async (req, reply) => {
   const { id } = req.params as { id: string };
   const lotId = safePositiveId(id);
   if (lotId === null) return reply.code(400).send({ error: 'id inválido' });
-  const lot = await dependencies.data.getLot(lotId);
+  const lot = await dependencies.data.getLot(lotId, { interno: papelDe(req) === 'admin' });
   if (!lot) return reply.code(404).send({ error: 'lote não encontrado' });
   const eu = await donoDe(req);
   return (await accountContext.decorateLots(eu.userId, [lot]))[0];

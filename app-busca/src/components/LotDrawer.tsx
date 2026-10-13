@@ -48,15 +48,23 @@ function BlocoKv({ titulo: t, pares }: { titulo: string; pares: Par[] }) {
  * conteúdo, sem scrim, sem foco preso e sem travar a rolagem do corpo — não é
  * um modal sobre a busca, é a tela inteira. Reaproveitar em vez de duplicar
  * evita a divergência que já aconteceu com o cartão.
+ *
+ * `mostrarProcedencia` é opt-in e nasce falsa: o bloco de procedência é dado
+ * interno de coleta (fonte, classificação crua da fonte, título bruto, modelo
+ * de encerramento, fuso, quando entrou e quando foi coletado) e só o
+ * administrador precisa dele. A página pública do lote é servida a anônimo e aos
+ * robôs (Googlebot, WhatsApp), então deixá-lo no padrão fechado é o que impede
+ * esse dado de sair no HTML do link compartilhado.
  */
 export function LotDrawer({
-  lot: lotAtual, aoFechar, comoPagina = false, favoritado, aoFavoritar,
+  lot: lotAtual, aoFechar, comoPagina = false, favoritado, aoFavoritar, mostrarProcedencia = false,
 }: {
   lot: Lot | null;
   aoFechar: () => void;
   comoPagina?: boolean;
   favoritado?: boolean;
   aoFavoritar?: (id: number) => void;
+  mostrarProcedencia?: boolean;
 }) {
   // Sai animando: o último lote fica na tela até a gaveta deslizar para fora.
   // Com o lote zerado na hora, ela sumia de um quadro para o outro.
@@ -316,20 +324,22 @@ export function LotDrawer({
               </section>
             ) : null}
 
-            <details className="proc">
-              <summary>Procedência do dado</summary>
-              <LinhasKv
-                pares={[
-                  ['Fonte', SRC_LABEL[lot.source_id] ?? lot.source_id],
-                  ['Classificação na fonte', lot.source_category ?? 'a fonte não classifica'],
-                  ['Título publicado pela fonte', lot.title_display && lot.title_display !== lot.title_raw ? lot.title_raw : null],
-                  ['Modelo de encerramento', EXPLICA_FECHAMENTO[lot.closing_model] ?? lot.closing_model],
-                  ['Fuso publicado pela fonte', lot.source_tz],
-                  ['Entrou na base em', dataBr(lot.first_seen_at)],
-                  ['Coletado em', dataBr(lot.collected_at)],
-                ]}
-              />
-            </details>
+            {mostrarProcedencia ? (
+              <details className="proc">
+                <summary>Procedência do dado</summary>
+                <LinhasKv
+                  pares={[
+                    ['Fonte', SRC_LABEL[lot.source_id] ?? lot.source_id],
+                    ['Classificação na fonte', lot.source_category ?? 'a fonte não classifica'],
+                    ['Título publicado pela fonte', lot.title_display && lot.title_display !== lot.title_raw ? lot.title_raw : null],
+                    ['Modelo de encerramento', EXPLICA_FECHAMENTO[lot.closing_model] ?? lot.closing_model],
+                    ['Fuso publicado pela fonte', lot.source_tz],
+                    ['Entrou na base em', dataBr(lot.first_seen_at)],
+                    ['Coletado em', dataBr(lot.collected_at)],
+                  ]}
+                />
+              </details>
+            ) : null}
           </div>
         </div>
     </>

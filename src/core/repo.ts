@@ -594,7 +594,7 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
   ]);
 
   // Comitente pessoa física é mascarado no que aparece como texto (card).
-  const publicItems = (items as any[]).map(toPublicLot);
+  const publicItems = (items as any[]).map((row) => toPublicLot(row));
 
   return {
     total: count,
@@ -606,7 +606,7 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
   };
 }
 
-export async function getLot(id: number, queryFn: QueryFunction = query) {
+export async function getLot(id: number, opcoes: { interno?: boolean } = {}, queryFn: QueryFunction = query) {
   const [lot] = await queryFn(
     `SELECT id, source_id, lot_url, title_raw, title_display, brand, model, version, year_make, year_model,
             km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
@@ -623,7 +623,7 @@ export async function getLot(id: number, queryFn: QueryFunction = query) {
   );
   if (!lot) return null;
   const history = await queryFn('SELECT bid, observed_at FROM bid_history WHERE lot_id=$1 ORDER BY observed_at DESC LIMIT 30', [id]);
-  return toPublicLot({ ...lot, bid_history: history });
+  return toPublicLot({ ...lot, bid_history: history }, opcoes);
 }
 
 export async function getStats() {
