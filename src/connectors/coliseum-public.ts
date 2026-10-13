@@ -27,13 +27,16 @@ export function mapColiseumLot(item: any, event: string): CanonicalLot | null {
   if (type.assetType === 'outro') return null;
   const years = String(item.ano ?? '').match(/^(\d{4})\/(\d{4})$/);
   const rawPhoto = String(item.foto ?? '');
-  const money = Number(String(item.lance ?? '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+  const amount = String(item.lance ?? '').replace(/[^\d,.-]/g, '');
+  // The API also returns ordinary decimal numbers; periods are not always thousands separators.
+  const money = typeof item.lance === 'number' ? item.lance
+    : Number(amount.includes(',') ? amount.replace(/\./g, '').replace(',', '.') : amount);
   return { sourceId: 'coliseumpublic', externalId: id,
     lotUrl: `${BASE}/site/listar-lotes.php?codLeilao=${event}&codLote=${id}`,
     titleRaw: title, assetType: type.assetType, vehicleType: type.vehicleType,
     brand: parsed.brand, model: parsed.model, version: parsed.version,
     yearMake: years ? Number(years[1]) : null, yearModel: years ? Number(years[2]) : null,
-    color: item.cor || null, currentBid: money > 0 ? money : null,
+    color: item.cor || null, currentBid: Number.isFinite(money) && money > 0 ? money : null,
     closingModel: 'sequencial', status: 'aberto', sourceTz: 'America/Sao_Paulo',
     photos: rawPhoto ? [new URL(rawPhoto, `${BASE}/site/`).href] : [],
     raw: { tenant: DOMAIN, event, condition: item.observacoes ?? null },

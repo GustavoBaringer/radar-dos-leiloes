@@ -71,4 +71,7 @@ assert.deepEqual(coliseumEvents('<a href="listar-lotes.php?codLeilao=1209">Ver l
 const lot=mapColiseumLot({id:'264460',marcaModelo:'HONDA/Pop 100',ano:'2007/2007',foto:'../imgTmp/photo.jpg'},'1209')!;
 assert.equal(lot.sourceId,'coliseumpublic');assert.equal(lot.yearModel,2007);assert.match(lot.lotUrl!,/codLote=264460/);assert.equal(lot.photos?.[0],'https://www.coliseumleiloes.com.br/imgTmp/photo.jpg');
 assert.equal(mapColiseumLot({id:'0',marcaModelo:''},'1209'),null);
+for (const lance of [1234.56,'1234.56','1.234,56']) {
+  assert.equal(mapColiseumLot({id:'264460',marcaModelo:'HONDA/Pop 100',lance},'1209')?.currentBid,1234.56);
+}
 console.log('Daily scope, scheduling, guaranteed ledger, failure/empty outcomes, tenant isolation and parser regressions OK');
