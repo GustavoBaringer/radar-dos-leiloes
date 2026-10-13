@@ -27,11 +27,38 @@ export interface LoteParaVerificar {
 export interface Resultado {
   veredito: Veredito;
   sinal: string;
+  /**
+   * Prazo que a ORIGEM publica, em ISO, quando ela publica um. Não decide o
+   * veredito: serve para CORRIGIR o `auction_end_utc` que guardamos do card,
+   * que às vezes é meia-noite do dia da sessão em vez do fim real.
+   */
+  fimUtc?: string | null;
 }
 export interface Verificador {
   /** Uma requisição por lote, ou uma por host? Decide o tamanho do lote enviado. */
   porHost: boolean;
-  verificar(host: string, lotes: LoteParaVerificar[]): Promise<Map<number, Resultado>>;
+  /**
+   * `buscar` é o gancho de teste: o padrão é o `fetchText` de produção, e um
+   * verificador pode aceitá-lo para ser exercitado contra HTML guardado. Os que
+   * não precisam simplesmente não declaram o parâmetro.
+   */
+  verificar(host: string, lotes: LoteParaVerificar[], buscar?: typeof fetchText): Promise<Map<number, Resultado>>;
+}
+
+/**
+ * Prazo previsto que a origem publica, em ISO — ou null se não publicar.
+ *
+ * Só a Hastá Pública usa isto hoje. A página escreve `DD/MM/YYYY HH:MM` num
+ * bloco escondido, com "(horário previsto)" ao lado: previsto, não garantido.
+ * Por isso devolve o valor SEM deixar o veredito depender dele, salvo nos rótulos
+ * em que a data é a única evidência (sem licitante).
+ */
+function fimPrevisto(html: string): string | null {
+  const m = /<dt>\s*Encerra em\s*<\/dt>[\s\S]{0,200}?<dd[^>]*>[\s\S]{0,60}?(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/i.exec(html);
+  if (!m) return null;
+  const [, d, mes, a, h = '00', min = '00'] = m;
+  const ts = Date.parse(`${a}-${mes}-${d}T${h}:${min}:00-03:00`);
+  return Number.isFinite(ts) ? new Date(ts).toISOString() : null;
 }
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
@@ -324,6 +351,98 @@ const freitas: Verificador = {
   },
 };
 
-export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance, leilo, freitas };
+/**
+ * HASTÁ PÚBLICA / VALLAND — o estado do lote está num par estável na página de
+ * detalhe, que o conector (que só lê a home) nunca via:
+ *
+ *   <dt>Status do Item</dt><dd class="badge bg-success">Recebendo Propostas</dd>
+ *   <dt>Encerra em</dt><dd class="destaquetexto">13/10/2026 14:01 <small>…</small></dd>
+ *
+ * Existe por causa do lote 104282 (Mercedes GLA 250, 13/10/2026): o card da
+ * home publicava "Próxima data 13/10/2026 00:00" e o conector gravava isso como
+ * FIM, encerrando o lote à meia-noite enquanto a origem escrevia "Encerra em
+ * 13/10/2026 14:01" com status "Recebendo Propostas" — 14 horas de leilão ativo
+ * dado por morto. Esta fonte não tinha verificador, então nada contestou.
+ *
+ * Por isso o verificado devolve também `fimUtc`: o prazo verdadeiro da origem,
+ * que corrige o nosso quando existe.
+ *
+ * Rótulo desconhecido vira indeterminado, como nos outros: inventar estado a
+ * partir de palavra não vista é como se fecha lote vivo.
+ */
+const hastapublica: Verificador = {
+  porHost: false,
+  async verificar(_host, lotes, buscar: typeof fetchText = fetchText) {
+    const saida = new Map<number, Resultado>();
+    for (const l of lotes) {
+      if (!l.lotUrl) {
+        saida.set(l.id, { veredito: 'indeterminado', sinal: 'sem URL' });
+        continue;
+      }
+      try {
+        const r = await buscar(l.lotUrl, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 25000 });
+        if (r.status === 404 || r.status === 410) {
+          saida.set(l.id, { veredito: 'sumiu', sinal: `HTTP ${r.status}` });
+          continue;
+        }
+        if (r.status !== 200) {
+          saida.set(l.id, { veredito: 'indeterminado', sinal: `HTTP ${r.status}` });
+          continue;
+        }
+        const estado = r.body.match(/<dt>\s*Status do Item\s*<\/dt>\s*<dd[^>]*>([^<]{1,80})<\/dd>/i)?.[1]?.trim();
+        /**
+         * Página do lote que responde 200 sem SER a página do lote.
+         *
+         * A Hastá Pública responde 200 com "Nenhum lote para exibir" depois que
+         * o item sai do leilão — e o id nem aparece no HTML. Medido em 104691 e
+         * 104692 (13/10/2026), ambos fechados por `prazo` com um prazo que o
+         * card inventou. Sem esta checagem, reabrir o lote o deixaria em
+         * `indeterminado` para sempre, incrementando verify_fails sem fechar.
+         *
+         * As DUAS condições são exigidas, e a ordem importa: id ausente sozinho
+         * é o que qualquer página genérica (erro, WAF, manutenção) também traria,
+         * e adivinhar encerramento por ausência é exatamente como se apaga lote
+         * vivo. A frase é o marcador positivo que a fonte usa para dizer que o
+         * item não existe mais.
+         */
+        const idDoLote = l.externalId ?? l.lotUrl?.match(/\/lote\/(\d+)/)?.[1] ?? null;
+        const paginaDoLote = !idDoLote || new RegExp(`/lote/${idDoLote}/`).test(r.body);
+        if (!paginaDoLote && /nenhum\s+lote\s+(para\s+exibir|dispon[ií]vel|encontrado)/i.test(r.body)) {
+          saida.set(l.id, { veredito: 'sumiu', sinal: `fonte diz que o lote ${idDoLote} não existe mais` });
+          continue;
+        }
+        // O "Encerra em" vem num bloco `display:none` do HTML: existe mesmo
+        // escondido, e é o prazo previsto que a origem publica.
+        const fim = fimPrevisto(r.body);
+        if (!estado) {
+          saida.set(l.id, { veredito: 'indeterminado', sinal: 'sem "Status do Item"', fimUtc: fim });
+          continue;
+        }
+        const t = estado.toLowerCase();
+        // "Sem licitante" NÃO encerra sozinho (mesma razão do soleon: leilão
+        // judicial de duas praças, CPC art. 891). Quem decide é o prazo que a
+        // própria página publica.
+        const semLicitante = /sem licitante|n[aã]o vendid|houve lance|deserto/.test(t);
+        const r0: Omit<Resultado, 'veredito'> = { sinal: estado, ...(fim ? { fimUtc: fim } : {}) };
+        if (!semLicitante && /recebendo|em leila[ãa]o|em andamento|lance|proposta|aberto|habilitado/.test(t)) {
+          saida.set(l.id, { veredito: 'aberto', ...r0 });
+        } else if (!semLicitante && /aguard|inicio|breve|a abrir/.test(t)) {
+          saida.set(l.id, { veredito: 'agendado', ...r0 });
+        } else if (/arrematad|vendid|encerrad|cancelad|suspens|retirad|sustad/.test(t)) {
+          saida.set(l.id, { veredito: 'encerrado', ...r0 });
+        } else if (semLicitante && fim) {
+          saida.set(l.id, { veredito: Date.parse(fim) > Date.now() ? 'agendado' : 'encerrado', sinal: `${estado} (prazo ${fim})`, fimUtc: fim });
+        } else {
+          saida.set(l.id, { veredito: 'indeterminado', ...r0 });
+        }
+      } catch (e: any) {
+        saida.set(l.id, { veredito: 'indeterminado', sinal: String(e.message).slice(0, 50) });
+      }
+    }
+    return saida;
+  },
+};
+
+export const VERIFICADORES: Record<string, Verificador> = { soleon, vlance, leilo, freitas, hastapublica };
 
 export const temVerificador = (fonte: string) => fonte in VERIFICADORES;

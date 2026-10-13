@@ -179,7 +179,7 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
     porHost.set(host, grupo);
   }
 
-  const vereditos: Array<{ id: number; veredito: Veredito; sinal: string }> = [];
+  const vereditos: Array<{ id: number; veredito: Veredito; sinal: string; fimUtc?: string | null }> = [];
   await Promise.all(
     [...porHost.entries()].map(async ([host, { fonte, lotes }]) => {
       if (!temVerificador(fonte)) return;
@@ -219,6 +219,29 @@ export async function verificarCandidatos(teto = Number(process.env.VERIFICAR_PO
          FROM (SELECT unnest($1::bigint[]) id, unnest($2::text[]) sinal) d
         WHERE lots.id = d.id`,
       [cegos.map((m) => m.id), cegos.map((m) => m.sinal.slice(0, 120))],
+    );
+  }
+  /**
+   * Prazo que a ORIGEM publica, corrigindo o nosso.
+   *
+   * A hastapublica guardava como `auction_end_utc` a "Próxima data" do card, que
+   * é a data da sessão e sai à meia-noite quando o site não tem horário — o
+   * lote 104282 foi encerrado às 00:00 enquanto a origem publicava "Encerra em
+   * 13/10/2026 14:01". A origem tem a palavra final: quando ela publica um
+   * prazo, é esse que vale.
+   *
+   * Só reescreve com diferença de mais de uma hora: o site recalcula o "previsto"
+   * a cada visita e diferença de minutos não justifica reescrever a linha.
+   */
+  const comPrazo = vereditos.filter((v): v is typeof v & { fimUtc: string } => Boolean(v.fimUtc));
+  if (comPrazo.length) {
+    await query(
+      `UPDATE lots SET auction_end_utc = d.fim
+         FROM (SELECT unnest($1::bigint[]) id, unnest($2::timestamptz[]) fim) d
+        WHERE lots.id = d.id
+          AND (lots.auction_end_utc IS NULL
+               OR abs(extract(epoch FROM (lots.auction_end_utc - d.fim))) >= 3600)`,
+      [comPrazo.map((p) => p.id), comPrazo.map((p) => p.fimUtc)],
     );
   }
   return { verificados: vereditos.length, encerrados: mortos.length, vivos: vivos.length, indeterminados: cegos.length };
