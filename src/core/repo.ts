@@ -298,6 +298,28 @@ END, '/', 1), chr(63), 1), chr(35), 1)`;
 export const LOT_SITE_HOST_SQL = lotSiteHostSql();
 
 /**
+ * Nome do site do lote, para o cartão mostrar a origem em vez do host.
+ *
+ * Só vale quando o domínio pertence a UM único nome no catálogo. `leilo.com.br`
+ * tem 3 leiloeiros declarando aquele domínio e `casamartillo.com.br` tem 17: a
+ * escolha anterior (`ORDER BY name LIMIT 1`) pegava o primeiro em ordem
+ * alfabética e colocava o nome de uma pessoa — "EDUARDO VINICIUS FLEURY LÔBO" em
+ * todos os lotes do Leilo, "AHARO ESPÍRITO SANTO AQUINO" em todos os do
+ * Casamartillo — como se fosse a origem daquele leilão: 15.976 lotes do índice
+ * com atribuição a quem não leiloou, e sem nenhum aviso.
+ *
+ * Com mais de um nome o subselect devolve NULL e o cartão cai no host, que é o
+ * que a página realmente é. Quando a fonte publica o responsible verdadeiro
+ * (`lots.auctioneer_name`), ele tem precedência e continua aparecendo.
+ */
+export function auctioneerSiteNameSql(urlColumn = 'lot_url'): string {
+  return `(SELECT min(a.name) FROM auctioneers a
+            WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${lotSiteHostSql(urlColumn)}
+              AND a.name IS NOT NULL AND a.name <> ''
+           HAVING count(DISTINCT a.name) = 1)`;
+}
+
+/**
  * A busca roda no nosso índice, nunca é repassada à fonte.
  * Quando marca e modelo são reconhecidos, o filtro é ESTRUTURAL (igualdade),
  * e não trigram: é isso que impede "mercedes b 200" de trazer GLA 200.
@@ -511,7 +533,7 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
   const [{ count }] = await queryFn(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params) as { count: number }[];
   const items = await queryFn(
     `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
-            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${LOT_SITE_HOST_SQL} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            ${auctioneerSiteNameSql()} AS auctioneer_site_name,
             title_raw, title_display, brand, model, version, year_make, year_model,
             km, doc_type, closing_model, auction_start_utc, auction_end_utc, source_tz, status,
             current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect, asset_type, vehicle_type, property_type,
@@ -614,7 +636,7 @@ export async function searchLots(p: SearchParams, queryFn: QueryFunction = query
 export async function getLot(id: number, opcoes: { interno?: boolean } = {}, queryFn: QueryFunction = query) {
   const [lot] = await queryFn(
     `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
-            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${LOT_SITE_HOST_SQL} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            ${auctioneerSiteNameSql()} AS auctioneer_site_name,
             title_raw, title_display, brand, model, version, year_make, year_model,
             km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
             source_tz, status, current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect,

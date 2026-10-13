@@ -28,6 +28,9 @@ const files = [
   'scripts/teste-tenant-rotation.ts',
   'scripts/teste-antibot-ws.ts',
   'scripts/teste-brands-contrato.ts',
+  // Nome do site nos cards: o contrato existe e não rodava em lugar nenhum.
+  'scripts/teste-auctioneer-site-contract.ts',
+  'app-busca/scripts/teste-nome-origem.mjs',
   'scripts/teste-smtp-tls.ts',
   'scripts/teste-host-contrato.mjs',
   'scripts/teste-nest-brands-contrato.mjs',

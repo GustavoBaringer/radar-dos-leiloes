@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { lotSiteHostSql } from '../src/core/repo.js';
+import { auctioneerSiteNameSql, lotSiteHostSql } from '../src/core/repo.js';
 import { toPublicFavorite, toPublicHit, toPublicLot } from '../src/core/public-dto.js';
 
 test('DTO mantém crédito e inclui apenas dados de site disponíveis', () => {
@@ -14,6 +14,25 @@ test('DTO mantém crédito e inclui apenas dados de site disponíveis', () => {
   const absent = toPublicLot({ id: 2, source_id: 'tenant' });
   assert.equal(absent.auctioneer_site_name, undefined);
   assert.equal(absent.auctioneer_domain, undefined);
+});
+
+test('nome do site só existe quando o domínio pertence a um único nome', () => {
+  const sql = auctioneerSiteNameSql();
+  // Um domínio com vários deeloeiros declarando-o é plataforma compartilhada:
+  // escolher um deles (o primeiro em ordem alfabética) atribuía a pessoa errada.
+  assert.match(sql, /count\(DISTINCT a\.name\) = 1/);
+  assert.doesNotMatch(sql, /ORDER BY a\.name LIMIT 1/);
+  assert.match(sql, /lower\(regexp_replace\(a\.domain, '\^www\[\.\]', ''\)\)/);
+  assert.match(sql, /a\.name IS NOT NULL AND a\.name <> ''/);
+  assert.match(sql, /min\(a\.name\)/);
+
+  // Nenhuma consulta pode voltar ao antigo: o ORDER BY LIMIT 1 sem contagem.
+  for (const arquivo of ['../src/core/repo.ts', '../src/legacy-host.ts']) {
+    const texto = readFileSync(new URL(arquivo, import.meta.url), 'utf8');
+    assert.doesNotMatch(texto, /SELECT a\.name FROM auctioneers/,
+      `${arquivo} ainda tem o subselect que escolhe um nome ao acaso`);
+    assert.match(texto, /auctioneerSiteNameSql\(/, `${arquivo} não usa o SQL único de nome do site`);
+  }
 });
 
 test('lookup e rotas de busca, alertas e favoritos projetam domínio/nome pelo mesmo SQL', () => {

@@ -29,7 +29,7 @@ import { admitWsUpgrade, attachWsUpgrade } from './core/antibot/ws-admission.js'
 import { createHttpResourceGuard, sendRateLimit, sendUnauthenticated } from './core/antibot/http-resources.js';
 import { parseSearchInput, safePositiveId, ValidateAlertInput, BoundedInputError, parsePagination, paginateRows } from './core/request-bounds.js';
 import { toPublicAlert, toPublicFavorite, toPublicHit, toPublicLot } from './core/public-dto.js';
-import { lotSiteHostSql } from './core/repo.js';
+import { auctioneerSiteNameSql, lotSiteHostSql } from './core/repo.js';
 import { buildMePayload, createAccountContext, VISIBLE_FAVORITE_PREDICATE } from './core/account-context.js';
 import { canaisDisponiveis } from './core/notificar.js';
 import { ROUTE_POLICIES, registerChallengeHttp, registerOperationsMetricsRoute } from './core/antibot/routes.js';
@@ -945,7 +945,7 @@ app.get('/sitemap.xml', async (_req, reply) => {
  * discount_pct e bid_suspect e o cartão degradava sem erro nenhum.
  */
 const COLUNAS_CARTAO = `id, title_raw, title_display, source_id, lot_url,
-             (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${lotSiteHostSql()} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+             ${auctioneerSiteNameSql()} AS auctioneer_site_name,
              ${lotSiteHostSql()} AS auctioneer_domain,
              asset_type, vehicle_type, property_type,
             source_category, status, city, state, km, doc_type, photos, brand, model, year_make, year_model,
@@ -1400,7 +1400,7 @@ app.get('/api/alerts/hits', withReadResources(async (req) => {
   // aqui significaria um segundo card, com campos faltando, para manter.
   const base = `
      SELECT l.id, l.source_id, l.lot_url,
-            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${lotSiteHostSql('l.lot_url')} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            ${auctioneerSiteNameSql('l.lot_url')} AS auctioneer_site_name,
             ${lotSiteHostSql('l.lot_url')} AS auctioneer_domain,
             l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
@@ -1459,7 +1459,7 @@ app.get('/api/favorites', withReadResources(async (req) => {
   // significaria um segundo card, com campos faltando, para manter.
   const base = `
      SELECT l.id, l.source_id, l.lot_url,
-            (SELECT a.name FROM auctioneers a WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${lotSiteHostSql('l.lot_url')} AND a.name IS NOT NULL ORDER BY a.name LIMIT 1) AS auctioneer_site_name,
+            ${auctioneerSiteNameSql('l.lot_url')} AS auctioneer_site_name,
             ${lotSiteHostSql('l.lot_url')} AS auctioneer_domain,
             l.title_raw, l.title_display, l.auctioneer_name, l.brand, l.model, l.year_make, l.year_model,
            l.km, l.doc_type, l.closing_model, l.auction_start_utc, l.auction_end_utc, l.status,
