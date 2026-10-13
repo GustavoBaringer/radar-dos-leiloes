@@ -35,7 +35,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "aplleiloes.com.br",
-    "sourceId": "htmlagenda",
+    "sourceId": "suporteleiloes",
     "required120": true
   },
   {
@@ -131,7 +131,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "celsocunhaleiloes.com.br",
-    "sourceId": "htmlagenda",
+    "sourceId": "celsocunha",
     "required120": false
   },
   {
@@ -167,7 +167,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "compreipgfn.com.br",
-    "sourceId": "htmlagenda",
+    "sourceId": "suporteleiloes",
     "required120": true
   },
   {
@@ -248,7 +248,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "ghvmleiloes.com.br",
-    "sourceId": "superbid",
+    "sourceId": "ghvmpublic",
     "required120": false
   },
   {
@@ -549,7 +549,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "nsleiloes.leilao.br",
-    "sourceId": "htmlagenda",
+    "sourceId": "suporteleiloes",
     "required120": true
   },
   {
@@ -599,7 +599,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "portaldosleiloes.com.br",
-    "sourceId": "suporteleiloes",
+    "sourceId": "portalpublic",
     "required120": false
   },
   {
@@ -699,7 +699,7 @@ export const DAILY_SITES: readonly DailySite[] = [
   },
   {
     "domain": "saraivaleiloes.com.br",
-    "sourceId": "htmlagenda",
+    "sourceId": "suporteleiloes",
     "required120": true
   },
   {

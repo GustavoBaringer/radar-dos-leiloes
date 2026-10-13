@@ -21,6 +21,9 @@ assert.throws(() => dailySite('arbitrary.example'), /Unreviewed/);
 assert.equal(dailySite('venda-imoveis.caixa.gov.br').required120, true);
 assert.equal(dailySite('comprei.pgfn.gov.br').monitorOnly, true);
 assert.equal(dailySite('vlleiloes.com.br').sourceId, 'suporteleiloes');
+assert.equal(dailySite('celsocunhaleiloes.com.br').sourceId, 'celsocunha');
+assert.equal(dailySite('ghvmleiloes.com.br').sourceId, 'ghvmpublic');
+assert.equal(dailySite('portaldosleiloes.com.br').sourceId, 'portalpublic');
 
 for (const mode of ['selection-error','empty','persistence-error','success'] as const) {
   const order: string[] = []; const states: any[] = []; const runs: any[] = [];

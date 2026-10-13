@@ -50,7 +50,9 @@ export function dailyConnector(domain: string, lookup = getConnector, enabled = 
 export async function processDailyJob(job: Job<CollectJob>, execution: CollectionExecutionDependencies,
   signal?: AbortSignal, browserGate?: <T>(operation: () => Promise<T>) => Promise<T>) {
   const site = dailySite(String(job.data.tenant));
-  if (site.sourceId !== job.data.sourceId) throw new Error('Daily source/domain mismatch');
+  // A queued catch-up can outlive a reviewed source correction. The manifest,
+  // never the queued source field, selects the adapter and persisted source ID.
+  if (site.sourceId !== job.data.sourceId) console.warn(`[daily] ${site.domain}: source corrected ${job.data.sourceId} -> ${site.sourceId}`);
   const limit = Math.min(site.sourceId === 'caixa' ? 15000 : 1200, job.data.limit);
   const timeoutMs = Math.min(180000, job.data.timeoutMs ?? 180000);
   if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new Error('Invalid daily budget');
