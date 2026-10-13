@@ -17,17 +17,79 @@ export function podePush(): boolean {
   return typeof window !== 'undefined' && 'PushManager' in window && window.isSecureContext;
 }
 
-/** Re-register an existing, already-authorized browser subscription without prompting. */
+/**
+ * Registro e inscrição saem daqui para os dois caminhos compartilharem o mesmo
+ * reparo: ativar do zero e reconciliar o que já estava autorizado.
+ */
+async function registrarServiceWorker(): Promise<ServiceWorkerRegistration> {
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  return reg;
+}
+
+/** Sem inscrição no navegador, recria com a chave pública que o servidor publica. */
+async function assinarComChaveDoServidor(reg: ServiceWorkerRegistration, chaveJaConhecida?: string | null): Promise<PushSubscription | null> {
+  const chave = chaveJaConhecida === undefined ? (await api.chavePush()).publicKey : chaveJaConhecida;
+  if (!chave) return null;
+  return reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: chaveParaBytes(chave) as BufferSource,
+  });
+}
+
+/**
+ * Reconcilia a inscrição já autorizada pelo usuário, sem pedir permissão.
+ *
+ * Antes disto só reenviava ao servidor a inscrição que já existia no navegador.
+ * Se o service worker ou a inscrição sumissem — storage do site limpo no
+ * Android, site removido dos dados, navegador em outro perfil — o servidor
+ * continuava guardando a inscrição velha, o serviço de push continuava aceitando
+ * o envio com 201 e a notificação nunca aparecia: alerta marcava "entregue" e o
+ * usuário não recebia nada, sem erro em lugar nenhum. Registrar e reassinar
+ * quando falta conserta essa divergência sozinha.
+ *
+ * Todo caminho que falha devolve `motivo`: sem ele a tela não mostrava nada e o
+ * silêncio era indistinguível de "está tudo certo".
+ */
 export async function sincronizarPushAutorizado(): Promise<{ ok: boolean; motivo?: string }> {
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return { ok: false };
+  if (typeof Notification === 'undefined') return { ok: false, motivo: 'Notificação push não existe neste navegador.' };
+  if (Notification.permission === 'denied') {
+    return { ok: false, motivo: 'Permissão de notificação negada. Libere nas permissões do site e recarregue.' };
+  }
+  if (Notification.permission !== 'granted') {
+    return { ok: false, motivo: 'Permissão de notificação ainda não foi concedida.' };
+  }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.isSecureContext) {
     return { ok: false, motivo: 'Este navegador não permite sincronizar notificações push.' };
   }
-  const reg = await navigator.serviceWorker.getRegistration();
-  const sub = await reg?.pushManager.getSubscription();
-  if (!sub) return { ok: false };
+
+  const reg = await navigator.serviceWorker.getRegistration() ?? await registrarServiceWorker();
+  const sub = await reg.pushManager.getSubscription() ?? await assinarComChaveDoServidor(reg);
+  if (!sub) return { ok: false, motivo: 'O navegador não devolveu inscrição de push.' };
   await api.inscreverPush(sub.toJSON());
   return { ok: true };
+}
+
+/** Retrato do que o navegador tem, para a tela mostrar onde a cadeia parou. */
+export interface EstadoPush {
+  suportado: boolean;
+  permissao: NotificationPermission | 'indisponivel';
+  registrado: boolean;
+  inscrito: boolean;
+}
+
+export async function estadoPush(): Promise<EstadoPush> {
+  const suportado = podePush() && 'serviceWorker' in navigator;
+  if (!suportado) {
+    return { suportado: false, permissao: 'indisponivel', registrado: false, inscrito: false };
+  }
+  const reg = await navigator.serviceWorker.getRegistration();
+  return {
+    suportado: true,
+    permissao: typeof Notification === 'undefined' ? 'indisponivel' : Notification.permission,
+    registrado: Boolean(reg),
+    inscrito: Boolean(await reg?.pushManager.getSubscription()),
+  };
 }
 
 /**
@@ -51,14 +113,9 @@ export async function ativarPush(): Promise<{ ok: boolean; motivo?: string }> {
   const { publicKey } = await api.chavePush();
   if (!publicKey) return { ok: false, motivo: 'Servidor sem chave VAPID configurada.' };
 
-  const reg = await navigator.serviceWorker.register('/sw.js');
-  await navigator.serviceWorker.ready;
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: chaveParaBytes(publicKey) as BufferSource,
-    }));
+  const reg = await registrarServiceWorker();
+  const sub = await reg.pushManager.getSubscription() ?? await assinarComChaveDoServidor(reg, publicKey);
+  if (!sub) return { ok: false, motivo: 'O navegador não aceitou a inscrição de push.' };
   await api.inscreverPush(sub.toJSON());
   return { ok: true };
 }

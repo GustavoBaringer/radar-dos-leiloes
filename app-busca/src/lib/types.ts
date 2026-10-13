@@ -119,6 +119,20 @@ export interface PaginatedResponse<T> {
   hasMore: boolean;
 }
 
+/** O que o servidor consegue entregar hoje, e para quais aparelhos ele manda. */
+export interface StatusNotificacoes {
+  canais: { push: boolean; email: boolean };
+  publicKey: string | null;
+  dispositivos: { host: string; failures: number; desde: string }[];
+}
+
+export interface TestePush {
+  configurado: boolean;
+  inscricoes: number;
+  entregues: number;
+  dispositivos: { host: string; status: number | null; erro?: string }[];
+}
+
 export interface AccountSummary {
   papel?: string;
   logado?: boolean;

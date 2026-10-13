@@ -126,22 +126,41 @@ novas implantações somente com gate de recursos e execução aprovados. Sem SM
 há promessa de recuperação de conta por e-mail; backup local não substitui backup
 externo testado antes de habilitar escrita pública em uma nova implantação.
 
-## Integrações externas pendentes
+## Integrações externas
 
-Brevo e Backblaze B2 foram escolhidos em 2026-10-09; ambos seguem bloqueados por
-credenciais ausentes. Os caminhos abaixo são **arquivos privados da VPS**, não
-devem ser criados/versionados localmente. Manter permissão `0600` e nunca enviar
-segredos por chat.
+### Brevo / SMTP — configurado em 2026-10-13
 
-### Brevo / SMTP
+`/etc/radar/smtp.json` foi preenchido com `smtp-relay.brevo.com`, porta 587,
+STARTTLS e remetente aprovado; envio real aceito pelo provedor (250 queued).
+O que faltava era a ligação com o runtime: sem `SMTP_HOST` no ambiente,
+`enviarEmail` devolvia `{enviados: 0, pendentes: N}` e todo disparo de e-mail de
+alerta ficava pendente sem erro visível. As variáveis agora vêm de
+`production.env` do runtime: o **worker** recebe o conjunto completo (é quem
+envia) e o **web** recebe apenas `SMTP_HOST`, que é o que a tela de alertas lê
+para dizer se o canal existe — credencial de SMTP não entra no container que
+responde a entrada não autenticada. Recuperação de senha do Keycloak e
+autorregistro continuam desativados: dependem de validação própria.
 
-Criar conta e remetente, autenticar o domínio e obter o login e a chave SMTP
+Reaplicar após qualquer recriação do `production.env`:
+`python3 /root/radar-deploy/notificacoes-20261013/aplicar-smtp.py`.
+
+### Backblaze B2 — ainda bloqueado
+
+Escolhido em 2026-10-09 e bloqueado por credenciais ausentes. O caminho é
+**arquivo privado da VPS**, não deve ser criado/versionado localmente. Manter
+permissão `0600` e nunca enviar segredos por chat.
+
+### Notas de configuração (as duas)
+
+Os caminhos abaixo são arquivos privados da VPS. Criar conta e remetente,
+autenticar o domínio e obter o login e a chave SMTP
 (não a senha da conta nem a chave API). Preencher `/etc/radar/smtp.json` a partir
 de `/etc/radar/smtp.json.example` com `smtp-relay.brevo.com`, porta 587,
 STARTTLS e remetente aprovado. Validar conexão/autenticação sem envio com
 `finalization/verify-smtp.mjs` em container descartável. Só depois configurar
-app/worker e SMTP do realm. Não enviar e-mail de teste até confirmar o destinatário;
-reset/recuperação e autorregistro Keycloak permanecem desativados até validação e
+app/worker e SMTP do realm. O e-mail real de teste foi enviado para o
+destinatário dos alertas do próprio usuário, com autorização explícita. Reset/
+recuperação e autorregistro Keycloak permanecem desativados até validação e
 aprovação explícitas.
 
 ### Backblaze B2 / Restic

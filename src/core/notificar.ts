@@ -31,6 +31,38 @@ const pushDependencies: PushDependencies = {
   enabled: VAPID_OK, query, send: webpush.sendNotification.bind(webpush), mark: marcarNotificado,
 };
 
+/**
+ * O que o servidor consegue entregar AGORA. A tela de alertas usa para avisar
+ * que o canal escolhido não vai sair: sem isto, marcar "e-mail" num alerta com o
+ * SMTP ausente produz um disparo que nunca chega e nenhum sinal de por quê.
+ */
+export function canaisDisponiveis(): { push: boolean; email: boolean } {
+  return { push: VAPID_OK, email: Boolean(process.env.SMTP_HOST) };
+}
+
+/**
+ * Sem VAPID o push era descartado em silêncio (`enviarPush` devolvia 0 sem log),
+ * que é exatamente o defeito que o usuário reportou: a tela mostrava o alerta
+ * e nada chegava, sem nenhum sinal nos logs.
+ */
+export function avisarCanaisIndisponiveis(): void {
+  const canais = canaisDisponiveis();
+  if (!canais.push) console.warn('[alerta] push indisponível: VAPID_PUBLIC/VAPID_PRIVATE ausentes');
+  if (!canais.email) console.warn('[alerta] e-mail indisponível: SMTP_HOST ausente — disparos de e-mail ficam pendentes');
+}
+
+interface Inscricao {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  owner_id: number;
+  failures: number;
+}
+const inscricoesDoDono = (ownerId: number, deps: PushDependencies) => deps.query<Inscricao>(
+  'SELECT endpoint, p256dh, auth, owner_id, failures FROM push_subscriptions WHERE failures < 5 AND owner_id = $1',
+  [ownerId],
+);
+
 export async function enviarPush(disparos: Disparo[], deps: PushDependencies = pushDependencies) {
   if (!deps.enabled || !disparos.length) return 0;
   const alvos = disparos.filter((d) => d.channels.includes('push'));
@@ -79,6 +111,50 @@ export async function enviarPush(disparos: Disparo[], deps: PushDependencies = p
     if (entregue) for (const lote of grupo) await deps.mark(lote.alertId, lote.lotId, 'push');
   }
   return enviados;
+}
+
+export interface ResultadoDispositivo {
+  host: string;
+  status: number | null;
+  erro?: string;
+}
+export interface ResultadoTestePush {
+  configurado: boolean;
+  inscricoes: number;
+  entregues: number;
+  dispositivos: ResultadoDispositivo[];
+}
+
+/**
+ * Push de teste para os aparelhos do dono, com a resposta do serviço de push.
+ *
+ * Existe porque o `alert_hits.notified` respondia "entregue" com o FCM aceitando
+ * (201) enquanto o navegador não mostrava nada: o usuário via o alerta na tela e
+ * nenhuma notificação, sem nenhum lugar que dissesse onde a cadeia parou. Aqui o
+ * servidor devolve o que o serviço respondeu e a tela mostra, aparelho por aparelho.
+ */
+export async function testarPushDoDono(ownerId: number, deps: PushDependencies = pushDependencies): Promise<ResultadoTestePush> {
+  if (!deps.enabled) return { configurado: false, inscricoes: 0, entregues: 0, dispositivos: [] };
+  const inscricoes = await inscricoesDoDono(ownerId, deps);
+  const dispositivos: ResultadoDispositivo[] = [];
+  let entregues = 0;
+  for (const s of inscricoes) {
+    const host = new URL(s.endpoint).host;
+    try {
+      const resposta = await deps.send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({
+          title: 'Radar',
+          body: 'Notificação de teste. Se você viu isto, o push deste aparelho funciona.',
+          url: '/alertas',
+          tag: `teste-push-${Date.now()}`,
+        }));
+      entregues++;
+      dispositivos.push({ host, status: resposta.statusCode });
+    } catch (err: any) {
+      dispositivos.push({ host, status: err?.statusCode ?? null, erro: String(err?.message ?? err).slice(0, 200) });
+    }
+  }
+  return { configurado: true, inscricoes: inscricoes.length, entregues, dispositivos };
 }
 
 /**

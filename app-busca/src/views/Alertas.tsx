@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pencil, Search, Trash2 } from 'lucide-react';
 import type { Alerta, Hit } from '@/lib/types';
+import type { StatusNotificacoes } from '@/lib/types';
 import type { FavoriteReadStamp } from '@/lib/favorite-context';
 import { api } from '@/lib/api';
 import { LABEL_CANAL } from '@/lib/labels';
 import { dataCurta } from '@/lib/format';
-import { ativarPush, podePush, sincronizarPushAutorizado } from '@/lib/push';
+import { ativarPush, podePush, sincronizarPushAutorizado, estadoPush, type EstadoPush } from '@/lib/push';
 import { LotCard } from '@/components/LotCard';
 import { Paginacao } from '@/components/Paginacao';
 
@@ -37,6 +38,9 @@ export function Alertas({
   const [erro, setErro] = useState<string | null>(null);
   const [apagando, setApagando] = useState<number | null>(null);
   const [permissao, setPermissao] = useState<NotificationPermission | 'indisponivel'>('indisponivel');
+  const [canais, setCanais] = useState<StatusNotificacoes | null>(null);
+  const [navegador, setNavegador] = useState<EstadoPush | null>(null);
+  const [testando, setTestando] = useState(false);
 
   useEffect(() => {
     const value = new URLSearchParams(location.search).get('alertId');
@@ -80,12 +84,26 @@ export function Alertas({
   useEffect(() => {
     if (typeof Notification !== 'undefined') setPermissao(Notification.permission);
     let ativo = true;
+    // Reconcilia primeiro (repara inscrição perdida) e só depois mostra o que
+    // falhou: um diagnóstico feito sobre uma inscrição morta não vale nada.
     void sincronizarPushAutorizado().then((r) => {
-      if (ativo && !r.ok && r.motivo) toast(`Não foi possível sincronizar notificações: ${r.motivo}`);
+      if (ativo && !r.ok && r.motivo && Notification.permission === 'denied') toast(r.motivo);
     }).catch((e) => {
       if (ativo) toast(`Não foi possível sincronizar notificações: ${(e as Error)?.message ?? e}`);
     });
     return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Retrato dos dois lados da cadeia: o que o navegador tem e o que o servidor entrega. */
+  async function carregarEstado() {
+    const [doNavegador, doServidor] = await Promise.allSettled([estadoPush(), api.statusNotificacoes()]);
+    setNavegador(doNavegador.status === 'fulfilled' ? doNavegador.value : null);
+    if (doServidor.status === 'fulfilled') setCanais(doServidor.value);
+  }
+
+  useEffect(() => {
+    void carregarEstado().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -106,6 +124,36 @@ export function Alertas({
     const r = await ativarPush();
     toast(r.ok ? 'Notificações ativadas neste aparelho.' : (r.motivo ?? 'Não foi possível ativar.'));
     if (typeof Notification !== 'undefined') setPermissao(Notification.permission);
+    await carregarEstado().catch(() => undefined);
+  }
+
+  /**
+   * Teste de ponta a ponta: reconcilia a inscrição, manda um push de verdade e
+   * mostra a resposta por aparelho. Era o que faltava para distinguir "o servidor
+   * não entregou" de "o navegador não exibiu" — os dois casos aparecem iguais na
+   * tela, com o alerta visível só quando a plataforma é aberta.
+   */
+  async function testarNotificacao() {
+    setTestando(true);
+    try {
+      const reparo = await sincronizarPushAutorizado();
+      if (!reparo.ok) {
+        toast(reparo.motivo ?? 'Este navegador não está com push pronto.');
+        await carregarEstado().catch(() => undefined);
+        return;
+      }
+      const r = await api.testarPush();
+      const detalhe = r.dispositivos.map((d) => `${d.host}: ${d.erro ?? d.status}`).join(' · ');
+      if (!r.configurado) toast('O servidor não tem chave VAPID configurada.');
+      else if (!r.inscricoes) toast('Nenhum aparelho inscrito no servidor. Clique em "Ativar" neste aparelho.');
+      else if (r.entregues) toast(`Servidor entregou para ${r.entregues}/${r.inscricoes} aparelho(s) — ${detalhe}. Apareceu no aparelho?`);
+      else toast(`Nenhum aparelho aceitou — ${detalhe || 'sem detalhe'}.`);
+      await carregarEstado().catch(() => undefined);
+    } catch (e) {
+      toast(`Não foi possível testar: ${(e as Error)?.message ?? e}`);
+    } finally {
+      setTestando(false);
+    }
   }
 
   return (
@@ -134,6 +182,22 @@ export function Alertas({
               service worker sobre certificado CONFIÁVEL. */}
           No celular, antes de ativar: instale a autoridade local em Ajustes → Segurança → Instalar
           certificado → Certificado CA. <a href="/ca.crt" download>Baixar certificado</a>
+        </div>
+      )}
+
+      <div className="aviso">
+        <span>
+          Notificações — navegador: {navegador?.permissao === 'granted' ? 'permitidas' : navegador?.permissao ?? 'indisponível'}
+          {navegador ? (navegador.inscrito ? ' · aparelho inscrito' : ' · aparelho sem inscrição') : ''}
+          {canais ? ` · servidor: push ${canais.canais.push ? 'pronto' : 'sem chave'} · e-mail ${canais.canais.email ? 'pronto' : 'NÃO CONFIGURADO'}` : ''}
+        </span>
+        <button className="btn-pri" onClick={() => void testarNotificacao()} disabled={testando}>
+          {testando ? 'Testando…' : 'Testar notificação'}
+        </button>
+      </div>
+      {canais && !canais.canais.email && (
+        <div className="aviso">
+          Este servidor não tem e-mail configurado. Alertas com o canal de e-mail não chegam por e-mail até o SMTP ser configurado.
         </div>
       )}
 

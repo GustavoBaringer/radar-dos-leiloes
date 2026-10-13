@@ -58,6 +58,8 @@ export const ROUTE_POLICIES: Readonly<Record<string, PolicyId>> = {
   'POST /api/favorites': 'write',
   'DELETE /api/favorites/:lotId': 'write',
   'POST /api/push/subscribe': 'write',
+  'POST /api/push/teste': 'write',
+  'GET /api/notificacoes/status': 'search',
   'GET /ws': 'wsIp',
 };
 

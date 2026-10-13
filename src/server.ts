@@ -52,6 +52,10 @@ async function start() {
     await app.listen({ port, host });
     ensureStartupActive();
     console.log(`API e interface em http://localhost:${port}`);
+    // A tela de alertas mostra o estado dos canais; o log diz o mesmo na subida,
+    // para um canal ausente não depender de alguém abrir a tela para aparecer.
+    const { avisarCanaisIndisponiveis } = await import('./core/notificar.js');
+    avisarCanaisIndisponiveis();
 
     const certDir = paths.certDir;
     const temCert = existsSync(join(certDir, 'local.crt')) && existsSync(join(certDir, 'local.key'));

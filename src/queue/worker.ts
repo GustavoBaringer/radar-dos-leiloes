@@ -5,6 +5,7 @@ import { getConnector, connectors } from '../connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources, registrarLeituraAoVivo } from '../core/repo.js';
 import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../core/pos-coleta.js';
+import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
@@ -151,6 +152,14 @@ async function runCollect(
     // executor compartilhado (mesmo caminho da CLI, ver [[collection-execution]]).
     const timeoutMs = tenant === undefined ? bounded.timeoutMs : DEPLOY.sourceTimeouts[sourceId] ?? TENANT_DEFAULT_TIMEOUT_MS;
     const r = await executeWorkerCollect({ sourceId, limit, metadata, timeoutMs, tenant, ...exec });
+    // O resultado da entrega dos alertas era descartado aqui: em produção não
+    // havia um único log dizendo quantos pushes e e-mails saíram, e um canal
+    // quebrado (SMTP ausente, chave VAPID faltando) era indistinguível de um
+    // alerta que simplesmente não casou.
+    const n = r.notifications;
+    if (n?.disparos) {
+      console.log(`[alerta] ${sourceId}: ${n.disparos} disparo(s) · push ${n.push} · e-mail ${n.emails} · pendentes ${n.pendentesEmail}`);
+    }
     return { fetched: r.result.fetched, upserted: r.upserted, skipped: r.result.skipped };
   };
   return DEPLOY.serial ? serialCollect(operation) : operation();
@@ -630,6 +639,9 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       await daily?.start();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
+      // Canais de aviso auditados na subida: canal ausente é configuração, e
+      // configuração ausente precisa aparecer no primeiro log do processo.
+      avisarCanaisIndisponiveis();
     },
 
     async stop() {

@@ -31,6 +31,7 @@ import { parseSearchInput, safePositiveId, ValidateAlertInput, BoundedInputError
 import { toPublicAlert, toPublicFavorite, toPublicHit, toPublicLot } from './core/public-dto.js';
 import { lotSiteHostSql } from './core/repo.js';
 import { buildMePayload, createAccountContext, VISIBLE_FAVORITE_PREDICATE } from './core/account-context.js';
+import { canaisDisponiveis, testarPushDoDono } from './core/notificar.js';
 import { ROUTE_POLICIES, registerChallengeHttp, registerOperationsMetricsRoute } from './core/antibot/routes.js';
 import { PAGINA_LOGIN } from './web/login-template.js';
 import type { query as DbQuery } from './core/db.js';
@@ -1543,6 +1544,40 @@ app.post('/api/push/subscribe', withReadResources(async (req, reply) => {
     [endpoint.toString(), b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] ?? '').slice(0, 200), (await donoDe(req)).userId],
   );
   return { ok: true };
+}));
+
+/**
+ * Estado da entrega por canal e push de teste, por aparelho.
+ *
+ * `GET /api/push/key` só dizia se havia chave VAPID; o navegador não tinha como
+ * saber se o canal de e-mail existia no servidor, e o servidor não tinha como
+ * dizer se o navegador ainda mostrava a notificação. As duas metades juntas
+ * fecham o diagnóstico: chave ok + aparelho aceitando + nada aparecendo é
+ * navegador (permissão ou inscrição), não servidor.
+ */
+app.get('/api/notificacoes/status', withReadResources(async (req, reply) => {
+  const { userId } = await donoDe(req);
+  const inscricoes = await query<{ endpoint: string; failures: number; created_at: string }>(
+    'SELECT endpoint, failures, created_at FROM push_subscriptions WHERE owner_id = $1 ORDER BY created_at',
+    [userId],
+  );
+  return reply.header('Cache-Control', 'no-store').send({
+    canais: canaisDisponiveis(),
+    publicKey: env.VAPID_PUBLIC ?? null,
+    dispositivos: inscricoes.map((i) => ({
+      host: new URL(i.endpoint).host,
+      failures: i.failures,
+      desde: i.created_at,
+    })),
+  });
+}));
+
+app.post('/api/push/teste', withReadResources(async (req, reply) => {
+  const { userId } = await donoDe(req);
+  const resultado = await testarPushDoDono(userId);
+  console.log(`[push] teste de ${userId}: ${resultado.entregues}/${resultado.inscricoes} aparelho(s) aceitaram`
+    + resultado.dispositivos.map((d) => ` ${d.host}=${d.status ?? d.erro}`).join(''));
+  return reply.header('Cache-Control', 'no-store').send(resultado);
 }));
 
 /**
