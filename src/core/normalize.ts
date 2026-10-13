@@ -844,7 +844,21 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // "Caminhão Mercedes Benz 1718 com baú da marca Facchini" virando reboque.
   // O código do modelo ("SRF") discrimina; o nome do fabricante, não.
   [/\b(semi ?reboque|semirreboque|srf\b|estrada cg)\b/, 'reboque'],
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
+  // `mb ?\d{4}` saiu daqui: "MB" é a sigla que Copart e Superbid colam no
+  // anúncio de carro leve, e o quatro dígitos que vem depois é o ANO. Medido em
+  // 13/10: "VW/GOL CITY MB | 2014/2015", "VW VOYAGE CL MB 2015/2015" e "VW
+  // SAVEIRO CS ST MB 2015/2015" entravam como caminhão — três carros dentro do
+  // filtro de pesado, sem erro em lugar nenhum. O código da Mercedes só vale
+  // com a marca ou o "caminhão" no título, nas duas regras logo abaixo.
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
+  [/\bmercedes ?mb ?\d{4}\b/, 'caminhao'],
+  // "CAMINHÃO CAÇAMBA MB 1113": com o tipo no título, o código volta a valer.
+  [/\bcaminh[ao].{0,40}\bmb ?\d{4}\b/, 'caminhao'],
+  // "MB 1634 LS 2-EIXOS" (soleon): código de chassi sem a marca e sem a palavra
+  // caminhão. O sufixo e o eixo dizem que é pesado — "MB 2014 BRANCA", que é o
+  // anúncio de um Gol, não casa em nenhum dos dois.
+  [/\bmb ?\d{4} (ls|lk|la|cav|cam|trator)\b/, 'caminhao'],
+  [/\bmb ?\d{4}\b.{0,24}\b(eixos|[468]x[24]|8x4)\b/, 'caminhao'],
   [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
   // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
   // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
@@ -892,6 +906,63 @@ const GENERICAS = /\b(carros?|pesad[oa]s?|diversos|outros|veiculos?|geral)\b/;
  */
 const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.test(cat);
 
+/**
+ * Marca/modelo que NO BRASIL só existe em caminhão.
+ *
+ * Estes vencem a categoria da fonte de propósito, ao contrário de quase todo
+ * título. A regra geral é confiar na categoria específica, e ela está certa na
+ * maior parte das vezes — mas não quando a fonte guarda um Hyundai HR em
+ * "Utilitários Grandes" (Copart) ou um HR HDB em "Hatches" (Superbid): o
+ * caminhão ia parar no filtro de van/carro. Aqui não há o que decidir, porque
+ * nenhum desses nomes é de veículo leve.
+ *
+ * Medido em 13/10 sobre os 19.264 veículos do índice: 14 lotes.
+ */
+const CAMINHAO_INEQUIVOCO =
+  /\bhyundai ?\/? ?hr\b|volvo.{0,8}\b(nl ?1[02]?|n12)\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b/;
+/**
+ * Código de caminhão da Volkswagen colado à marca, nos dois sentidos
+ * ("12140 H - VOLKSWAGEN" e "VOLKSWAGEN 12.140"): a regra do `vw \d{2} \d{3}`
+ * exige a marca na frente e não pegava o código sozinho. 2 lotes.
+ */
+const CODIGO_VW_PESADO =
+  /\bvolkswagen\b.{0,30}\b(1[24][ .]?[14]40|17[ .]?180)\b|\b(1[24][ .]?[14]40|17[ .]?180)\b.{0,30}\bvolkswagen\b/;
+
+/**
+ * Reboque com evidência no TÍTULO, que também vence a categoria.
+ *
+ * A Copart junta semirreboque em "Caminhões e Rebocadores" e o leilo em
+ * "Pesados": com a categoria mandando, 34 semirreboques entravam como
+ * caminhão e inflavam o filtro de pesado com coisa que não é caminhão. O
+ * código RENAVAM depois da barra é o mesmo que o RENAVAM usa ("RANDON/SR BA",
+ * "RANDON/RE DL"), e o "reboque" escrito cobre o resto. 36 lotes.
+ */
+const REBOQUE_INEQUIVOCO = new RegExp(
+  // "reboque" só vale como o BEM: no início do título ou com "semi" ("2022
+  // ESTRADA SEMI-REBOQUE", "REBOQUE"). Solto no meio descreve o que a peça
+  // serve — "Transbordo ... com engate para reboque traseiro" é caixa de
+  // transbordo, não reboque —, pelo mesmo motivo que "caminhão" solto no meio
+  // não vale.
+  String.raw`^(semi ?reboque|reboques?)\b` +
+  String.raw`|\bsemi ?reboque\b` +
+  // marca de reboque + código RENAVAM ("RANDON/SR BA", "ALFASTEEL/SRASBS"): o
+  // prefixo SÓ vale depois da marca.
+  String.raw`|\b(randon|rondon|guerra|facchini|alfa ?steel|librelato|estrada|rodofort|noma|simetal|imos|carmetal)\b.{0,24}\b(sr[a-z]{0,5}|re|rb|rr)\b` +
+  String.raw`|\brodofort\b`,
+  'i',
+);
+/**
+ * Reboque escrito no título não decide sozinho: "MOTONETA BP/LAMBRETTA (COM
+ * REBOQUE)" é moto com sidecar e "CAMINHÃO COM REBOQUE" é caminhão. Nesses dois
+ * casos o resto do título é que vale.
+ *
+ * O código RENAVAM ("SR", "RE", "RB") só conta depois do nome de quem fabrica
+ * reboque: sozinho ele é ruído — o dry-run pegou "NOVA SAVEIRO RB MBVS",
+ * "RE/ROYAL HUNTER 350" (moto), "TOYOTA/YARIS SA PLUS" e "MÁQUINAS - SB
+ * Leilões", todos com duas letras + palavra e nenhum reboque.
+ */
+const REBOQUE_DE_UTENSILIO = /\b(motoneta|motocicleta|lambretti|scooter|ciclomotor|quadricicl)\b/;
+
 export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | null): VehicleType | null {
   const cat = fold(sourceCategory ?? '');
   const titulo = fold(titleRaw);
@@ -903,6 +974,10 @@ export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | nu
   // desta amarra. No início é sempre o bem em si (achado em 23/09: Superbid
   // "Motos" e bomvalor "Carreta com 3 eixos" categorizando caminhão errado).
   if (/^caminhao\b/.test(titulo)) return 'caminhao';
+  // Antes da categoria: reboque e caminhão inequívoco são decididos pelo bem, não
+  // pelo rótulo que a fonte deu a ele.
+  if (REBOQUE_INEQUIVOCO.test(titulo) && !REBOQUE_DE_UTENSILIO.test(titulo)) return 'reboque';
+  if (CAMINHAO_INEQUIVOCO.test(titulo) || CODIGO_VW_PESADO.test(titulo)) return 'caminhao';
   let tipoCat: VehicleType | null = null;
   for (const [re, tipo] of CATEGORIA_FONTE) {
     if (cat && re.test(cat)) {
@@ -934,7 +1009,7 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
-  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
+  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mercedes ?mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
   [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
   [/\b(onibus|microonibus|marcopolo|comil|neobus|caio)\b/, 'onibus'],
   [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],

@@ -78,3 +78,55 @@ test('reconhece Volvo VM/FH/FM com código sem confundir SUVs XC', () => {
   }
   assert.deepEqual(classifyAsset('Volvo XC60'), { assetType: 'veiculo', vehicleType: 'suv' });
 });
+
+/**
+ * Regressões medidas na auditoria de 13/10 sobre os 19.264 veículos do índice.
+ * Cada linha aqui é um lote real que estava na categoria errada.
+ */
+test('"MB" seguido de ano é sigla do anúncio, não código de caminhão', () => {
+  // O `mb ?\d{4}` tratava o ano como modelo: três carros dentro do filtro de
+  // pesado (Gol, Voyage, UP) e nenhum erro em log.
+  for (const title of [
+    'VW/GOL CITY MB | 2014/2015 | BRANCA', 'VW VOYAGE CL MB 2015/2015 BRANCA',
+    'VW/UP MOVE MB | 2016/2017 | PRETA', 'VW GOL ROCK IN RIO MB 2015/2016 BRANCA',
+  ]) {
+    assert.deepEqual(classifyAsset(title), { assetType: 'veiculo', vehicleType: 'carro' }, title);
+  }
+  // O código de chassi continua valendo com a marca, com o tipo no título ou
+  // com o sufixo/eixo que só pesado tem.
+  assert.deepEqual(classifyAsset('Mercedes MB2726 2011'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('CAMINHÃO CAÇAMBA MB 1113, ANO 1973'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('MB 1634 LS 2-EIXOS'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+});
+
+test('marca que só existe em caminhão vence a categoria da fonte', () => {
+  // Copart guarda o HR em "Utilitários Grandes" e a Superbid em "Hatches": o
+  // caminhão ia parar no filtro de van/carro por causa do rótulo da fonte.
+  assert.deepEqual(classifyAsset('2011 HYUNDAI HR', 'Utilitários Grandes'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('HYUNDAI/HR HDB 2011/', 'Hatches'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('I/HYUNDAI HR HDLWBSC – 07/07 – Água Clara/MS'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO/NL12 360 4X2 - 94/95 - Branco'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('STRALISHD 490S38TN'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('12140 H - VOLKSWAGEN'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  // O SUV da mesma marca continua SUV: a regra é o modelo, não o fabricante.
+  assert.deepEqual(classifyAsset('Volvo XC60', 'SUV'), { assetType: 'veiculo', vehicleType: 'suv' });
+});
+
+test('reboque no título não é caminhão, mesmo com a categoria dizendo o contrário', () => {
+  // Copart põe semirreboque em "Caminhões e Rebocadores" e o leilo em
+  // "Pesados": 35 lotes entravam no filtro de caminhão sem serem caminhão.
+  assert.deepEqual(classifyAsset('2022 ESTRADA SEMI-REBOQUE', 'Caminhões e Rebocadores'), { assetType: 'veiculo', vehicleType: 'reboque' });
+  assert.deepEqual(classifyAsset('2020 LIBRELATO SEMI-REBOQUE'), { assetType: 'veiculo', vehicleType: 'reboque' });
+  assert.deepEqual(classifyAsset('RANDON/SR BA', 'Pesados'), { assetType: 'veiculo', vehicleType: 'reboque' });
+  assert.deepEqual(classifyAsset('ALFASTEEL/SRASBS 2EIXO', 'Pesados'), { assetType: 'veiculo', vehicleType: 'reboque' });
+  assert.deepEqual(classifyAsset('SUCATA DE REBOQUE CANAVIEIRO RODOFORT RR CN, 2007/2008', 'Sucata de Carrocerias & Impl. Rodov.'), { assetType: 'veiculo', vehicleType: 'reboque' });
+  // Sidecar é moto, e o código RENAVAM sozinho é ruído: duas letras + palavra
+  // não são reboque. ("Transbordo ... com engate para reboque traseiro" é caixa
+  // de transbordo e o dicionário já responde reboque antes e depois disto —
+  // está fora do que estas regras mudam.)
+  assert.deepEqual(classifyAsset('MOTONETA – BP/ LAMBRETTA (COM REBOQUE)'), { assetType: 'veiculo', vehicleType: 'moto' });
+  // Código RENAVAM sozinho é ruído: dois códigos e uma palavra não são reboque.
+  assert.deepEqual(classifyAsset('VW/NOVA SAVEIRO RB MBVS - 18/19'), { assetType: 'veiculo', vehicleType: 'picape' });
+  assert.notEqual(classifyAsset('RE/ROYAL HUNTER 350, 26/27').vehicleType, 'reboque');
+  assert.deepEqual(classifyAsset('TOYOTA/YARIS SA PLUS CONNECT'), { assetType: 'veiculo', vehicleType: 'carro' });
+});
