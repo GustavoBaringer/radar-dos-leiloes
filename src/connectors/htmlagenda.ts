@@ -15,9 +15,13 @@ const ESCOPO_ASP = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|fazenda|ve[i�
 const FORA_ESCOPO = /numism[aá]tica|filatelia|cart[õo]es?\s+postais|eucalol|brinquedos?|colecion[aá]veis|porcelana|moedas?/i;
 const MONITORED_ONLY = ['coliseumleiloes.com.br', 'leiloesbrasilpe.com.br', 'albuquerqueleiloes.com.br', 'ghvmleiloes.com.br', 'portaldosleiloes.com.br'];
 const REVIEWED_TENANTS = ['c3leiloes.com.br', 'leiloescostaesilva.com.br', 'tbaracajuleiloes.com.br', ...MONITORED_ONLY];
-const BLOCKED = /sistema indispon[ií]vel|acesso negado|access denied|captcha|verifica[cç][aã]o de seguran[cç]a/i;
+const BLOCKED = /sistema indispon[ií]vel|acesso negado|access denied|radware bot manager|just a moment|checking your browser|complete (?:o|the) captcha|verifica[cç][aã]o de seguran[cç]a/i;
 
-export function isBlockedPage(body: string): boolean { return BLOCKED.test(texto(body)); }
+export function isBlockedPage(body: string): boolean {
+  const $ = cheerio.load(body);
+  $('script,style,noscript').remove();
+  return BLOCKED.test($.root().text());
+}
 
 export function isAspCatalogInScope(text: string): boolean {
   return ESCOPO_ASP.test(text) && !FORA_ESCOPO.test(text);

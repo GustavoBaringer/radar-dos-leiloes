@@ -100,19 +100,28 @@ export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
 
     // A descrição é texto operacional/jurídico em muitos tenants (inclusive
     // Bidmax); só a use quando o h5 for a categoria genérica do bem.
-    const descricao = semPartesJudiciais($c
+    const descricaoBruta = $c
       .find('div[style*="justify"]')
       .first()
-      .text()
+      .text();
+    // Judicial cards can place the actual asset after party/chassis fields.
+    // Extract the last asset description before applying personal-data scrubbing.
+    const descricoes = [...descricaoBruta.matchAll(/Descri[çc][ãa]o(?:\s+do\s+bem)?\s*:/gi)];
+    const descricaoBem = descricoes.length > 1
+      ? descricaoBruta.slice(descricoes.at(-1)!.index! + descricoes.at(-1)![0].length)
+      : descricaoBruta;
+    const descricao = semPartesJudiciais(descricaoBem
       .replace(/^\s*Descri[çc][ãa]o\s*:?\s*/i, '')
       .replace(/\s+/g, ' ')
       .replace(/\b(?:Placa|CPF|CNPJ|RENAVAM|Chassi|Executado|Exequente|Autor|R[eé]u)\s*:\s*.*$/i, '')
       .trim());
     const textoCard = $c.text().replace(/\s+/g, ' ').trim();
     const h5 = $c.find('h5').first().text().replace(/\s+/g, ' ').trim();
-    const h5Generico = /^(?:lote[-\s\d]*|ve[ií]culo|autom[oó]vel|carro|moto|motocicleta|caminhonete|caminh[aã]o|ônibus|onibus|utilit[aá]rio|im[oó]vel(?:\s+(?:rural|urbano))?|im[oó]veis|propriedade)$/i.test(h5);
+    const h5Generico = /^(?:lote[-\s\d]*|lote em leil[ãa]o(?: judicial)?|ve[ií]culo|autom[oó]vel|carro|moto|motocicleta|caminhonete|caminh[aã]o|ônibus|onibus|utilit[aá]rio|im[oó]vel(?:\s+(?:rural|urbano))?|im[oó]veis|propriedade)$/i.test(h5);
     const marcaModelo = textoCard.match(/Marca\s*\/?\s*Modelo\s*:\s*(.+?)(?=(?:Placa|Ano(?:\s*\/?\s*Modelo)?|Cor|Combust[ií]vel)\s*:|$)/i)?.[1]?.trim() ?? '';
-    const titulo = (!h5Generico && h5 ? h5 : marcaModelo || descricao).slice(0, 180);
+    const titulo = (!h5Generico && h5 ? h5 : marcaModelo || descricao)
+      .replace(/\bplaca\s*:?\s*[A-Z]{3}[\s-]?\d[A-Z0-9]\d{2}(?:\/[A-Z]{2})?/gi, '')
+      .replace(/\b(?:chassi|renavam)\s*:?\s*[A-Z0-9]{8,30}/gi, '').slice(0, 180);
     const bloco = $c.find('[class*="label_lote"]').first();
     const rotulo = $c.find('.etiqueta').first().text().trim() || $c.find('.my-auto h5').first().text().trim() || null;
     const valorTxt = $c.find('.lance').first().text().trim() || $c.find('.my-auto h4').first().text().trim();
@@ -131,6 +140,21 @@ export function lerCards($: cheerio.CheerioAPI, host: string): Card[] {
     });
   });
   return out;
+}
+
+export function judicialAssetTitle(html: string): string | null {
+  const $ = cheerio.load(html); $('script,style').remove();
+  const text = $.root().text().replace(/\s+/g, ' ');
+  const matches = [...text.matchAll(/Descri[çc][ãa]o(?:\s+do\s+bem)?\s*:/gi)];
+  if (!matches.length) return null;
+  const last = matches.at(-1)!;
+  const asset = text.slice(last.index! + last[0].length)
+    .split(/Localiza[çc][ãa]o:|Valor Total Penhorado:|CONTATOS/i)[0]
+    .replace(/\bplaca\s*:?\s*[A-Z]{3}[\s-]?\d[A-Z0-9]\d{2}(?:\/[A-Z]{2})?/gi, '')
+    .replace(/\b(?:chassi|renavam)\s*:?\s*[A-Z0-9]{8,30}/gi, '')
+    .replace(/\s+/g, ' ').trim();
+  if (!parseTitle(asset).brand && !IMOVEL_SINAL.test(asset) && !MAQUINA_TITULO.test(asset)) return null;
+  return asset.slice(0, 180);
 }
 
 export function novosCards(cards: Card[], vistos: Set<string>): Card[] {
@@ -277,7 +301,7 @@ export async function collectSoleon(
         const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost)
           ? ROTAS_CATEGORIAS
           : ROTAS_CATEGORIAS.slice(0, 2)).map((path) => ({ path, page: 1, done: false }));
-        if (normalizedHost === 'ccjleiloes.com.br') {
+        if (['ccjleiloes.com.br', 'colodeteleiloes.com.br', 'leilaopernambuco.com.br'].includes(normalizedHost)) {
           try {
             const home = await fetch(`https://${host}/`, { gapMs: 1100 });
             attempt?.response(home.status);
@@ -345,6 +369,11 @@ export async function collectSoleon(
               throwIfCancelled();
               const c = cards[i];
               if (lots.length - antes >= cota || lots.length >= limit) { truncated = true; break; }
+              if (normalizedHost === 'leilaopernambuco.com.br' && !parseTitle(c.titulo).brand && !IMOVEL_SINAL.test(c.titulo)) {
+                const response = await fetch(c.url, { gapMs: 1100, timeoutMs: 30000 });
+                attempt?.response(response.status);
+                if (response.status === 200) c.titulo = judicialAssetTitle(response.body) ?? c.titulo;
+              }
               const titulo = semPartesJudiciais(c.titulo);
               const bemTexto = `${titulo} ${c.descricao}`;
               if (!titulo || parecePeca(bemTexto) || looksLikeCollectible(bemTexto)) { skipped++; continue; }

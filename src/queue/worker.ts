@@ -12,6 +12,7 @@ import { consultaFreio } from '../core/freio.js';
 import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
 import { refreshBatch } from './refresh-batch.js';
+import { createDailyWorkerRuntime } from './daily-worker.js';
 import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
 import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
 import {
@@ -566,6 +567,7 @@ export interface WorkerHub {
  * consomem a mesma fábrica.
  */
 export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
+  let daily: ReturnType<typeof createDailyWorkerRuntime> | undefined;
   const workers: Worker[] = [];
   const timers: Array<ReturnType<typeof setInterval>> = [];
   let ligado = false;
@@ -624,6 +626,8 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       );
 
       await agendarTudo();
+      if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect);
+      await daily?.start();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
     },
@@ -632,6 +636,7 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       if (!ligado) return;
       ligado = false;
       cancelarEmAndamento('shutdown', undefined, 'worker encerrando');
+      await daily?.stop();
       for (const t of timers.splice(0)) clearInterval(t);
       await Promise.all(workers.splice(0).map((w) => w.close()));
     },

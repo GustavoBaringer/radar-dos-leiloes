@@ -308,7 +308,12 @@ export const docxhtml: Connector = {
     siteUrl: 'https://www.centralsuldeleiloes.com.br',
     notes: 'Conector geral para sites dos DOCX que não compartilham uma plataforma já suportada, com parsers curados por domínio.',
   },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, tenant }): Promise<CollectResult> {
+    if (tenant !== undefined) {
+      if (tenant !== 'leiloeslaraforster.com.br') throw new Error(`Unreviewed docxhtml tenant: ${tenant}`);
+      const r = await coletarLaraForster(limit);
+      return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched-r.lots.length), httpStatus: r.status };
+    }
     const lots: CanonicalLot[] = [];
     let fetched = 0, skipped = 0, httpStatus = 0;
     // Benedetto já tem conector próprio (`benedetto`). Aqui ficam só os sites

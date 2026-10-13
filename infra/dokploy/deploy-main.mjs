@@ -90,7 +90,7 @@ if (!nextWeb.includes(`${metricsDir}:/app/image-metrics`)) nextWeb = nextWeb.rep
   `$1\n    volumes:\n    - ${metricsDir}:/app/image-metrics$2`);
 const nextWorker = beforeWorker.replace(/(\n    image:) [^\n]+/, `$1 ${workerId}`);
 if (!nextWorker.includes(`image: ${workerId}`)) throw Error('Worker image replacement failed');
-const queuePrefix = 'import {collectQueue,refreshQueue,discoverQueue} from "./dist/src/queue/queues.js";const queues=[collectQueue,refreshQueue,discoverQueue];';
+const queuePrefix = 'import {Queue} from "bullmq";import {makeRedis} from "./dist/src/queue/runtime.js";import {collectQueue,refreshQueue,discoverQueue} from "./dist/src/queue/queues.js";const dailyQueue=new Queue("collect-daily-sites",{connection:makeRedis()});const queues=[collectQueue,refreshQueue,discoverQueue,dailyQueue];';
 const queues = code => docker(['exec', 'radar-worker', 'node', '--input-type=module', '-e', queuePrefix + code + ';process.exit(0)'], true);
 const pausedBefore = JSON.parse(queues('console.log(JSON.stringify(await Promise.all(queues.map(q=>q.isPaused()))))'));
 let activationStarted = false;

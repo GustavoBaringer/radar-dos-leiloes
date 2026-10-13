@@ -214,7 +214,12 @@ function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
   } as CanonicalLot;
 }
 
-async function tenants(): Promise<string[]> {
+async function tenants(tenant?: string): Promise<string[]> {
+  if (tenant !== undefined) {
+    const domain = tenant.replace(/^www\./, '').toLowerCase();
+    if (!TENANTS_PADRAO.includes(domain)) throw new Error(`Unreviewed Bomvalor tenant: ${tenant}`);
+    return [domain];
+  }
   const env = String(process.env.BOMVALOR_TENANTS ?? '').trim();
   if (env) {
     const candidates = env.split(',').map((s) => s.trim()).filter(Boolean);
@@ -243,7 +248,7 @@ export const bomvalor: Connector = {
       'Marketplace único com fachadas por leiloeiro: 5 tenants cobrem 100% do catálogo, os outros 6 não acrescentam nada. Listagem traz o acervo num atributo; preço e data exigem o detalhe.',
   },
 
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
+  async collect({ limit, assetTypes, tenant }): Promise<CollectResult> {
     throwIfCancelled();
     const lots: CanonicalLot[] = [];
     let fetched = 0;
@@ -251,7 +256,7 @@ export const bomvalor: Connector = {
     let status = 0;
     const vistos = new Set<string>();
 
-    for (const host of await tenants()) {
+    for (const host of await tenants(tenant)) {
       if (lots.length >= limit) break;
       throwIfCancelled();
       let r;

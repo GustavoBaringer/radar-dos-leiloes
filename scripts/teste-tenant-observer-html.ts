@@ -63,6 +63,7 @@ test('SOLEON records completed empty tenant from its actual collector', async ()
   await runOffline(async (agent, attempts) => {
     env('SOLEON_DOMAINS', host(1)); env('SOLEON_TENANTS', '1');
     agent.get(`https://${host(1)}`).intercept({ path: '/lotes/veiculo?tipo=veiculo&page=1' }).reply(200, '<html></html>');
+    agent.get(`https://${host(1)}`).intercept({ path: '/lotes/imovel?tipo=imovel&page=1' }).reply(200, '<html></html>');
     const result = await soleon.collect({ limit: 10, observer: ledger(attempts) });
     assert.equal(result.lots.length, 0);
     assert.equal(attempts[1].finish[1], 'completed', JSON.stringify(attempts));

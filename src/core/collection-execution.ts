@@ -1,6 +1,8 @@
 import type { Connector, CollectResult } from '../connectors/types.js';
 import type { UpsertOutcome } from './repo.js';
 import type { TenantObserverContext } from './tenant-attempts.js';
+import type { TenantObserver } from './tenant-attempts.js';
+import { guaranteedTenantObserver } from './guaranteed-tenant-observer.js';
 import {
   collectionSignal,
   erroDeCancelamento,
@@ -20,6 +22,7 @@ export interface CollectionExecutionOptions {
   metadata?: CollectionMetadata;
   tenant?: string;
   forceTenantObserver?: boolean;
+  guaranteeTenantAttempt?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
   checkEmptyHttpFailure?: boolean;
@@ -94,12 +97,18 @@ export async function executeCollection(
   let upserted = 0;
   let bidChanges: UpsertOutcome['bidChanges'] = [];
   let notifications: CollectionNotifications = { disparos: 0, push: 0, emails: 0, pendentesEmail: 0 };
+  let tenantTracker: Awaited<ReturnType<typeof guaranteedTenantObserver>> | undefined;
 
   try {
+    const metadata = options.metadata ?? { origin: 'unknown' as const };
+    let observer = deps.observerForCollection({ runId, sourceId: options.sourceId, ...metadata }, options.forceTenantObserver ? true : undefined);
+    if (options.guaranteeTenantAttempt && options.tenant) {
+      if (!observer) throw new Error('Daily collection requires tenant observer');
+      tenantTracker = await guaranteedTenantObserver(observer as TenantObserver, options.tenant);
+      observer = tenantTracker.observer;
+    }
     const connector = deps.lookupConnector(options.sourceId);
     if (!connector) throw new Error(`fonte desconhecida: ${options.sourceId}`);
-    const metadata = options.metadata ?? { origin: 'unknown' as const };
-    const observer = deps.observerForCollection({ runId, sourceId: options.sourceId, ...metadata }, options.forceTenantObserver ? true : undefined);
     result = await withCollectionCancellation({ signal: options.signal, timeoutMs: options.timeoutMs }, () => {
       throwIfCancelled();
       const coleta = connector.collect({ limit: options.limit, ...(options.tenant !== undefined ? { tenant: options.tenant } : {}), ...(observer ? { observer: observer as never } : {}) });
@@ -119,6 +128,7 @@ export async function executeCollection(
     upserted = upsert.upserted;
     bidChanges = upsert.bidChanges;
     notifications = await deps.processarAposColeta(upsert.novos, deps.publishNotification);
+    if (tenantTracker) { const tracker = tenantTracker; tenantTracker = undefined; await tracker.finish(result); }
     await finish({ ok: true, fetched: result.fetched, upserted, skipped: result.skipped, httpStatus: result.httpStatus });
 
     const publishErrors: string[] = [];
@@ -134,6 +144,7 @@ export async function executeCollection(
     }
     return { runId, result, upserted, bidChanges, notifications, publishErrors };
   } catch (error) {
+    if (tenantTracker) { const tracker = tenantTracker; tenantTracker = undefined; await tracker.finish(result, error); }
     const httpStatus = Number((error as { httpStatus?: unknown } | null)?.httpStatus) || undefined;
     try {
       await finish({ ok: false, fetched: result?.fetched, upserted, skipped: result?.skipped, httpStatus, error: safeError(error) });

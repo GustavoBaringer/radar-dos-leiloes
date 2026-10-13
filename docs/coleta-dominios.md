@@ -1,5 +1,9 @@
 # Coleta explícita de domínios
 
+Para a cobertura diária de produção implantada em 13/10/2026, consulte
+[coleta-diaria.md](coleta-diaria.md). O fluxo abaixo é o executor legado e seu
+manifesto de 29 domínios; não representa a nova agenda diária de 158 domínios.
+
 `node --env-file=.env --import tsx scripts/collect-sites.ts` lista os pares executáveis e os 20 domínios solicitados sem abrir DB, Redis ou filas. Atualmente há 19 pares executáveis na união de 29; 10 domínios seguem pendentes de contrato/sonda e `--run all`/`--schedule` recusam escopo incompleto.
 
 - `--run <domínio|all> [--limit N]` usa o executor compartilhado; cada fonte precisa estar habilitada e permitida por `WORKER_SOURCES`.

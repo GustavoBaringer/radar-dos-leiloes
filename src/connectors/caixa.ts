@@ -101,8 +101,19 @@ async function baixarCsv(): Promise<{ texto: string; status: number; url?: strin
   // O navegador resolve o Radware ao visitar o índice; o Referer some porque
   // deixa de existir requisição manual — é a própria navegação da page.
   return comNavegador(INDICE, async (page) => {
-    const { status, raw, url } = await getLatin1ViaNavegador(page, CSV_NACIONAL, { accept: 'text/csv,application/octet-stream,*/*' });
-    return { texto: raw, status, url };
+    try {
+      const { status, raw, url } = await getLatin1ViaNavegador(page, CSV_NACIONAL, { accept: 'text/csv,application/octet-stream,*/*' });
+      return { texto: raw, status, url };
+    } catch (error) {
+      // A browser fetch can reject without exposing HTTP status when a challenge
+      // redirects to another origin. Preserve session cookies and inspect the
+      // actual response once; CAPTCHA validation below still rejects it.
+      if (!/Failed to fetch/i.test(error instanceof Error ? error.message : '')) throw error;
+      const response = await page.context().request.get(CSV_NACIONAL, {
+        timeout: 30000, headers: { accept: 'text/csv,application/octet-stream,*/*', referer: page.url() },
+      });
+      return { texto: (await response.body()).toString('latin1'), status: response.status(), url: response.url() };
+    }
   });
 }
 
