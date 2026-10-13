@@ -1,0 +1,465 @@
+{
+  "_leia": "fixtures recortadas de respostas JSON públicas reais. Não é catálogo completo.",
+  "origens": {
+    "jdleiloes.com.br": {
+      "url": "https://jdleiloes.com.br/core/api/get-lotes (POST, página 1, sem tipo)",
+      "capturadoEmUtc": "2026-10-13T18:15:50.348Z",
+      "httpStatus": 200,
+      "sha256CorpoOriginal": "2031df9539ea95a8f0d4c5a36704b83b126c4460c305bd4468bdcdaf61e79df4",
+      "totalItems": 20,
+      "totalPages": 1,
+      "itemsPerPage": 40
+    },
+    "franciscofreitasleiloes.com.br": {
+      "url": "https://franciscofreitasleiloes.com.br/core/api/get-lotes (POST, página 1, sem tipo)",
+      "capturadoEmUtc": "2026-10-13T18:15:51.311Z",
+      "httpStatus": 200,
+      "sha256CorpoOriginal": "87ae9cc69aa87c9c848f2957b561a7d6407097a8e47ae6ef55ec51db6eef7fa3",
+      "totalItems": 134,
+      "totalPages": 4,
+      "itemsPerPage": 40
+    }
+  },
+  "medidoTipos": {
+    "jdleiloes.com.br": {
+      "tipo1": {
+        "totalItems": 4,
+        "categorias": {
+          "Veículos": 4
+        },
+        "donos": {
+          "www.jdleiloes.com.br": 4
+        }
+      },
+      "tipo3": {
+        "totalItems": 14,
+        "categorias": {
+          "Imóveis": 14
+        },
+        "donos": {
+          "www.jdleiloes.com.br": 14
+        }
+      },
+      "tipo0": {
+        "totalItems": 20,
+        "categorias": {
+          "Imóveis": 14,
+          "Veículos": 4,
+          "Animais": 2
+        }
+      }
+    },
+    "franciscofreitasleiloes.com.br": {
+      "tipo1": {
+        "totalItems": 16,
+        "categorias": {
+          "Veículos": 16
+        },
+        "donos": {
+          "www.nortenordesteleiloes.com.br": 16
+        }
+      },
+      "tipo3": {
+        "totalItems": 74,
+        "categorias": {
+          "Imóveis": 74
+        },
+        "donos": {
+          "www.nortenordesteleiloes.com.br": 74
+        }
+      },
+      "tipo0": {
+        "totalItems": 134,
+        "categorias": {
+          "Imóveis": 74,
+          "Outros": 43,
+          "Veículos": 16,
+          "Máquinas e equipamentos": 1
+        },
+        "donos": {
+          "www.nortenordesteleiloes.com.br": 134
+        }
+      }
+    }
+  },
+  "itens": {
+    "imovel_jd": {
+      "nm_statuslote": "Aberto para Lance",
+      "statuslote_id": 1,
+      "nm_url_leiloeiro": "www.jdleiloes.com.br",
+      "nm_leiloeiro": "José David Gonçalves de Melo",
+      "veiculo_id": null,
+      "nm_cidade": "Salvador",
+      "nm_estado": "BA",
+      "equipamento_id": null,
+      "imovel_id": 29534,
+      "iframe_streetview": null,
+      "nm_subcategoria": "Comerciais",
+      "id_subcategoria": 40,
+      "nm_categoria": "Imóveis",
+      "id_categoria": 3,
+      "nm_segmento": "Imóveis",
+      "id_segmento": 3,
+      "nu_visitas": 17,
+      "nu": "1",
+      "lote_id": 222706,
+      "leilao_id": 100888,
+      "nm_titulo_lote": "Edificação c/ 4.742,00m² - Terreno 8.850,00m² - Salvador/BA",
+      "nm_titulo_leilao": "TRIBUNAL REGIONAL DO TRABALHO DA 5ª REGIÃO - SECRETARIA DE EXECUÇÃO E EXPROPRIAÇÃO",
+      "nm_descricao": "<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">Imóvel com uma área construída de 4.742,00m², terreno com 18.850,00m², situado na Av. San Martim, 271, Fazenda Grande do Retiro, Salvador/BA. Matrícula 1.207 do 2º Registro de Imóveis de Salvador/BA. (Proc. 0000864-79.2024.5.05.0342)</span></p>\n<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">Observações: Atualmente funciona no imóvel a Oficina E B Escave Engenharia.</span></p>",
+      "dt_fechamento_formatado": "23:59:00",
+      "dt_fechamento": "2026-10-26 23:59:00-03",
+      "vl_venda": null,
+      "vl_lanceminimo": "28574530.31",
+      "vl_lanceinicial": "22859624.25",
+      "vl_incremento": "100000.00",
+      "vl_lanceinicialsegundoleilao": null,
+      "vl_lance": null,
+      "nu_parcelas": 1,
+      "vl_percentualentrada": 100,
+      "indice_correcao": null,
+      "id": 3,
+      "nu_qtdelances": 0,
+      "vl_ordenacao": "22859624.25",
+      "nu_ordem": 1,
+      "statusmontagem_id": 3,
+      "fotos": [
+        {
+          "nm_path": "I_29534_480154_A.webp",
+          "veiculo_id": null,
+          "equipamento_id": null,
+          "imovel_id": 29534,
+          "nu_ordem": 1,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/196x146/I_29534_480154_A.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/"
+        },
+        {
+          "nm_path": "I_29534_480158_C.webp",
+          "veiculo_id": null,
+          "equipamento_id": null,
+          "imovel_id": 29534,
+          "nu_ordem": 2,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/196x146/I_29534_480158_C.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/"
+        }
+      ],
+      "usuariovistorialotexstatusliberacaoextra": [
+        {
+          "statusliberacaoextra_id": 26,
+          "nm": "TRT 5 - ALIENAÇÃO P. ELETRÔNICA",
+          "nm_alerta": "<p>Este lote requer habilitação especial, pois não são aceitos lances diretamente no site do(a) leiloeiro(a). São aceitas apenas propostas por escrito, enviadas por e-mail, conforme especificado no cabeçalho acima. Para mais informações, entre em contato pelo telefone 0800-707-9272.</p>\r\n<p><span style=\"color: #000000; text-decoration: underline;\"><strong>OS DOCUMENTOS PODERÃO SER ENVIADOS COMO ANEXO NO CADASTRO OU ENCAMINHADOS POR E-MAIL. APÓS O ENVIO DA DOCUMENTAÇÃO, OBRIGATORIAMENTE É NECESSÁRIO ENTRAR EM CONTATO PELO TELEFONE DISPONIBILIZADO NA PLATAFORMA DO LEILOEIRO, PARA CONFIRMAÇÃO E VALIDAÇÃO DA HABILITAÇÃO.</strong></span></p>",
+          "nm_mensagem": "<p>Este lote requer habilitação especial, pois não são aceitos lances diretamente no site do(a) leiloeiro(a). São aceitas apenas propostas por escrito, enviadas por e-mail, conforme especificado no cabeçalho acima. Para mais informações, entre em contato pelo telefone 0800-707-9272.</p>\r\n<p><span style=\"color: #000000; text-decoration: underline;\"><strong>OS DOCUMENTOS PODERÃO SER ENVIADOS COMO ANEXO NO CADASTRO OU ENCAMINHADOS POR E-MAIL. APÓS O ENVIO DA DOCUMENTAÇÃO, OBRIGATORIAMENTE É NECESSÁRIO ENTRAR EM CONTATO PELO TELEFONE DISPONIBILIZADO NA PLATAFORMA DO LEILOEIRO, PARA CONFIRMAÇÃO E VALIDAÇÃO DA HABILITAÇÃO.</strong></span></p>"
+        }
+      ],
+      "s3_path": "906de634c48fb7d34136160b4c353ae4.s3.sa-east-1.amazonaws.com/public/jdleiloes",
+      "bn_exibeavaliacao": true,
+      "anexos": [
+        {
+          "id": 448530,
+          "nm_path": "4485301791403587.pdf",
+          "nm": "AVALIAÇÃO",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4485301791403587.pdf"
+        },
+        {
+          "id": 448533,
+          "nm_path": "4485331791403599.pdf",
+          "nm": "EDITAL",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4485331791403599.pdf"
+        }
+      ],
+      "_reducao": "fotos/anexos truncados a 2; nm_usuario/id_usuario (licitante) removidos"
+    },
+    "veiculo_jd": {
+      "nm_statuslote": "Aberto para Lance",
+      "statuslote_id": 1,
+      "nm_url_leiloeiro": "www.jdleiloes.com.br",
+      "nm_leiloeiro": "José David Gonçalves de Melo",
+      "veiculo_id": 26937,
+      "nm_cidade": "Dormentes",
+      "nm_estado": "PE",
+      "equipamento_id": null,
+      "imovel_id": null,
+      "iframe_streetview": null,
+      "nm_subcategoria": "Carros",
+      "id_subcategoria": 4,
+      "nm_categoria": "Veículos",
+      "id_categoria": 1,
+      "nm_segmento": "Veículos",
+      "id_segmento": 1,
+      "nu_visitas": 366,
+      "nu": "1",
+      "lote_id": 222597,
+      "leilao_id": 100863,
+      "nm_titulo_lote": "Fiat Palio ELX Flex - 10/10 - Dormentes/PE",
+      "nm_titulo_leilao": "Afrânio e Dormentes/PE - Veículos ",
+      "nm_descricao": "<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">Veículo Fiat/Palio ELX Flex, cor prata, ano de fabricação/modelo 2010/2010, placa KFW-0525/PE, o referido veículo encontra-se bem conservado em termos de pintura, pneus e tapeçaria. (Proc. 0000228-42.2018.8.17.2120)</span></p>\n<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\"><strong>(O VEÍCULO PODE SER PARCELADO COM 25% DE ENTRADA E O RESTANTE EM ATÉ 06 MESES – MEDIANTE APRESENTAÇÃO DE CAUÇÃO)</strong></span></p>\n<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\"><strong><span style=\"font-size: 10pt;\">LOCALIZAÇÃO DO BEM: </span></strong><span style=\"font-size: 10pt;\">Sitio Boa Esperança, S/N, Zona Rural, Dormentes – PE, CEP: 56.355-000.</span></span></p>",
+      "dt_fechamento_formatado": "11:00:00",
+      "dt_fechamento": "2026-10-21 11:00:00-03",
+      "vl_venda": null,
+      "vl_lanceminimo": "28000.00",
+      "vl_lanceinicial": "14000.00",
+      "vl_incremento": "300.00",
+      "vl_lanceinicialsegundoleilao": "14000.00",
+      "vl_lance": null,
+      "nu_parcelas": 6,
+      "vl_percentualentrada": 25,
+      "indice_correcao": "IPCA (IBGE)",
+      "id": 1,
+      "nu_qtdelances": 0,
+      "vl_ordenacao": "14000.00",
+      "nu_ordem": 1,
+      "statusmontagem_id": 3,
+      "fotos": [
+        {
+          "nm_path": "V_26937_957969_A.webp",
+          "veiculo_id": 26937,
+          "equipamento_id": null,
+          "imovel_id": null,
+          "nu_ordem": 1,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/veiculos/196x146/V_26937_957969_A.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/veiculos/"
+        },
+        {
+          "nm_path": "V_26937_957971_B.webp",
+          "veiculo_id": 26937,
+          "equipamento_id": null,
+          "imovel_id": null,
+          "nu_ordem": 2,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/veiculos/196x146/V_26937_957971_B.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/veiculos/"
+        }
+      ],
+      "usuariovistorialotexstatusliberacaoextra": [],
+      "s3_path": "906de634c48fb7d34136160b4c353ae4.s3.sa-east-1.amazonaws.com/public/jdleiloes",
+      "bn_exibeavaliacao": true,
+      "anexos": [
+        {
+          "id": 430980,
+          "nm_path": "4309801788956064.pdf",
+          "nm": "EDITAL",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4309801788956064.pdf"
+        },
+        {
+          "id": 430981,
+          "nm_path": "4309811788956066.pdf",
+          "nm": "LAUDO DE AVALIAÇÃO",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4309811788956066.pdf"
+        }
+      ],
+      "_reducao": "fotos/anexos truncados a 2; nm_usuario/id_usuario (licitante) removidos"
+    },
+    "animal_jd": {
+      "nm_statuslote": "Aberto para Lance",
+      "statuslote_id": 1,
+      "nm_url_leiloeiro": "www.jdleiloes.com.br",
+      "nm_leiloeiro": "José David Gonçalves de Melo",
+      "veiculo_id": null,
+      "nm_cidade": "Bom Conselho",
+      "nm_estado": "PE",
+      "equipamento_id": 12429,
+      "imovel_id": null,
+      "iframe_streetview": null,
+      "nm_subcategoria": "Outros",
+      "id_subcategoria": 1822,
+      "nm_categoria": "Animais",
+      "id_categoria": 1751,
+      "nm_segmento": "Bens Diversos",
+      "id_segmento": 2,
+      "nu_visitas": 51,
+      "nu": "2",
+      "lote_id": 215273,
+      "leilao_id": 99164,
+      "nm_titulo_lote": "14 Vacas Girolandas - Bom Conselho/PE",
+      "nm_titulo_leilao": "Iati - Bom Conselho/PE - Sítio c/ 51,0312 hectares - 14 Vacas Girolandas",
+      "nm_descricao": "<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">14 Vacas girolandas, mestiçagem 3/4, descritas como mansas e pacíficas. (Proc. 0000101-29.2025.8.17.2680)</span></p>\n<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\"><span style=\"text-decoration: underline;\">LOCALIZAÇÃO DO BEM</span>: Sítio José Alexandre, Bom Conselho/PE.</span></p>",
+      "dt_fechamento_formatado": "09:00:00",
+      "dt_fechamento": "2026-10-22 09:00:00-03",
+      "vl_venda": null,
+      "vl_lanceminimo": "119000.00",
+      "vl_lanceinicial": "119000.00",
+      "vl_incremento": "1000.00",
+      "vl_lanceinicialsegundoleilao": "59500.00",
+      "vl_lance": null,
+      "nu_parcelas": null,
+      "vl_percentualentrada": 25,
+      "indice_correcao": null,
+      "id": 2,
+      "nu_qtdelances": 0,
+      "vl_ordenacao": "59500.00",
+      "nu_ordem": 2,
+      "statusmontagem_id": 3,
+      "fotos": [
+        {
+          "nm_path": "E_12429_269561_A.webp",
+          "veiculo_id": null,
+          "equipamento_id": 12429,
+          "imovel_id": null,
+          "nu_ordem": 1,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/equipamentos/196x146/E_12429_269561_A.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/equipamentos/"
+        },
+        {
+          "nm_path": "E_12429_269569_B.webp",
+          "veiculo_id": null,
+          "equipamento_id": 12429,
+          "imovel_id": null,
+          "nu_ordem": 2,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/equipamentos/196x146/E_12429_269569_B.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/equipamentos/"
+        }
+      ],
+      "usuariovistorialotexstatusliberacaoextra": [],
+      "s3_path": "906de634c48fb7d34136160b4c353ae4.s3.sa-east-1.amazonaws.com/public/jdleiloes",
+      "bn_exibeavaliacao": true,
+      "anexos": [
+        {
+          "id": 426742,
+          "nm_path": "4267421788266951.pdf",
+          "nm": "LAUDO DE AVALIAÇÃO",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4267421788266951.pdf"
+        },
+        {
+          "id": 431799,
+          "nm_path": "4317991789048244.pdf",
+          "nm": "EDITAL RETIFICADO",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4317991789048244.pdf"
+        }
+      ],
+      "_reducao": "fotos/anexos truncados a 2; nm_usuario/id_usuario (licitante) removidos"
+    },
+    "dono_divergente_ff": {
+      "nm_statuslote": "Aberto para Lance",
+      "statuslote_id": 1,
+      "nm_url_leiloeiro": "www.nortenordesteleiloes.com.br",
+      "nm_leiloeiro": "Francisco Freitas",
+      "veiculo_id": null,
+      "nm_cidade": "Salvador",
+      "nm_estado": "BA",
+      "equipamento_id": null,
+      "imovel_id": 29538,
+      "iframe_streetview": null,
+      "nm_subcategoria": "Comerciais",
+      "id_subcategoria": 40,
+      "nm_categoria": "Imóveis",
+      "id_categoria": 3,
+      "nm_segmento": "Imóveis",
+      "id_segmento": 3,
+      "nu_visitas": 14,
+      "nu": "1",
+      "lote_id": 222685,
+      "leilao_id": 100891,
+      "nm_titulo_lote": "Edificação c/ 4.742,00m² - Terreno 8.850,00m² - Salvador/BA",
+      "nm_titulo_leilao": "TRIBUNAL REGIONAL DO TRABALHO DA 5ª REGIÃO - SECRETARIA DE EXECUÇÃO E EXPROPRIAÇÃO",
+      "nm_descricao": "<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">Imóvel com uma área construída de 4.742,00m², terreno com 18.850,00m², situado na Av. San Martim, 271, Fazenda Grande do Retiro, Salvador/BA. Matrícula 1.207 do 2º Registro de Imóveis de Salvador/BA. (Proc. 0000864-79.2024.5.05.0342)</span></p>\n<p style=\"text-align: justify;\"> </p>\n<p style=\"text-align: justify;\"><span style=\"font-size: 10pt;\">Observações: Atualmente funciona no imóvel a Oficina E B Escave Engenharia.</span></p>",
+      "dt_fechamento_formatado": "23:59:00",
+      "dt_fechamento": "2026-10-26 23:59:00-03",
+      "vl_venda": null,
+      "vl_lanceminimo": "28574530.31",
+      "vl_lanceinicial": "22859624.25",
+      "vl_incremento": "100000.00",
+      "vl_lanceinicialsegundoleilao": null,
+      "vl_lance": null,
+      "nu_parcelas": 1,
+      "vl_percentualentrada": 100,
+      "indice_correcao": null,
+      "id": 3,
+      "nu_qtdelances": 0,
+      "vl_ordenacao": "22859624.25",
+      "nu_ordem": 1,
+      "statusmontagem_id": 3,
+      "fotos": [
+        {
+          "nm_path": "I_29538_479788_A.webp",
+          "veiculo_id": null,
+          "equipamento_id": null,
+          "imovel_id": 29538,
+          "nu_ordem": 1,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/196x146/I_29538_479788_A.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/"
+        },
+        {
+          "nm_path": "I_29538_479792_C.webp",
+          "veiculo_id": null,
+          "equipamento_id": null,
+          "imovel_id": 29538,
+          "nu_ordem": 2,
+          "tamanho": {
+            "thumb": "107x80",
+            "thumb_pequena": "196x146",
+            "thumb_media": "327x244",
+            "thumb_grande": "640x480"
+          },
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/196x146/I_29538_479792_C.webp",
+          "nm_path_incompleto": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/fotos/imoveis/"
+        }
+      ],
+      "usuariovistorialotexstatusliberacaoextra": [
+        {
+          "statusliberacaoextra_id": 26,
+          "nm": "TRT 5 - ALIENAÇÃO P. ELETRÔNICA",
+          "nm_alerta": "<p>Este lote requer habilitação especial, pois não são aceitos lances diretamente no site do(a) leiloeiro(a). São aceitas apenas propostas por escrito, enviadas por e-mail, conforme especificado no cabeçalho acima. Para mais informações, entre em contato pelo telefone 0800-707-9272.</p>\r\n<p><span style=\"color: #000000; text-decoration: underline;\"><strong>OS DOCUMENTOS PODERÃO SER ENVIADOS COMO ANEXO NO CADASTRO OU ENCAMINHADOS POR E-MAIL. APÓS O ENVIO DA DOCUMENTAÇÃO, OBRIGATORIAMENTE É NECESSÁRIO ENTRAR EM CONTATO PELO TELEFONE DISPONIBILIZADO NA PLATAFORMA DO LEILOEIRO, PARA CONFIRMAÇÃO E VALIDAÇÃO DA HABILITAÇÃO.</strong></span></p>",
+          "nm_mensagem": "<p>Este lote requer habilitação especial, pois não são aceitos lances diretamente no site do(a) leiloeiro(a). São aceitas apenas propostas por escrito, enviadas por e-mail, conforme especificado no cabeçalho acima. Para mais informações, entre em contato pelo telefone 0800-707-9272.</p>\r\n<p><span style=\"color: #000000; text-decoration: underline;\"><strong>OS DOCUMENTOS PODERÃO SER ENVIADOS COMO ANEXO NO CADASTRO OU ENCAMINHADOS POR E-MAIL. APÓS O ENVIO DA DOCUMENTAÇÃO, OBRIGATORIAMENTE É NECESSÁRIO ENTRAR EM CONTATO PELO TELEFONE DISPONIBILIZADO NA PLATAFORMA DO LEILOEIRO, PARA CONFIRMAÇÃO E VALIDAÇÃO DA HABILITAÇÃO.</strong></span></p>"
+        }
+      ],
+      "s3_path": "906de634c48fb7d34136160b4c353ae4.s3.sa-east-1.amazonaws.com/public/franciscofreitasleiloes",
+      "bn_exibeavaliacao": true,
+      "anexos": [
+        {
+          "id": 448467,
+          "nm_path": "4484671791400957.pdf",
+          "nm": "EDITAL",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4484671791400957.pdf"
+        },
+        {
+          "id": 448468,
+          "nm_path": "4484681791400968.pdf",
+          "nm": "AVALIAÇÃO",
+          "nm_path_completo": "https://s3-sa-east-1.amazonaws.com/906de634c48fb7d34136160b4c353ae4/public/anexo/4484681791400968.pdf"
+        }
+      ],
+      "_reducao": "fotos/anexos truncados a 2; nm_usuario/id_usuario (licitante) removidos"
+    }
+  }
+}

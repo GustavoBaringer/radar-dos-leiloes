@@ -3,12 +3,13 @@ import { getConnector } from '../src/connectors/index.js';
 import { startRun, finishRun, upsertLots } from '../src/core/repo.js';
 import { observerForCollection } from '../src/core/collection-observer.js';
 import { executeCollection, type CollectionExecutionResult } from '../src/core/collection-execution.js';
+import { classifyAsset, looksLikeCollectible } from '../src/core/normalize.js';
 import { guardTenantLots, normalizeHost, normalizeLotUrl } from './coleta-tenant-audit.js';
 
-// Uso: coleta-tenant <sourceId> <dominio> [limite] [timeout-ms]
+// Uso: coleta-tenant <sourceId> <dominio> <limite> <timeout-ms>
 const [sourceId, rawDomain, limitArg, timeoutArg] = process.argv.slice(2);
-const positiveInteger = (value: string | undefined, fallback: number, name: string) => {
-  const parsed = value === undefined ? fallback : Number(value);
+const positiveInteger = (value: string | undefined, name: string) => {
+  const parsed = value === undefined ? NaN : Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} deve ser inteiro positivo`);
   return parsed;
 };
@@ -21,10 +22,11 @@ let runId: number | undefined;
 let startedAt: string | undefined;
 let rejectedHostCount = 0;
 let overLimitCount = 0;
+let normalizeDiscardCount = 0;
 try {
-  if (!sourceId || !rawDomain) throw new Error('Uso: coleta-tenant <sourceId> <dominio> [limite] [timeout-ms]');
-  const limit = positiveInteger(limitArg, 400, 'limite');
-  const timeoutMs = positiveInteger(timeoutArg, 7_200_000, 'timeout-ms');
+  if (!sourceId || !rawDomain) throw new Error('Uso: coleta-tenant <sourceId> <dominio> <limite> <timeout-ms>');
+  const limit = positiveInteger(limitArg, 'limite');
+  const timeoutMs = positiveInteger(timeoutArg, 'timeout-ms');
   const domain = normalizeHost(`https://${rawDomain}`)!;
   if (domain !== rawDomain.toLowerCase().replace(/^www\./, '').replace(/\.$/, '') || !domain.includes('.')) {
     throw new Error('dominio inválido');
@@ -57,6 +59,11 @@ try {
           const guarded = guardTenantLots(lots, domain, limit);
           rejectedHostCount = guarded.rejected.length;
           overLimitCount = guarded.overLimit;
+          normalizeDiscardCount = guarded.accepted.filter(lot => {
+            const raw = lot.raw as Record<string, unknown> | null | undefined;
+            const textoEscopo = [lot.titleRaw, lot.sourceCategory, raw?.descricao, raw?.description, raw?.leilao, raw?.categoria].filter(Boolean).join(' ');
+            return looksLikeCollectible(textoEscopo) || (lot.assetType ?? classifyAsset(lot.titleRaw, lot.sourceCategory, lot.sourceGroup).assetType) === 'outro';
+          }).length;
           const outcome = await upsertLots(guarded.accepted);
           newInsertIds = outcome.novos;
           return outcome;
@@ -74,7 +81,7 @@ try {
     const baselineIds = new Set(before.ids);
     const inserted = afterRows ? newInsertIds.filter(id => !baselineIds.has(id) && afterIds.has(id)) : null;
     const missing = afterRows ? newInsertIds.filter(id => baselineIds.has(id) || !afterIds.has(id)) : null;
-    console.error(JSON.stringify({ source: sourceId, domain, runId: runId ?? null, startedAt, finishedAt: new Date().toISOString(), before, after: afterRows ? { capturedAtUtc: new Date().toISOString(), count: afterRows.length, ids: afterRows.map(r => r.id), samples: afterRows.slice(0, sampleSize).map(r => ({ id: r.id, url: normalizeLotUrl(r.lot_url), firstSeenUtc: new Date(r.first_seen_at).toISOString() })) } : null, hostCountDelta: afterRows ? afterRows.length - before.ids.length : null, newInsertIds: inserted, missingOrBaselineInsertIds: missing, newInsertIdRange: inserted ? idRange(inserted) : null, partial: true, persistenceError: error instanceof Error ? error.message : String(error), verificationError: verification.error, rejectedHostCount, rejectedReasons: { hostMismatch: 'lotUrl ausente/inválida ou host diferente do solicitado', overLimit: 'itens além do limite explícito não persistidos' }, overLimitCount }));
+    console.error(JSON.stringify({ source: sourceId, domain, runId: runId ?? null, startedAt, finishedAt: new Date().toISOString(), before, after: afterRows ? { capturedAtUtc: new Date().toISOString(), count: afterRows.length, ids: afterRows.map(r => r.id), samples: afterRows.slice(0, sampleSize).map(r => ({ id: r.id, url: normalizeLotUrl(r.lot_url), firstSeenUtc: new Date(r.first_seen_at).toISOString() })) } : null, hostCountDelta: afterRows ? afterRows.length - before.ids.length : null, newInsertIds: inserted, missingOrBaselineInsertIds: missing, newInsertIdRange: inserted ? idRange(inserted) : null, partial: true, persistenceError: error instanceof Error ? error.message : String(error), verificationError: verification.error, rejectedHostCount, normalizeDiscardCount, rejectedReasons: { hostMismatch: 'lotUrl ausente/inválida ou host diferente do solicitado', overLimit: 'itens além do limite explícito não persistidos', normalize: 'coleta normaliza para asset_type outro ou política global anti-colecionáveis' }, overLimitCount }));
     process.exitCode = 1;
     throw error;
   }
@@ -91,7 +98,7 @@ try {
     httpStatus: result.result.httpStatus, fetched: result.result.fetched, mapped: result.result.lots.length,
     upserted: result.upserted, newInsertIds: inserted, newInsertIdRange: idRange(inserted), insertedSamples: afterRows.filter(r => inserted.includes(r.id)).slice(0, sampleSize).map(r => ({ id: r.id, url: normalizeLotUrl(r.lot_url) })), updates,
     hostCountDelta: afterRows.length - before.ids.length,
-    skipped: result.result.skipped + rejectedHostCount + overLimitCount, rejectedHostCount, rejectedReasons: { hostMismatch: 'lotUrl ausente/inválida ou host diferente do solicitado', overLimit: 'itens além do limite explícito não persistidos' }, overLimitCount, missingOrBaselineInsertIds: missing, before, after: { capturedAtUtc: new Date().toISOString(), count: afterRows.length, ids: afterRows.map(r => r.id), samples: afterRows.slice(0, sampleSize).map(r => ({ id: r.id, url: normalizeLotUrl(r.lot_url), firstSeenUtc: new Date(r.first_seen_at).toISOString() })) }, partial: missing.length > 0 || result.result.note != null || result.publishErrors.length > 0 || rejectedHostCount > 0 || overLimitCount > 0,
+    skipped: result.result.skipped + rejectedHostCount + normalizeDiscardCount + overLimitCount, rejectedHostCount, normalizeDiscardCount, rejectedReasons: { hostMismatch: 'lotUrl ausente/inválida ou host diferente do solicitado', overLimit: 'itens além do limite explícito não persistidos', normalize: 'coleta normaliza para asset_type outro ou política global anti-colecionáveis' }, overLimitCount, missingOrBaselineInsertIds: missing, before, after: { capturedAtUtc: new Date().toISOString(), count: afterRows.length, ids: afterRows.map(r => r.id), samples: afterRows.slice(0, sampleSize).map(r => ({ id: r.id, url: normalizeLotUrl(r.lot_url), firstSeenUtc: new Date(r.first_seen_at).toISOString() })) }, partial: missing.length > 0 || result.result.note != null || result.publishErrors.length > 0 || rejectedHostCount > 0 || overLimitCount > 0,
     note: result.result.note ?? null, publishErrors: result.publishErrors,
   }));
 } catch (error) {

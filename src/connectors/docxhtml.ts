@@ -2,7 +2,8 @@ import * as cheerio from 'cheerio';
 import { fetchJson, fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, classifyAsset, fold } from '../core/normalize.js';
+import { throwIfCancelled } from '../core/collection-cancellation.js';
 import * as campos from '../core/campos.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -259,9 +260,10 @@ async function coletarArremate(limit: number): Promise<{ lots: CanonicalLot[]; f
 }
 
 async function coletarRoiSoft(limit: number): Promise<{ lots: CanonicalLot[]; fetched: number; status: number }> {
+  // O Norte Leilões saiu daqui: a API dele exige POST + Origin/Referer (GET
+  // devolve 403 medido em 13/10/2026) e hoje tem coletor próprio (coletarNorte).
   const tenants = [
     { host: 'caiapoleiloes.com.br', site: 'https://www.caiapoleiloes.com.br', api: 'https://www.caiapoleiloes.com.br', nome: 'Caiapó Leilões' },
-    { host: 'norteleiloes.com.br', site: 'https://www.norteleiloes.com.br', api: 'https://www.sistema.norteleiloes.com.br', nome: 'Norte Leilões' },
   ];
   const lots: CanonicalLot[] = [];
   let fetched = 0, status = 0;
@@ -298,6 +300,211 @@ async function coletarRoiSoft(limit: number): Promise<{ lots: CanonicalLot[]; fe
   return { lots, fetched, status };
 }
 
+/* ------------------------------------------------------------------ *
+ * Norte Leilões (norteleiloes.com.br) — SPA Next.js em /lotes.
+ *
+ * O HTML server-side não mapeia nada ("0 Lotes encontrados / Aguarde
+ * Carregando..."). O contrato real foi medido nos chunks JS que a própria
+ * página entrega (0fnwbp609eb9e.js):
+ *   POST https://www.sistema.norteleiloes.com.br/lotes/listar-dados
+ *        ?pagina={N}&porPagina=12&api=true
+ *   Content-Type: application/x-www-form-urlencoded, body "pagina={N}&porPagina=12"
+ * Sem Origin/Referer do site a API devolve 403 (medido em 13/10/2026); são os
+ * headers que o próprio browser envia, não um bypass. GET também 403 (medido).
+ * Resposta: { dados: [...], dadosPaginacao: { pageCount, totalItemCount, ... } }.
+ * A lista NÃO traz avaliação nem lance mínimo; `valorLance` vem em formato
+ * americano ("146000.00") e só quando há lances (LEL_COUNT_LANCES > 0).
+ */
+export const NORTE = {
+  host: 'norteleiloes.com.br',
+  site: 'https://www.norteleiloes.com.br',
+  api: 'https://www.sistema.norteleiloes.com.br',
+  nome: 'Norte Leilões',
+};
+
+/** valorLance da API é americano ("146000.00"); dinheiro() espera "1.234,00". */
+function norteValor(v: unknown): number | null {
+  if (v == null || v === '' || v === false) return null;
+  const s = String(v).trim();
+  const n = /^\d+(\.\d+)?$/.test(s) ? Number(s) : dinheiro(s);
+  return n != null && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * LED_DIA_F ("HOJE, 13/OUT/2026 - 10h00" / "AMANHÃ, 14/OUT/2026 - 10h30" /
+ * "QUI, 15/OUT/2026 - 09h30") traz a data ABSOLUTA mesmo quando rotulada como
+ * relativa; o rótulo "HOJE"/"AMANHÃ" é só apresentação. `confere` valida o
+ * rótulo contra o relógio em America/Sao_Paulo (UTC-3, sem DST desde 2019 —
+ * o parser fixa -03:00, o mesmo offset que o resto do repo usa).
+ */
+export function norteData(txt?: string | null, agora: Date = new Date()): { date: Date | null; relativo: 'HOJE' | 'AMANHÃ' | null; confere: boolean | null } {
+  const s = String(txt ?? '').trim();
+  const m = s.match(/^\s*(HOJE|AMANH[ÃA])/i);
+  const relativo = m ? (m[1].toUpperCase().startsWith('HOJE') ? 'HOJE' as const : 'AMANHÃ' as const) : null;
+  const date = dataRoi(s) ?? dataBr(s);
+  let confere: boolean | null = null;
+  if (date && relativo) {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+    confere = fmt.format(date) === fmt.format(relativo === 'HOJE' ? agora : new Date(agora.getTime() + 24 * 3600 * 1000));
+  }
+  return { date, relativo, confere };
+}
+
+/**
+ * Status só com base no que a fonte publica: LEL_SITUACAO decide, data
+ * desempata. "LIBERADO_LEILAO" = lote liberado no leilão (aceitando lances,
+ * medido com LEL_COUNT_LANCES > 0 mesmo antes da data); "AG_PAGAMENTO" =
+ * arrematado aguardando pagamento; "NAO_ARREMATADO" com data futura ainda vai
+ * a praça, com data passada foi a praça e não vendeu.
+ */
+export function statusNorte(lelSituacao: string, fim: Date | null, agora: Date = new Date()): LotStatus {
+  if (lelSituacao === 'AG_PAGAMENTO') return 'vendido';
+  if (lelSituacao === 'LIBERADO_LEILAO') return 'aberto';
+  if (lelSituacao === 'NAO_ARREMATADO') return fim && fim.getTime() > agora.getTime() ? 'agendado' : 'encerrado';
+  return statusDe(lelSituacao, fim);
+}
+
+export interface NorteDescarte { id: string; titulo: string; motivo: 'sucata' | 'titulo_peca' | 'tipo_peca' }
+
+/**
+ * Mapeia UMA página da lista. Dedup por LEL_ID via `vistos` (compartilhado
+ * entre páginas: a fonte pode repetir item no corte da paginação). Schema
+ * inesperado (item sem LEL_ID/titulo, payload sem dados) não derruba a página.
+ */
+export function parseNortePage(
+  payload: { dados?: unknown; dadosPaginacao?: { pageCount?: unknown; totalItemCount?: unknown } } | null | undefined,
+  opts: { vistos: Set<string>; limite: number; agora?: Date },
+): { lots: CanonicalLot[]; descartados: NorteDescarte[]; itens: number; pageCount: number | null; totalItemCount: number | null } {
+  const dados = Array.isArray(payload?.dados) ? (payload!.dados as unknown[]) : [];
+  const pag = payload?.dadosPaginacao ?? null;
+  const pageCountNum = Number((pag as any)?.pageCount);
+  const totalNum = Number((pag as any)?.totalItemCount);
+  const agora = opts.agora ?? new Date();
+  const lots: CanonicalLot[] = [];
+  const descartados: NorteDescarte[] = [];
+  for (const item of dados) {
+    const l = (item ?? {}) as Record<string, any>;
+    const id = String(l.LEL_ID ?? '').trim();
+    const titulo = String(l.titulo ?? l.descricao ?? '').trim();
+    if (!id || !titulo) continue;
+    if (opts.vistos.has(id)) continue;
+    opts.vistos.add(id);
+    if (lots.length >= opts.limite) continue;
+    // Exclusão explícita: sucata/peça não é bem imóvel/veículo/máquina.
+    if (l.vecSucata) { descartados.push({ id, titulo, motivo: 'sucata' }); continue; }
+    if (/\b(pecas?|sucata)\b/.test(fold(titulo))) { descartados.push({ id, titulo, motivo: 'titulo_peca' }); continue; }
+    const cls = classifyAsset(titulo, null);
+    if (cls.vehicleType === 'peca') { descartados.push({ id, titulo, motivo: 'tipo_peca' }); continue; }
+
+    const campoData: 'LED_DIA_F' | 'LED_DIA_F2' = norteData(l.LED_DIA_F).date ? 'LED_DIA_F' : 'LED_DIA_F2';
+    const d = norteData(campoData === 'LED_DIA_F' ? l.LED_DIA_F : l.LED_DIA_F2);
+    const fim = d.date;
+    const parsed = cls.assetType === 'veiculo' ? parseTitle(titulo) : { brand: null, model: null, version: null, yearMake: null, yearModel: null };
+    const local = campos.localDeTexto(titulo);
+    const fotos = (Array.isArray(l.fotos) ? l.fotos : [])
+      .map((f: any) => f?.imgUrl_285x220 ?? f?.imgUrl ?? null)
+      .filter((u: any) => typeof u === 'string' && u.startsWith('http'));
+    const fotoSolo = l.imgUrl_285x220 ?? l.imgUrl ?? null;
+    const photos = fotos.length ? fotos : (typeof fotoSolo === 'string' && fotoSolo.startsWith('http') ? [fotoSolo] : []);
+    lots.push({
+      sourceId: 'docxhtml',
+      externalId: `${NORTE.host}:${id}`,
+      // urlLote vem null na lista; o detalhe público /lote/{LEL_ID} responde
+      // 200 com o título no corpo (medido: 74772 → "JF-3090 - ALTAMIRA/PA...").
+      lotUrl: `${NORTE.site}/lote/${id}`,
+      auctioneerName: NORTE.nome,
+      titleRaw: titulo,
+      brand: parsed.brand,
+      model: parsed.model,
+      version: parsed.version,
+      yearMake: parsed.yearMake,
+      yearModel: parsed.yearModel,
+      assetType: cls.assetType,
+      vehicleType: cls.vehicleType,
+      // A lista não publica categoria/documentação por lote: não inventar.
+      sourceCategory: null,
+      docType: null,
+      closingModel: 'timer_por_lote',
+      auctionStartUtc: null,
+      auctionEndUtc: fim,
+      sourceTz: 'America/Sao_Paulo',
+      status: statusNorte(String(l.LEL_SITUACAO ?? ''), fim, agora),
+      currentBid: norteValor(l.valorLance),
+      // Sem lance mínimo nem avaliação na lista: ficam null, não zero.
+      minBid: null,
+      appraisal: null,
+      sellerType: classifySeller(null) as any,
+      city: local?.city ?? null,
+      state: local?.uf ?? null,
+      photos,
+      raw: {
+        tenant: NORTE.host,
+        lelId: id,
+        leilaoId: l.LEI_ID ?? null,
+        lelSituacao: l.LEL_SITUACAO ?? null,
+        leiSiteSituacao: l.LEI_SITE_SITUACAO ?? null,
+        leiSiteTipo: l.LEI_SITE_TIPO ?? null,
+        countLances: l.LEL_COUNT_LANCES ?? null,
+        valorLanceFonte: l.valorLance ?? null,
+        dataFonte: campoData,
+        diaRelativo: d.relativo,
+        diaRelativoConfere: d.confere,
+      },
+    });
+  }
+  return {
+    lots,
+    descartados,
+    itens: dados.length,
+    pageCount: Number.isFinite(pageCountNum) ? pageCountNum : null,
+    totalItemCount: Number.isFinite(totalNum) ? totalNum : null,
+  };
+}
+
+/** Varre a paginação completa (364 itens / 12 por página = 31 páginas), sequencial. */
+export async function coletarNorte(
+  limit: number,
+  buscar: typeof fetchText = fetchText,
+): Promise<{ lots: CanonicalLot[]; fetched: number; descartados: NorteDescarte[]; status: number; note?: string }> {
+  const vistos = new Set<string>();
+  const lots: CanonicalLot[] = [];
+  const descartados: NorteDescarte[] = [];
+  let fetched = 0, status = 0, note: string | undefined;
+  let pagina = 1, pageCount = 1;
+  do {
+    throwIfCancelled();
+    let r;
+    try {
+      r = await buscar(`${NORTE.api}/lotes/listar-dados?pagina=${pagina}&porPagina=12&api=true`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: NORTE.site,
+          referer: `${NORTE.site}/lotes`,
+        },
+        body: `pagina=${pagina}&porPagina=12`,
+        gapMs: 1100,
+      });
+    } catch (error) {
+      throwIfCancelled();
+      note = `Norte: falha de rede na página ${pagina}: ${error instanceof Error ? error.message : String(error)}`;
+      break;
+    }
+    status ||= r.status;
+    if (r.status !== 200) { note = `Norte: HTTP ${r.status} na página ${pagina}`; break; }
+    let payload: any;
+    try { payload = JSON.parse(r.body); } catch { note = `Norte: resposta não-JSON na página ${pagina}`; break; }
+    const res = parseNortePage(payload, { vistos, limite: limit - lots.length });
+    fetched += res.itens;
+    descartados.push(...res.descartados);
+    lots.push(...res.lots);
+    if (res.itens === 0) break;
+    pageCount = res.pageCount ?? pagina;
+    pagina += 1;
+  } while (pagina <= pageCount && lots.length < limit);
+  return { lots, fetched, descartados, status, note };
+}
+
 export const docxhtml: Connector = {
   def: {
     id: 'docxhtml',
@@ -310,6 +517,16 @@ export const docxhtml: Connector = {
   },
   async collect({ limit, tenant }): Promise<CollectResult> {
     if (tenant !== undefined) {
+      if (tenant === NORTE.host) {
+        const r = await coletarNorte(limit);
+        return {
+          lots: r.lots,
+          fetched: r.fetched,
+          skipped: Math.max(0, r.fetched - r.lots.length),
+          httpStatus: r.status,
+          ...(r.note ? { note: r.note } : {}),
+        };
+      }
       if (tenant !== 'leiloeslaraforster.com.br') throw new Error(`Unreviewed docxhtml tenant: ${tenant}`);
       const r = await coletarLaraForster(limit);
       return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched-r.lots.length), httpStatus: r.status };

@@ -14,14 +14,15 @@ const ESCOPO = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|sala|loja|fazenda
 const ESCOPO_ASP = /im[óo]vel|apartamento|casa|terreno|galp[aã]o|fazenda|ve[ií]culo|carro|moto|caminh[aã]o|ônibus|onibus|máquina|maquina|equipamento/i;
 const FORA_ESCOPO = /numism[aá]tica|filatelia|cart[õo]es?\s+postais|eucalol|brinquedos?|colecion[aá]veis|porcelana|moedas?/i;
 const MONITORED_ONLY = ['coliseumleiloes.com.br', 'leiloesbrasilpe.com.br', 'albuquerqueleiloes.com.br', 'ghvmleiloes.com.br', 'portaldosleiloes.com.br'];
-const REVIEWED_TENANTS = ['c3leiloes.com.br', 'leiloescostaesilva.com.br', 'tbaracajuleiloes.com.br', ...MONITORED_ONLY];
-const BLOCKED = /sistema indispon[ií]vel|acesso negado|access denied|radware bot manager|just a moment|checking your browser|complete (?:o|the) captcha|verifica[cç][aã]o de seguran[cç]a/i;
+const REVIEWED_CATALOG_PATHS: Record<string, string[]> = {
+  'marcoantonioleiloeiro.com.br': ['/leiloes/judiciais', '/leiloes/extrajudiciais'],
+  'dcmleiloes.com.br': ['/leiloes/judiciais', '/leiloes/extrajudiciais'],
+};
+const MJ_TENANT = 'mjleiloes.com.br';
+const REVIEWED_TENANTS = ['c3leiloes.com.br', 'leiloescostaesilva.com.br', 'tbaracajuleiloes.com.br', ...MONITORED_ONLY, ...Object.keys(REVIEWED_CATALOG_PATHS), MJ_TENANT];
+const BLOCKED = /sistema indispon[ií]vel|acesso negado|access denied|captcha|verifica[cç][aã]o de seguran[cç]a/i;
 
-export function isBlockedPage(body: string): boolean {
-  const $ = cheerio.load(body);
-  $('script,style,noscript').remove();
-  return BLOCKED.test($.root().text());
-}
+export function isBlockedPage(body: string): boolean { return BLOCKED.test(texto(body)); }
 
 export function isAspCatalogInScope(text: string): boolean {
   return ESCOPO_ASP.test(text) && !FORA_ESCOPO.test(text);
@@ -58,6 +59,18 @@ export function aspItemIds(html: string): string[] {
     if (id) ids.add(id);
   });
   return [...ids];
+}
+
+export function reviewedCatalogLotLinks(html: string, base: string): string[] {
+  const $ = cheerio.load(html), host = new URL(base).hostname.toLowerCase();
+  const links = new Set<string>();
+  $('a[href]').each((_, a) => {
+    try {
+      const url = new URL($(a).attr('href') ?? '', base);
+      if (url.hostname.toLowerCase() === host && /^\/lotes\/\d+\/?$/.test(url.pathname)) links.add(url.href);
+    } catch { /* ignore malformed links */ }
+  });
+  return [...links];
 }
 
 function aspLastPage(html: string): number {
@@ -189,6 +202,103 @@ async function aspCatalog(base: string, body: string, attempt?: import('../core/
   return { lots, fetched, skipped, httpStatus, truncated };
 }
 
+function jsonObjectAt(text: string, start: number): Record<string, any> | null {
+  if (start < 0 || text[start] !== '{') return null;
+  let depth = 0, inString = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"' && text[i - 1] !== '\\') inString = !inString;
+    if (inString) continue;
+    if (char === '{') depth++;
+    else if (char === '}' && --depth === 0) {
+      try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function jsonObjectAfter(text: string, key: string): Record<string, any> | null {
+  const matches = new RegExp(`\\"${key}\\"\\s*:`, 'g');
+  let result: Record<string, any> | null = null, match: RegExpExecArray | null;
+  while ((match = matches.exec(text))) result = jsonObjectAt(text, text.indexOf('{', match.index + match[0].length)) ?? result;
+  return result;
+}
+
+function jsonObjectAssignment(text: string, variable: string): Record<string, any> | null {
+  const marker = new RegExp(`\\bvar\\s+${variable}\\s*=\\s*\\{`, 'g');
+  let result: Record<string, any> | null = null, match: RegExpExecArray | null;
+  while ((match = marker.exec(text))) result = jsonObjectAt(text, match.index + match[0].lastIndexOf('{')) ?? result;
+  return result;
+}
+
+function payloadDaPagina(html: string): Record<string, any> | null {
+  const $ = cheerio.load(html);
+  let flight = '';
+  $('script').each((_, el) => {
+    const script = $(el).html() ?? '';
+    const at = script.indexOf('self.__next_f.push(');
+    if (at < 0) return;
+    try {
+      const arg = JSON.parse(script.slice(script.indexOf('(', at) + 1, script.lastIndexOf(')')));
+      if (Array.isArray(arg) && typeof arg[1] === 'string') flight += arg[1];
+    } catch { /* ignore unrelated or incomplete Next flight chunks */ }
+  });
+  return jsonObjectAfter(flight, 'initialLote') ?? jsonObjectAssignment(html, 'lote') ?? jsonObjectAfter(html, 'initialLote');
+}
+
+export function mapHtmlAgendaLot(host: string, url: string, html: string, status = 200): CanonicalLot | null {
+  const $ = cheerio.load(html);
+  const h1 = texto($('h1').first().text() || $('title').first().text());
+  const reviewedProbe = REVIEWED_TENANTS.includes(host.replace(/^www\./i, '').toLowerCase());
+  if (reviewedProbe && status !== 200) return null;
+  const titulo = h1 && !/^(início|home)$/i.test(h1) ? h1 : reviewedProbe ? '' : slugTitulo(url);
+  const body = texto(html).slice(0, 6000);
+  const pathId = url.match(/\/(?:lote|lotes)\/(\d+)/i)?.[1];
+  const isMj = host.replace(/^www\./i, '').toLowerCase() === MJ_TENANT;
+  const lotPayload = payloadDaPagina(html);
+  const mjEvent = host.replace(/^www\./i, '').toLowerCase() === MJ_TENANT ? jsonObjectAssignment(html, 'leilao') : null;
+  const linkedPayload = Boolean(pathId && String(lotPayload?.id) === pathId);
+  if (isMj && !linkedPayload) return null;
+  const tipoPai = linkedPayload ? String(lotPayload?.bem?.tipoPai ?? '') : '';
+  const category = /Im[oó]veis?/i.test(tipoPai) ? 'imovel' : /Ve[ií]culos?/i.test(tipoPai) ? 'veiculo' : null;
+  const parsed = parseTitle(titulo);
+  const cls = classifyAsset(titulo, category);
+  const scopeText = reviewedProbe ? `${titulo} ${category ?? ''}` : `${titulo} ${body}`;
+  if (!titulo || (isMj && /\bsucata\b/i.test(titulo)) || looksLikePart(titulo) || looksLikeCollectible(titulo) ||
+      (isMj ? cls.assetType === 'outro' : !ESCOPO.test(scopeText)) || (reviewedProbe && cls.assetType === 'outro')) return null;
+  const local = campos.localDeTexto(`${titulo} ${body}`);
+  const payloadNumber = (key: 'lanceInicial' | 'valorInicial' | 'valorAvaliado') => {
+    const value = lotPayload?.[key];
+    const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+  const valorRotulado = (label: string) => dinheiro(body.match(new RegExp(`(?:${label})[\\s.,:;()\\-]*(R\\$\\s*[\\d.,]+)`, 'i'))?.[1]);
+  const valorAntesDoRotulo = (label: string) => dinheiro(body.match(new RegExp(`(R\\$\\s*[\\d.,]+)[\\s.,:;()\\-]*(?:${label})`, 'i'))?.[1]);
+  const minBid = linkedPayload ? payloadNumber('lanceInicial') : host.replace(/^www\./i, '').toLowerCase() === MJ_TENANT ? payloadNumber('valorInicial') : null;
+  const verifiedMinBid = minBid ?? valorRotulado('\\blance\\s+(?:inicial|mínimo|minimo)\\b') ?? valorAntesDoRotulo('\\blance\\s+(?:inicial|mínimo|minimo)\\b');
+  const currentBid = valorRotulado('\\blance\\s+(?:atual|maior)\\b') ?? valorRotulado('\\bmaior\\s+lance\\b') ?? valorAntesDoRotulo('\\blance\\s+(?:atual|maior)\\b|\\bmaior\\s+lance\\b');
+  const avaliacaoFonte = linkedPayload ? payloadNumber('valorAvaliado') : null;
+  const phpDate = (value: any): Date | null => {
+    const raw = typeof value === 'string' ? value : value?.date;
+    if (!raw) return null;
+    const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${String(raw).replace(' ', 'T').slice(0, 19)}-03:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const lotStatus = isMj && /aberto para lances/i.test(body) ? 'aberto'
+    : isMj && /leil[aã]o encerrado|lote encerrado/i.test(body) ? 'encerrado' : 'sem_data';
+  const id = `${host}:${url.match(/\/(?:lote|lotes|leilao)\/([^/?#]+)/i)?.[1] ?? url.match(/(?:id|cod|evento)=([^&#]+)/i)?.[1] ?? url}`;
+  return {
+    sourceId: 'htmlagenda', externalId: id, lotUrl: url, titleRaw: titulo,
+    brand: parsed.brand, model: parsed.model, yearMake: parsed.yearMake, yearModel: parsed.yearModel,
+    sourceCategory: category, assetType: cls.assetType, vehicleType: cls.vehicleType,
+    closingModel: 'timer_por_lote', sourceTz: isMj ? 'America/Fortaleza' : 'America/Sao_Paulo', status: lotStatus,
+    auctionStartUtc: isMj ? phpDate(mjEvent?.dataPraca1) : null,
+    auctionEndUtc: isMj ? phpDate(mjEvent?.dataFimPraca1) : null,
+    minBid: verifiedMinBid, currentBid, appraisal: avaliacaoFonte, auctioneerName: host.replace(/^www\./, ''), sellerType: classifySeller(null) as any,
+    city: local?.city ?? null, state: local?.uf ?? null, photos: [], raw: { tenant: host, generic: true },
+  };
+}
+
 async function loteDeUrl(host: string, url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<CanonicalLot | null> {
   let html = '';
   let status = 0;
@@ -201,30 +311,101 @@ async function loteDeUrl(host: string, url: string, observer?: import('../core/t
     if (error instanceof CollectionCancellationError) throw error;
     observer?.failure('network'); /* usa slug */
   }
-  const $ = cheerio.load(html);
-  const h1 = texto($('h1').first().text() || $('title').first().text());
-  const reviewedProbe = REVIEWED_TENANTS.includes(host.replace(/^www\./i, '').toLowerCase());
-  if (reviewedProbe && status !== 200) return null;
-  const titulo = h1 && !/^(início|home)$/i.test(h1) ? h1 : reviewedProbe ? '' : slugTitulo(url);
-  const body = texto(html).slice(0, 6000);
-  if (!titulo || looksLikePart(titulo) || looksLikeCollectible(titulo) || !ESCOPO.test(reviewedProbe ? titulo : `${titulo} ${body}`)) return null;
-  const parsed = parseTitle(titulo);
-  const cls = classifyAsset(titulo);
-  if (reviewedProbe && cls.assetType === 'outro') return null;
-  const local = campos.localDeTexto(`${titulo} ${body}`);
-  const preco = dinheiro(body.match(/(?:lance\s*(?:inicial|atual|mínimo|minimo)|avaliaç[aã]o|valor)\D{0,80}(R\$\s*[\d.,]+)/i)?.[1]);
-  const id = `${host}:${url.match(/\/(?:lote|lotes|leilao)\/([^/?#]+)/i)?.[1] ?? url.match(/(?:id|cod|evento)=([^&#]+)/i)?.[1] ?? url}`;
-  return {
-    sourceId: 'htmlagenda', externalId: id, lotUrl: url, titleRaw: titulo,
-    brand: parsed.brand, model: parsed.model, yearMake: parsed.yearMake, yearModel: parsed.yearModel,
-    assetType: cls.assetType, vehicleType: cls.vehicleType,
-    closingModel: 'timer_por_lote', sourceTz: 'America/Sao_Paulo', status: 'sem_data',
-    minBid: preco, currentBid: preco, auctioneerName: host.replace(/^www\./, ''), sellerType: classifySeller(null) as any,
-    city: local?.city ?? null, state: local?.uf ?? null, photos: [], raw: { tenant: host, generic: true },
-  };
+  return mapHtmlAgendaLot(host, url, html, status);
 }
 
 type HtmlAgendaFetch = typeof fetchText;
+
+function mjEventLinks(html: string, base: string): Array<{ url: string; text: string }> {
+  const $ = cheerio.load(html), hostname = new URL(base).hostname.replace(/^www\./i, '').toLowerCase(), links = new Map<string, string>();
+  $('a[href]').each((_, el) => {
+    try {
+      const url = new URL($(el).attr('href') ?? '', base);
+      if (url.hostname.replace(/^www\./i, '').toLowerCase() !== hostname || !/^\/leiloes\/\d+\/?$/.test(url.pathname)) return;
+      links.set(url.href, texto($(el).closest('article').text() || $(el).parent().text()));
+    } catch { /* ignore malformed or external event links */ }
+  });
+  return [...links].map(([url, text]) => ({ url, text }));
+}
+
+function mjLotCards(html: string, base: string): Array<{ url: string; title: string; id: string }> {
+  const $ = cheerio.load(html), hostname = new URL(base).hostname.replace(/^www\./i, '').toLowerCase(), cards = new Map<string, { url: string; title: string; id: string }>();
+  $('.lote').each((_, el) => {
+    const card = $(el), a = card.find('a[href^="/lote/"]').toArray().find((item) => $(item).text().trim().length > 8);
+    if (!a) return;
+    try {
+      const url = new URL($(a).attr('href') ?? '', base), id = url.pathname.match(/^\/lote\/(\d+)\//)?.[1];
+      if (url.hostname.replace(/^www\./i, '').toLowerCase() !== hostname || !id) return;
+      url.hash = '';
+      if (!cards.has(id)) cards.set(id, { url: url.href, id, title: texto($(a).text()) });
+    } catch { /* ignore malformed or external lot links */ }
+  });
+  return [...cards.values()];
+}
+
+function mjTitleEligible(title: string): boolean {
+  return Boolean(title.trim()) && !/\bsucata\b|inform[aá]tica|notebook|computador|servidor|impressora/i.test(title) &&
+    !looksLikePart(title) && !looksLikeCollectible(title) && !FORA_ESCOPO.test(title) && classifyAsset(title).assetType !== 'outro';
+}
+
+export async function collectMjLeiloes(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
+  const base = `https://${host}`, reasons = new Set<string>(), candidates = new Map<string, { url: string; title: string }>();
+  let httpStatus = 0, skipped = 0;
+  const get = async (url: string): Promise<string | null> => {
+    throwIfCancelled();
+    try {
+      const response = await fetcher(url, { headers: { 'user-agent': UA }, gapMs: 900, timeoutMs: 30000 });
+      observer?.response(response.status);
+      httpStatus = response.status || httpStatus;
+      if (response.status !== 200) { reasons.add(`${url}: HTTP ${response.status}`); return null; }
+      return response.body;
+    } catch (error) {
+      if (error instanceof CollectionCancellationError) throw error;
+      observer?.failure('network');
+      reasons.add(`${url}: falha de rede`);
+      return null;
+    }
+  };
+  const home = await get(`${base}/leiloes`);
+  if (!home) return { lots: [], fetched: 0, skipped: 0, httpStatus, note: [...reasons].join('; ') || 'catálogo MJ indisponível' };
+  for (const event of mjEventLinks(home, base)) {
+    throwIfCancelled();
+    if (/em loteamento/i.test(event.text)) continue;
+    const pages = [event.url], seen = new Set<string>(), signatures = new Set<string>();
+    while (pages.length) {
+      throwIfCancelled();
+      const pageUrl = pages.shift()!;
+      if (seen.has(pageUrl)) continue;
+      seen.add(pageUrl);
+      const html = await get(pageUrl);
+      if (!html) continue;
+      const found = mjLotCards(html, base), signature = found.map((card) => card.id).join(',');
+      if (signature && !signatures.has(signature)) {
+        signatures.add(signature);
+        for (const card of found) if (!candidates.has(card.url)) candidates.set(card.url, card);
+      }
+      const $ = cheerio.load(html), current = new URL(pageUrl);
+      $('a[href*="page="]').each((_, el) => {
+        try {
+          const next = new URL($(el).attr('href') ?? '', current);
+      if (next.hostname.replace(/^www\./i, '').toLowerCase() === current.hostname.replace(/^www\./i, '').toLowerCase() && next.pathname === current.pathname && next.searchParams.has('page') && !seen.has(next.href) && !pages.includes(next.href)) pages.push(next.href);
+        } catch { /* ignore malformed pagination links */ }
+      });
+    }
+  }
+  const eligible = [...candidates.values()].filter((card) => mjTitleEligible(card.title));
+  skipped += candidates.size - eligible.length;
+  if (eligible.length > limit) reasons.add(`limite solicitado (${limit}) atingido; catálogo parcial`);
+  const lots: CanonicalLot[] = [];
+  for (const card of eligible.slice(0, limit)) {
+    throwIfCancelled();
+    const html = await get(card.url);
+    if (!html) { skipped++; continue; }
+    const lot = mapHtmlAgendaLot(host, card.url, html, 200);
+    if (lot) lots.push(lot); else skipped++;
+  }
+  return { lots, fetched: candidates.size, skipped, httpStatus, note: reasons.size ? [...reasons].join('; ') : undefined };
+}
 
 /** Domains with useful health signals but no reviewed lot-publication contract. */
 export function isMonitorOnlyDomain(domain: string): boolean {
@@ -319,6 +500,7 @@ export const htmlagenda: Connector = {
   async collect({ limit, observer, tenant }): Promise<CollectResult> {
     throwIfCancelled();
     const lots: CanonicalLot[] = [];
+    const notes: string[] = [];
     let fetched = 0, skipped = 0, httpStatus = 0;
     const dominios = await tenants(Number(process.env.HTMLAGENDA_TENANTS ?? 30), tenant);
     for (const host of dominios) {
@@ -330,6 +512,15 @@ export const htmlagenda: Connector = {
       let monitorAttemptFinished = false;
       try {
       const normalizedHost = host.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase();
+      if (normalizedHost === MJ_TENANT) {
+        const result = await collectMjLeiloes(normalizedHost, Math.max(0, limit - lots.length), attempt, fetchText);
+        lots.push(...result.lots);
+        fetched += result.fetched;
+        skipped += result.skipped;
+        httpStatus = result.httpStatus || httpStatus;
+        if (result.note) notes.push(`${host}: ${result.note}`);
+        continue;
+      }
       if (isMonitorOnlyDomain(normalizedHost)) {
         monitorAttemptFinished = true;
         const monitored = await collectHtmlAgendaMonitor(normalizedHost, attempt, fetchText);
@@ -341,7 +532,8 @@ export const htmlagenda: Connector = {
       const base = `https://${host}`;
       const urls = new Set<string>();
       let homeBody = '';
-      for (const p of PAGINAS) {
+      const catalogPaths = REVIEWED_CATALOG_PATHS[normalizedHost];
+      for (const p of catalogPaths ?? PAGINAS) {
         if (lots.length >= limit) { truncated = true; break; }
         throwIfCancelled();
         try {
@@ -351,7 +543,8 @@ export const htmlagenda: Connector = {
             homeBody = r.body;
             if (r.status !== 200 || isBlockedPage(r.body)) break;
           }
-          r.links.forEach((l) => urls.add(l));
+          if (catalogPaths) reviewedCatalogLotLinks(r.body, base).forEach((l) => urls.add(l));
+          else r.links.forEach((l) => urls.add(l));
         } catch (error) {
           // falha de rede já registrada pela função; cancelamento corta o laço
           if (error instanceof CollectionCancellationError) throw error;
@@ -384,6 +577,6 @@ export const htmlagenda: Connector = {
         if (!monitorAttemptFinished) await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
     }
-    return { lots, fetched, skipped, httpStatus };
+    return { lots, fetched, skipped, httpStatus, note: notes.length ? notes.join('; ') : undefined };
   },
 };

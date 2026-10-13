@@ -32,10 +32,17 @@ const LOTES_POR_PAGINA = 30;
 const EVENTOS_MAQUINAS_POR_TENANT = 5;
 const PAGINAS_EVENTO_MAQUINA = 20;
 export const ROTAS_CATEGORIAS = ['/lotes/veiculo?tipo=veiculo', '/lotes/imovel?tipo=imovel', '/lotes/diversos'] as const;
+const DIVERSOS_TENANTS = new Set([
+  'italoleiloes.com', 'snleiloes.com.br', 'construbemleiloes.com.br',
+  'sydneyleiloes.com.br', 'patiorochaleiloes.com.br',
+]);
+// Construbem has a verified SOLEON contract but no discovered_sites row yet;
+// the manual tenant CLI's host guard fences this explicitly reviewed host.
+const MANUAL_TENANTS = new Set(['construbemleiloes.com.br']);
 
 const MAQUINA_TITULO = /\b(compressor(?:es)?|m[aá]quina(?:s)?|equipamento(?:s)? industriais?|gerador(?:es)?|transformador(?:es)?|caldeira(?:s)?|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|carregadeira|betoneira|trator(?:es)?)\b/i;
 const IMOVEL_SINAL = /\b(im[oó]vel|apartamento|casa|sobrado|terreno|fazenda|s[ií]tio|ch[aá]cara|sala comercial|galp[aã]o|pr[eé]dio|vaga de garagem)\b/i;
-const SOLEON_PART_DESCRIPTION = /\bpeças?\s+(?:de\s+)?(?:motos?|motocicletas?|veículos?|carros?)\b|\b(?:carenagem|cabeçote|pistão|retrovisor|farol|parachoque)\b/i;
+const SOLEON_PART_DESCRIPTION = /\b(?:peças?|partes?)\s+(?:de\s+)?(?:motos?|motocicletas?|veículos?|carros?)\b/i;
 
 function parecePeca(text: string): boolean {
   return looksLikePart(text) || SOLEON_PART_DESCRIPTION.test(text);
@@ -224,7 +231,7 @@ async function tenants(limitTenants: number, tenant?: string, lookup: typeof que
           AND lower(regexp_replace(domain,'^www\.','')) = $1`,
       [alvo],
     );
-    if (!rows.length) throw new Error(`single-tenant '${tenant}' não é site soleon conhecido`);
+    if (!rows.length && !MANUAL_TENANTS.has(alvo)) throw new Error(`single-tenant '${tenant}' não é site soleon conhecido`);
     return [tenant];
   }
   const rows = await lookup<{ domain: string }>(
@@ -298,7 +305,7 @@ export async function collectSoleon(
       let truncated = false;
       try {
         const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
-        const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost)
+        const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost) || DIVERSOS_TENANTS.has(normalizedHost)
           ? ROTAS_CATEGORIAS
           : ROTAS_CATEGORIAS.slice(0, 2)).map((path) => ({ path, page: 1, done: false }));
         if (['ccjleiloes.com.br', 'colodeteleiloes.com.br', 'leilaopernambuco.com.br'].includes(normalizedHost)) {
@@ -376,14 +383,15 @@ export async function collectSoleon(
               }
               const titulo = semPartesJudiciais(c.titulo);
               const bemTexto = `${titulo} ${c.descricao}`;
-              if (!titulo || parecePeca(bemTexto) || looksLikeCollectible(bemTexto)) { skipped++; continue; }
+              const routeVehicle = categoria.path.includes('/lotes/veiculo');
+              if (!titulo || (routeVehicle ? parecePeca(titulo) || SOLEON_PART_DESCRIPTION.test(c.descricao) : parecePeca(bemTexto)) || looksLikeCollectible(bemTexto)) { skipped++; continue; }
               const corpo = semPartesJudiciais(c.corpo);
               const parsed = parseTitle(titulo);
               const temSinalMaquina = MAQUINA_TITULO.test(titulo);
               const diverse = categoria.path === '/lotes/diversos' || Boolean(categoria.eventUrl);
               const temSinalImovel = IMOVEL_SINAL.test(titulo);
-              const vehicleIdentity = Boolean(parsed.brand) && !looksLikePart(titulo);
-              const routeVehicle = categoria.path.includes('/lotes/veiculo');
+              const inferredAsset = classifyAsset(titulo);
+              const vehicleIdentity = (Boolean(parsed.brand) || inferredAsset.vehicleType === 'reboque') && !looksLikePart(titulo);
               const routeProperty = categoria.path.includes('/lotes/imovel');
               if (diverse && !temSinalMaquina && !temSinalImovel && !vehicleIdentity) { skipped++; continue; }
               if (routeVehicle && !vehicleIdentity || routeProperty && !temSinalImovel) { skipped++; continue; }

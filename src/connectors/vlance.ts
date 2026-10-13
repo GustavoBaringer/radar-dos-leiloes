@@ -41,7 +41,10 @@ const TAMANHO_FOTO = '640x480';
  *     isso o host é resolvido antes, e a chamada não segue redirecionamento.
  */
 
-const TIPOS: Record<number, 'veiculo' | 'imovel'> = { 1: 'veiculo', 3: 'imovel' };
+// Exportado só para o contrato offline em scripts/teste-vlance-jd.ts: provar que
+// a coleta pede SOMENTE veículos(1) e imóveis(3) — categorias como "Animais"
+// (presentes no catálogo no tipo=0) nunca chegam ao mapLot como veículo.
+export const TIPOS: Record<number, 'veiculo' | 'imovel'> = { 1: 'veiculo', 3: 'imovel' };
 
 /**
  * Leiloeiros oficiais encontrados nos DOCX estaduais em Downloads (05/10/2026)

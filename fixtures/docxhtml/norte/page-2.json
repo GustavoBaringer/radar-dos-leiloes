@@ -1,0 +1,926 @@
+{
+ "source": "Norte Leiloes (ROI Soft) — API publica do site, contrato medido no chunk 0fnwbp609eb9e.js",
+ "url": "https://www.sistema.norteleiloes.com.br/lotes/listar-dados?pagina=2&porPagina=12&api=true",
+ "method": "POST",
+ "requestBody": "pagina=2&porPagina=12",
+ "requestHeaders": {
+  "content-type": "application/x-www-form-urlencoded",
+  "origin": "https://www.norteleiloes.com.br",
+  "referer": "https://www.norteleiloes.com.br/lotes"
+ },
+ "status": 200,
+ "capturedAtUtc": "2026-10-13T18:53:34.759Z",
+ "originalBytes": 75169,
+ "sha256OriginalBody": "0fe2d6baa40c086adddd6ad3811de9358a7fc5a32e8cabeb1c9f65eacd47dcce",
+ "truncated": [
+  "comitentes",
+  "subcategorias",
+  "estadosConservacao",
+  "marcas",
+  "modelos",
+  "combustiveis",
+  "anosfab",
+  "cores",
+  "ufs",
+  "cidades",
+  "bairros",
+  "dadosInfoLeilao",
+  "fotos: 20 entradas removidas (cada lote guarda só as 2 primeiras)"
+ ],
+ "response": {
+  "dados": [
+   {
+    "LEL_ID": "74712",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4422",
+    "LED_DIA_F": "TER, 27/OUT/2026 - 10h00",
+    "LED_DIA_F2": "27/10 - 10h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "202605000133 - MARITUBA/PA - TERRENO - LOTE Nº 01 (UM), DA QUADRA Nº 15 (QUINZE), SITUADO NA ALAMEDA DAS CARAÚBAS, CONDOMÍNIO URBANÍSTICO “JARDINS MARSELHA”",
+    "descricao": "202605000133 - MARITUBA/PA - TERRENO - LOTE Nº 01 (UM), DA QUADRA Nº 15 (QUINZE), SITUADO NA ALAMEDA DAS CARAÚBAS, CONDOMÍNIO URBANÍSTICO “JARDINS MARSELHA”",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/93484216e4af2f9dc13bf50790e5b453_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/93484216e4af2f9dc13bf50790e5b453_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/b695e19df04cfe7af1b63258e3be8c7e_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/b695e19df04cfe7af1b63258e3be8c7e_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/34cf3d6e91e99026fe61e5fd01c02358_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/34cf3d6e91e99026fe61e5fd01c02358_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/93484216e4af2f9dc13bf50790e5b453_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/93484216e4af2f9dc13bf50790e5b453_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74540",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4411",
+    "LED_DIA_F": "QUA, 28/OUT/2026 - 10h30",
+    "LED_DIA_F2": "28/10 - 10h30",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "5",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "GERAL - 02 (DOIS) AUTO FALANTES MODELO JBL 12’’",
+    "descricao": "02 (DOIS) AUTO FALANTES MODELO JBL 12’’",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/be22a3119bd7657e38153fa13480c22a_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/be22a3119bd7657e38153fa13480c22a_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/e01eb744fda06b275c830b54ee130173_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/e01eb744fda06b275c830b54ee130173_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/be22a3119bd7657e38153fa13480c22a_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/be22a3119bd7657e38153fa13480c22a_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/788c15b1cf2b2526e4160af354d13796_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/788c15b1cf2b2526e4160af354d13796_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74719",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4425",
+    "LED_DIA_F": "QUI, 29/OUT/2026 - 10h30",
+    "LED_DIA_F2": "29/10 - 10h30",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "11",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "HONDA - CG 150 TITAN KS",
+    "descricao": "CG 150 TITAN KS",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "SUCATA",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/9953d8d482d5aab93a90f11516a0787d_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/9953d8d482d5aab93a90f11516a0787d_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/e3c6849c47d3bf8e7b7b3ac2ebc3ff91_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/e3c6849c47d3bf8e7b7b3ac2ebc3ff91_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/9953d8d482d5aab93a90f11516a0787d_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/9953d8d482d5aab93a90f11516a0787d_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74724",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "1",
+    "LEI_ID": "4426",
+    "LED_DIA_F": "QUI, 29/OUT/2026 - 11h00",
+    "LED_DIA_F2": "29/10 - 11h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "7",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "VOLKSWAGEN - PARATI 1.6",
+    "descricao": "PARATI 1.6",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "SUCATA",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/f3a17310195f61143cfe88e6367b8b68_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/f3a17310195f61143cfe88e6367b8b68_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/7b1c8ed03531bbc8193893458381a95d_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/7b1c8ed03531bbc8193893458381a95d_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/e741531014069384d0968a590d7d4546_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/e741531014069384d0968a590d7d4546_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/373cbe0e8f6d8ee225353d8ae45e63ac_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/373cbe0e8f6d8ee225353d8ae45e63ac_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": "750.00",
+    "apelido": "MI*******EX",
+    "ufApelido": "PA",
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74464",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4397",
+    "LED_DIA_F": "QUI, 29/OUT/2026 - 11h30",
+    "LED_DIA_F2": "29/10 - 11h30",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "4",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "202605000123 - ABAETETUBA/PA - FAZENDA - IPIRANGA",
+    "descricao": "202605000123 - ABAETETUBA/PA - FAZENDA - IPIRANGA",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/544cabd17590cb376d3479b57d63d6cb_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/544cabd17590cb376d3479b57d63d6cb_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/d9ea03fa1227e95fe03a8466fe99d6a0_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/d9ea03fa1227e95fe03a8466fe99d6a0_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/544cabd17590cb376d3479b57d63d6cb_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/544cabd17590cb376d3479b57d63d6cb_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74730",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4427",
+    "LED_DIA_F": "QUI, 29/OUT/2026 - 12h00",
+    "LED_DIA_F2": "29/10 - 12h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "3",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "FORD - IMP/FORD RANGER XLT 13D",
+    "descricao": "IMP/ RANGER XLT 13D",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": false,
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/e7a10efe553b7ae18d639ce5fe72304a_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/e7a10efe553b7ae18d639ce5fe72304a_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/arquivos/empresa/logo.png",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/arquivos/empresa/logo.png",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/e7a10efe553b7ae18d639ce5fe72304a_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/e7a10efe553b7ae18d639ce5fe72304a_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/36afa16ccf458de055d1329bb142455f_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/36afa16ccf458de055d1329bb142455f_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74750",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4432",
+    "LED_DIA_F": "SEX, 30/OUT/2026 - 09h00",
+    "LED_DIA_F2": "30/10 - 09h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "8",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": " - COBALT 1.4 LT",
+    "descricao": "COBALT 1.4 LT",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": false,
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/ddffb8753ab04d69ea16f44423facd90_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/ddffb8753ab04d69ea16f44423facd90_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/5847f245dd122a356f5e97c85a9790ea_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/5847f245dd122a356f5e97c85a9790ea_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/5e0ba8c2a16c4be358747522bf5bdba8_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/5e0ba8c2a16c4be358747522bf5bdba8_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/84f47546cdfa7620b57b60ea613e01e4_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/84f47546cdfa7620b57b60ea613e01e4_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74836",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4438",
+    "LED_DIA_F": "TER, 03/NOV/2026 - 10h00",
+    "LED_DIA_F2": "03/11 - 10h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "202605000133 - TERRENO - LOTE 36 (TRINTA E SEIS), LOCALIZADO NA TRAVESSA BRAÇÃO-AÇU,",
+    "descricao": "202605000133 - TERRENO - LOTE 36 (TRINTA E SEIS), LOCALIZADO NA TRAVESSA BRAÇÃO-AÇU,",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/fffaf0a0876c0f05c1af9cf820667908_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/fffaf0a0876c0f05c1af9cf820667908_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/df888e8b2f8caa1a82b13dc6e953f92c_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/df888e8b2f8caa1a82b13dc6e953f92c_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/fffaf0a0876c0f05c1af9cf820667908_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/fffaf0a0876c0f05c1af9cf820667908_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74463",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4396",
+    "LED_DIA_F": "TER, 03/NOV/2026 - 11h00",
+    "LED_DIA_F2": "03/11 - 11h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "6",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "202605000122 - BELEM/PA - CASA - UMA UMA DE 02 (DOIS) PAVIMENTOS",
+    "descricao": "202605000122 - BELEM/PA - CASA - UMA UMA DE 02 (DOIS) PAVIMENTOS",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/4d0eeb149ca2462e83b7f12fe925a8d1_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/4d0eeb149ca2462e83b7f12fe925a8d1_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/2943e60cc84c35ca5fee039941da296f_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/2943e60cc84c35ca5fee039941da296f_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/4d0eeb149ca2462e83b7f12fe925a8d1_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/4d0eeb149ca2462e83b7f12fe925a8d1_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/cecf3926d7921cb1dce9c52d3557aec5_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/cecf3926d7921cb1dce9c52d3557aec5_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74550",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4416",
+    "LED_DIA_F": "TER, 03/NOV/2026 - 11h30",
+    "LED_DIA_F2": "03/11 - 11h30",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "GERAL - UM CLOSET EM MDF MARCA FAVORITA",
+    "descricao": "UM CLOSET EM MDF MARCA FAVORITA",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/d846edaf469c653afea29fda9d7e6cdc_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/d846edaf469c653afea29fda9d7e6cdc_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/c472e42441fd86b5c90c7c7594cf2266_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/c472e42441fd86b5c90c7c7594cf2266_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/d846edaf469c653afea29fda9d7e6cdc_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/d846edaf469c653afea29fda9d7e6cdc_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74843",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4443",
+    "LED_DIA_F": "QUA, 04/NOV/2026 - 10h30",
+    "LED_DIA_F2": "04/11 - 10h30",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": " - CG 125 TITAN ES",
+    "descricao": "CG 125 TITAN ES",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": false,
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/9a9cc598e2574720e0a209afac2a0767_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/9a9cc598e2574720e0a209afac2a0767_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/dd9d453b2cb298fe4636e19dd6af0601_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/dd9d453b2cb298fe4636e19dd6af0601_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/9a9cc598e2574720e0a209afac2a0767_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/9a9cc598e2574720e0a209afac2a0767_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   },
+   {
+    "LEL_ID": "74837",
+    "ordem": "1",
+    "LEL_SITUACAO": "LIBERADO_LEILAO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4439",
+    "LED_DIA_F": "QUI, 05/NOV/2026 - 09h00",
+    "LED_DIA_F2": "05/11 - 09h00",
+    "LEI_SITE_SITUACAO": "EM_LOTEAMENTO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "SIM",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "202605000134 - TERRENO - LOTE DE Nº 21 DA QUADRA BA, SITUADO NO LOTEAMENTO BELA VISTA",
+    "descricao": "202605000134 - TERRENO - LOTE DE Nº 21 DA QUADRA BA, SITUADO NO LOTEAMENTO BELA VISTA",
+    "idGrupo": "0",
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/c33f04b87bf62ab8751f65c4848fabec_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/c33f04b87bf62ab8751f65c4848fabec_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/c3dffbbf3a27c5f4944c388088f8caf7_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/c3dffbbf3a27c5f4944c388088f8caf7_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/c33f04b87bf62ab8751f65c4848fabec_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/c33f04b87bf62ab8751f65c4848fabec_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "SIM",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   }
+  ],
+  "dadosPaginacao": {
+   "pageCount": 31,
+   "itemCountPerPage": 12,
+   "first": 1,
+   "current": 2,
+   "last": 31,
+   "previous": 1,
+   "next": 3,
+   "pagesInRange": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "firstPageInRange": 1,
+   "lastPageInRange": 10,
+   "currentItemCount": 12,
+   "totalItemCount": 364,
+   "firstItemNumber": 13,
+   "lastItemNumber": 24
+  },
+  "total": 364,
+  "leiloes": {
+   "options": "<option value='' selected=\"seletected\">Leilão (Todos)</option><option  value='4435' rel=\"4435//leilao/13-10-2026\">4435 - 13/10/2026 10:00 - JUSTIÇA FEDERAL - (1) lotes</option><option  value='4423' rel=\"4423//leilao/13-10-2026\">4423 - 13/10/2026 10:30 - JUSTIÇA FEDERAL - (2) lotes</option><option  value='4386' rel=\"4386//leilao/14-10-2026\">4386 - 14/10/2026 10:30 - JUSTIÇA FEDERAL - (6) lotes</option><option  value='4389' rel=\"4389//leilao/15-10-2026\">4389 - 15/10/2026 09:30 - JUSTIÇA ESTADUAL - PA - (3) lotes</option><option  value='4430' rel=\"4430//leilao/15-10-2026\">4430 - 15/10/2026 11:00 - JUSTIÇA FEDERAL - (1) lotes</option><option  value='4429' rel=\"4429//leilao/15-10-2026\">4429 - 15/10/2026 15:00 - SANTAREM - PA - (1) lotes</option><option  value='4406' rel=\"4406//leilao/16-10-2026\">4406 - 16/10/2026 09:00 - CAPANEMA - PA - (3) lotes</option><option  value='4428' rel=\"4428//leilao/16-10-2026\">4428 - 16/10/2026 15:00 - SANTAREM - PA - (14) lotes</option><option  value='4404' rel=\"4404//leilao/19-10-2026\">4404 - 19/10/2026 14:00 - ALIENAÇÕES J.FEDERAL - (1) lotes</option><option  value='4394' rel=\"4394//leilao/20-10-2026\">4394 - 20/10/2026 09:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4407' rel=\"4407//leilao/21-10-2026\">4407 - 21/10/2026 09:45 - BENEVIDES-PA - (87) lotes</option><option  value='4410' rel=\"4410//leilao/21-10-2026\">4410 - 21/10/2026 11:00 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4436' rel=\"4436//leilao/26-10-2026\">4436 - 26/10/2026 14:00 - PARAUAPEBAS - PA - (61) lotes</option><option  value='4422' rel=\"4422//leilao/27-10-2026\">4422 - 27/10/2026 10:00 - EXTRAJUDICIAL - (1) lotes</option><option  value='4424' rel=\"4424//leilao/27-10-2026\">4424 - 27/10/2026 10:30 - JUSTIÇA FEDERAL - (3) lotes</option><option  value='4411' rel=\"4411//leilao/28-10-2026\">4411 - 28/10/2026 10:30 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4425' rel=\"4425//leilao/29-10-2026\">4425 - 29/10/2026 10:30 - SENAD - (5) lotes</option><option  value='4426' rel=\"4426//leilao/29-10-2026\">4426 - 29/10/2026 11:00 - SENAD - (6) lotes</option><option  value='4397' rel=\"4397//leilao/29-10-2026\">4397 - 29/10/2026 11:30 - JUSTIÇA ESTADUAL - PA - (3) lotes</option><option  value='4427' rel=\"4427//leilao/29-10-2026\">4427 - 29/10/2026 12:00 - SENAD - (3) lotes</option><option  value='3987' rel=\"3987//leilao/30-10-2026\">3987 - 30/10/2026 00:00 - PROGRAMA COMPREI - (19) lotes</option><option  value='4432' rel=\"4432//leilao/30-10-2026\">4432 - 30/10/2026 09:00 - BENEVIDES-PA - (1) lotes</option><option  value='4438' rel=\"4438//leilao/03-11-2026\">4438 - 03/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4420' rel=\"4420//leilao/03-11-2026\">4420 - 03/11/2026 10:30 - JUSTIÇA FEDERAL - (27) lotes</option><option  value='4396' rel=\"4396//leilao/03-11-2026\">4396 - 03/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4416' rel=\"4416//leilao/03-11-2026\">4416 - 03/11/2026 11:30 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4443' rel=\"4443//leilao/04-11-2026\">4443 - 04/11/2026 10:30 - JUSTIÇA FEDERAL - (3) lotes</option><option  value='4439' rel=\"4439//leilao/05-11-2026\">4439 - 05/11/2026 09:00 - LEILÃO ONLINE, PERNAMBUCO - (2) lotes</option><option  value='4433' rel=\"4433//leilao/05-11-2026\">4433 - 05/11/2026 11:00 - SENAD - (5) lotes</option><option  value='4442' rel=\"4442//leilao/06-11-2026\">4442 - 06/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4437' rel=\"4437//leilao/06-11-2026\">4437 - 06/11/2026 14:30 - ALIENAÇÕES J.ESTADUAL - (2) lotes</option><option  value='4417' rel=\"4417//leilao/09-11-2026\">4417 - 09/11/2026 10:30 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4418' rel=\"4418//leilao/09-11-2026\">4418 - 09/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4395' rel=\"4395//leilao/10-11-2026\">4395 - 10/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4421' rel=\"4421//leilao/12-11-2026\">4421 - 12/11/2026 09:00 - SANTAREM - PA - (90) lotes</option><option  value='4415' rel=\"4415//leilao/18-11-2026\">4415 - 18/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option>",
+   "optionsArray": [
+    {
+     "name": "4435 - 13/10/2026 10:00 - JUSTIÇA FEDERAL",
+     "value": "4435",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4423 - 13/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4423",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4386 - 14/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4386",
+     "selected": false,
+     "quantidade": "6"
+    },
+    {
+     "name": "4389 - 15/10/2026 09:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4389",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4430 - 15/10/2026 11:00 - JUSTIÇA FEDERAL",
+     "value": "4430",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4429 - 15/10/2026 15:00 - SANTAREM - PA",
+     "value": "4429",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4406 - 16/10/2026 09:00 - CAPANEMA - PA",
+     "value": "4406",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4428 - 16/10/2026 15:00 - SANTAREM - PA",
+     "value": "4428",
+     "selected": false,
+     "quantidade": "14"
+    },
+    {
+     "name": "4404 - 19/10/2026 14:00 - ALIENAÇÕES J.FEDERAL",
+     "value": "4404",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4394 - 20/10/2026 09:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4394",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4407 - 21/10/2026 09:45 - BENEVIDES-PA",
+     "value": "4407",
+     "selected": false,
+     "quantidade": "87"
+    },
+    {
+     "name": "4410 - 21/10/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4410",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4436 - 26/10/2026 14:00 - PARAUAPEBAS - PA",
+     "value": "4436",
+     "selected": false,
+     "quantidade": "61"
+    },
+    {
+     "name": "4422 - 27/10/2026 10:00 - EXTRAJUDICIAL",
+     "value": "4422",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4424 - 27/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4424",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4411 - 28/10/2026 10:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4411",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4425 - 29/10/2026 10:30 - SENAD",
+     "value": "4425",
+     "selected": false,
+     "quantidade": "5"
+    },
+    {
+     "name": "4426 - 29/10/2026 11:00 - SENAD",
+     "value": "4426",
+     "selected": false,
+     "quantidade": "6"
+    },
+    {
+     "name": "4397 - 29/10/2026 11:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4397",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4427 - 29/10/2026 12:00 - SENAD",
+     "value": "4427",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "3987 - 30/10/2026 00:00 - PROGRAMA COMPREI",
+     "value": "3987",
+     "selected": false,
+     "quantidade": "19"
+    },
+    {
+     "name": "4432 - 30/10/2026 09:00 - BENEVIDES-PA",
+     "value": "4432",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4438 - 03/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4438",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4420 - 03/11/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4420",
+     "selected": false,
+     "quantidade": "27"
+    },
+    {
+     "name": "4396 - 03/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4396",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4416 - 03/11/2026 11:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4416",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4443 - 04/11/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4443",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4439 - 05/11/2026 09:00 - LEILÃO ONLINE, PERNAMBUCO",
+     "value": "4439",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4433 - 05/11/2026 11:00 - SENAD",
+     "value": "4433",
+     "selected": false,
+     "quantidade": "5"
+    },
+    {
+     "name": "4442 - 06/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4442",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4437 - 06/11/2026 14:30 - ALIENAÇÕES J.ESTADUAL",
+     "value": "4437",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4417 - 09/11/2026 10:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4417",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4418 - 09/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4418",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4395 - 10/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4395",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4421 - 12/11/2026 09:00 - SANTAREM - PA",
+     "value": "4421",
+     "selected": false,
+     "quantidade": "90"
+    },
+    {
+     "name": "4415 - 18/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4415",
+     "selected": false,
+     "quantidade": "1"
+    }
+   ],
+   "selecionadoTexto": ""
+  },
+  "categorias": {
+   "options": "<option value='' selected=\"seletected\">Categoria (Todos)</option><option  value='VTS_ID-4' >MOTO - (80) lotes</option><option  value='VTS_ID-15' >HATCH - (38) lotes</option><option  value='VTS_ID-16' >SEDAN - (25) lotes</option><option  value='NA' >Não Definido - (48) lotes</option><option  value='VTS_ID-5' >ONIBUS - (1) lotes</option><option  value='VTS_ID-1' >PESADOS - (12) lotes</option><option  value='VTS_ID-8' >UTILITARIOS - (27) lotes</option><option  value='VTS_ID-7' >VAN/FURGÃO - (1) lotes</option><option  value='9' >GERAL - (79) lotes</option><option  value='3' >APARTAMENTO - (1) lotes</option><option  value='12' >AREA - (4) lotes</option><option  value='4' >CASA - (5) lotes</option><option  value='13' >CHACARA - (2) lotes</option><option  value='10' >FAZENDA - (4) lotes</option><option  value='16' >GALPAO COMERCIAL - (1) lotes</option><option  value='15' >IMÓVEL COMERCIAL - (10) lotes</option><option  value='26' >LOJA - (1) lotes</option><option  value='25' >PRÉDIO - (1) lotes</option><option  value='22' >SALA COMERCIAL - (1) lotes</option><option  value='11' >TERRENO - (23) lotes</option>",
+   "optionsArray": [
+    {
+     "name": "MOTO",
+     "value": "VTS_ID-4",
+     "selected": false,
+     "quantidade": "80"
+    },
+    {
+     "name": "HATCH",
+     "value": "VTS_ID-15",
+     "selected": false,
+     "quantidade": "38"
+    },
+    {
+     "name": "SEDAN",
+     "value": "VTS_ID-16",
+     "selected": false,
+     "quantidade": "25"
+    },
+    {
+     "name": "Não Definido",
+     "value": "NA",
+     "selected": false,
+     "quantidade": "48"
+    },
+    {
+     "name": "ONIBUS",
+     "value": "VTS_ID-5",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "PESADOS",
+     "value": "VTS_ID-1",
+     "selected": false,
+     "quantidade": "12"
+    },
+    {
+     "name": "UTILITARIOS",
+     "value": "VTS_ID-8",
+     "selected": false,
+     "quantidade": "27"
+    },
+    {
+     "name": "VAN/FURGÃO",
+     "value": "VTS_ID-7",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "GERAL",
+     "value": "9",
+     "selected": false,
+     "quantidade": "79"
+    },
+    {
+     "name": "APARTAMENTO",
+     "value": "3",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "AREA",
+     "value": "12",
+     "selected": false,
+     "quantidade": "4"
+    },
+    {
+     "name": "CASA",
+     "value": "4",
+     "selected": false,
+     "quantidade": "5"
+    },
+    {
+     "name": "CHACARA",
+     "value": "13",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "FAZENDA",
+     "value": "10",
+     "selected": false,
+     "quantidade": "4"
+    },
+    {
+     "name": "GALPAO COMERCIAL",
+     "value": "16",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "IMÓVEL COMERCIAL",
+     "value": "15",
+     "selected": false,
+     "quantidade": "10"
+    },
+    {
+     "name": "LOJA",
+     "value": "26",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "PRÉDIO",
+     "value": "25",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "SALA COMERCIAL",
+     "value": "22",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "TERRENO",
+     "value": "11",
+     "selected": false,
+     "quantidade": "23"
+    }
+   ],
+   "selecionadoTexto": ""
+  }
+ }
+}

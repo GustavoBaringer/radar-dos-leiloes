@@ -1,0 +1,332 @@
+{
+ "source": "Norte Leiloes (ROI Soft) — API publica do site, contrato medido no chunk 0fnwbp609eb9e.js",
+ "url": "https://www.sistema.norteleiloes.com.br/lotes/listar-dados?pagina=1&porPagina=12&api=true",
+ "method": "POST",
+ "requestBody": "pagina=1&porPagina=12&LEI_ID=4435",
+ "requestHeaders": {
+  "content-type": "application/x-www-form-urlencoded",
+  "origin": "https://www.norteleiloes.com.br",
+  "referer": "https://www.norteleiloes.com.br/lotes"
+ },
+ "status": 200,
+ "capturedAtUtc": "2026-10-13T19:04:19.939Z",
+ "originalBytes": 17513,
+ "sha256OriginalBody": "97a994a80d922f7e113518c563f05318f9959aa4ba5ef41692f3bd75a515ad40",
+ "truncated": [
+  "comitentes",
+  "subcategorias",
+  "estadosConservacao",
+  "marcas",
+  "modelos",
+  "combustiveis",
+  "anosfab",
+  "cores",
+  "ufs",
+  "cidades",
+  "bairros",
+  "dadosInfoLeilao",
+  "fotos: 2 entradas removidas (cada lote guarda só as 2 primeiras)"
+ ],
+ "response": {
+  "dados": [
+   {
+    "LEL_ID": "74772",
+    "ordem": "1",
+    "LEL_SITUACAO": "NAO_ARREMATADO",
+    "LEL_COUNT_LANCES": "0",
+    "LEI_ID": "4435",
+    "LED_DIA_F": "HOJE, 13/OUT/2026 - 10h00",
+    "LED_DIA_F2": "13/10 - 10h00",
+    "LEI_SITE_SITUACAO": "REALIZADO",
+    "LEI_COUNT_ACEITES_EDITAL": "0",
+    "LEI_ACEITA_ARREMATE_ANTECIPADO": "ENCERRADO",
+    "LEI_SITE_TRANSMISSAO_AO_VIVO": "0",
+    "LEI_SITE_TIPO": "AUTOMATICO",
+    "titulo": "JF-3090 - ALTAMIRA/PA - TERRENO - LOTE 8 DA QUADRA 13 NA ALAMEDA VITÓRIA DO LOTEAMENTO RESIDENCIAL ALTAVILLE",
+    "descricao": "JF-3090 - ALTAMIRA/PA - TERRENO - LOTE 8 DA QUADRA 13 NA ALAMEDA VITÓRIA DO LOTEAMENTO RESIDENCIAL ALTAVILLE",
+    "idGrupo": null,
+    "isGrupo": false,
+    "grupoCountItens": "0",
+    "vecSucata": "",
+    "urlLote": null,
+    "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/caff6505828b130f84f7228698c54009_214_160.jpeg",
+    "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/caff6505828b130f84f7228698c54009_285_220.jpeg",
+    "imgUrlLeilao": "https://www.norteleiloes.com.br/tmp/arquivos/bf30a3c176ac194dff567cae8a61064f_250_70.jpg",
+    "imgUrlLeilao_150x40": "https://www.norteleiloes.com.br/tmp/arquivos/bf30a3c176ac194dff567cae8a61064f_150_40.jpg",
+    "fotos": [
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/caff6505828b130f84f7228698c54009_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/caff6505828b130f84f7228698c54009_285_220.jpeg"
+     },
+     {
+      "imgUrl": "https://www.norteleiloes.com.br/tmp/arquivos/1bef4f2724236bc86fbf46b729a76adf_214_160.jpeg",
+      "imgUrl_285x220": "https://www.norteleiloes.com.br/tmp/arquivos/1bef4f2724236bc86fbf46b729a76adf_285_220.jpeg"
+     }
+    ],
+    "favorito": false,
+    "motivoSustacaoNome": "",
+    "valorLance": null,
+    "apelido": "",
+    "ufApelido": null,
+    "leilao": {
+     "aceitaArremateAntecipado": "ENCERRADO",
+     "siteTransmissaoAovivo": "0",
+     "siteTipo": "AUTOMATICO"
+    }
+   }
+  ],
+  "dadosPaginacao": {
+   "pageCount": 1,
+   "itemCountPerPage": 12,
+   "first": 1,
+   "current": 1,
+   "last": 1,
+   "pagesInRange": [
+    1
+   ],
+   "firstPageInRange": 1,
+   "lastPageInRange": 1,
+   "currentItemCount": 1,
+   "totalItemCount": 1,
+   "firstItemNumber": 1,
+   "lastItemNumber": 1,
+   "previous": null,
+   "next": null
+  },
+  "total": 1,
+  "leiloes": {
+   "options": "<option value='' >Leilão (Todos)</option><option selected=\"seletected\" value='4435' rel=\"4435//leilao/13-10-2026\">4435 - 13/10/2026 10:00 - JUSTIÇA FEDERAL - (1) lotes</option><option  value='4423' rel=\"4423//leilao/13-10-2026\">4423 - 13/10/2026 10:30 - JUSTIÇA FEDERAL - (2) lotes</option><option  value='4386' rel=\"4386//leilao/14-10-2026\">4386 - 14/10/2026 10:30 - JUSTIÇA FEDERAL - (6) lotes</option><option  value='4389' rel=\"4389//leilao/15-10-2026\">4389 - 15/10/2026 09:30 - JUSTIÇA ESTADUAL - PA - (3) lotes</option><option  value='4430' rel=\"4430//leilao/15-10-2026\">4430 - 15/10/2026 11:00 - JUSTIÇA FEDERAL - (1) lotes</option><option  value='4429' rel=\"4429//leilao/15-10-2026\">4429 - 15/10/2026 15:00 - SANTAREM - PA - (1) lotes</option><option  value='4406' rel=\"4406//leilao/16-10-2026\">4406 - 16/10/2026 09:00 - CAPANEMA - PA - (3) lotes</option><option  value='4428' rel=\"4428//leilao/16-10-2026\">4428 - 16/10/2026 15:00 - SANTAREM - PA - (14) lotes</option><option  value='4404' rel=\"4404//leilao/19-10-2026\">4404 - 19/10/2026 14:00 - ALIENAÇÕES J.FEDERAL - (1) lotes</option><option  value='4394' rel=\"4394//leilao/20-10-2026\">4394 - 20/10/2026 09:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4407' rel=\"4407//leilao/21-10-2026\">4407 - 21/10/2026 09:45 - BENEVIDES-PA - (87) lotes</option><option  value='4410' rel=\"4410//leilao/21-10-2026\">4410 - 21/10/2026 11:00 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4436' rel=\"4436//leilao/26-10-2026\">4436 - 26/10/2026 14:00 - PARAUAPEBAS - PA - (61) lotes</option><option  value='4422' rel=\"4422//leilao/27-10-2026\">4422 - 27/10/2026 10:00 - EXTRAJUDICIAL - (1) lotes</option><option  value='4424' rel=\"4424//leilao/27-10-2026\">4424 - 27/10/2026 10:30 - JUSTIÇA FEDERAL - (3) lotes</option><option  value='4411' rel=\"4411//leilao/28-10-2026\">4411 - 28/10/2026 10:30 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4425' rel=\"4425//leilao/29-10-2026\">4425 - 29/10/2026 10:30 - SENAD - (5) lotes</option><option  value='4426' rel=\"4426//leilao/29-10-2026\">4426 - 29/10/2026 11:00 - SENAD - (6) lotes</option><option  value='4397' rel=\"4397//leilao/29-10-2026\">4397 - 29/10/2026 11:30 - JUSTIÇA ESTADUAL - PA - (3) lotes</option><option  value='4427' rel=\"4427//leilao/29-10-2026\">4427 - 29/10/2026 12:00 - SENAD - (3) lotes</option><option  value='3987' rel=\"3987//leilao/30-10-2026\">3987 - 30/10/2026 00:00 - PROGRAMA COMPREI - (19) lotes</option><option  value='4432' rel=\"4432//leilao/30-10-2026\">4432 - 30/10/2026 09:00 - BENEVIDES-PA - (1) lotes</option><option  value='4438' rel=\"4438//leilao/03-11-2026\">4438 - 03/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4420' rel=\"4420//leilao/03-11-2026\">4420 - 03/11/2026 10:30 - JUSTIÇA FEDERAL - (27) lotes</option><option  value='4396' rel=\"4396//leilao/03-11-2026\">4396 - 03/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4416' rel=\"4416//leilao/03-11-2026\">4416 - 03/11/2026 11:30 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4443' rel=\"4443//leilao/04-11-2026\">4443 - 04/11/2026 10:30 - JUSTIÇA FEDERAL - (3) lotes</option><option  value='4439' rel=\"4439//leilao/05-11-2026\">4439 - 05/11/2026 09:00 - LEILÃO ONLINE, PERNAMBUCO - (2) lotes</option><option  value='4433' rel=\"4433//leilao/05-11-2026\">4433 - 05/11/2026 11:00 - SENAD - (5) lotes</option><option  value='4442' rel=\"4442//leilao/06-11-2026\">4442 - 06/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (2) lotes</option><option  value='4437' rel=\"4437//leilao/06-11-2026\">4437 - 06/11/2026 14:30 - ALIENAÇÕES J.ESTADUAL - (2) lotes</option><option  value='4417' rel=\"4417//leilao/09-11-2026\">4417 - 09/11/2026 10:30 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4418' rel=\"4418//leilao/09-11-2026\">4418 - 09/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4395' rel=\"4395//leilao/10-11-2026\">4395 - 10/11/2026 10:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option><option  value='4421' rel=\"4421//leilao/12-11-2026\">4421 - 12/11/2026 09:00 - SANTAREM - PA - (90) lotes</option><option  value='4415' rel=\"4415//leilao/18-11-2026\">4415 - 18/11/2026 11:00 - JUSTIÇA ESTADUAL - PA - (1) lotes</option>",
+   "optionsArray": [
+    {
+     "name": "4435 - 13/10/2026 10:00 - JUSTIÇA FEDERAL",
+     "value": "4435",
+     "selected": true,
+     "quantidade": "1"
+    },
+    {
+     "name": "4423 - 13/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4423",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4386 - 14/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4386",
+     "selected": false,
+     "quantidade": "6"
+    },
+    {
+     "name": "4389 - 15/10/2026 09:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4389",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4430 - 15/10/2026 11:00 - JUSTIÇA FEDERAL",
+     "value": "4430",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4429 - 15/10/2026 15:00 - SANTAREM - PA",
+     "value": "4429",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4406 - 16/10/2026 09:00 - CAPANEMA - PA",
+     "value": "4406",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4428 - 16/10/2026 15:00 - SANTAREM - PA",
+     "value": "4428",
+     "selected": false,
+     "quantidade": "14"
+    },
+    {
+     "name": "4404 - 19/10/2026 14:00 - ALIENAÇÕES J.FEDERAL",
+     "value": "4404",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4394 - 20/10/2026 09:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4394",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4407 - 21/10/2026 09:45 - BENEVIDES-PA",
+     "value": "4407",
+     "selected": false,
+     "quantidade": "87"
+    },
+    {
+     "name": "4410 - 21/10/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4410",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4436 - 26/10/2026 14:00 - PARAUAPEBAS - PA",
+     "value": "4436",
+     "selected": false,
+     "quantidade": "61"
+    },
+    {
+     "name": "4422 - 27/10/2026 10:00 - EXTRAJUDICIAL",
+     "value": "4422",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4424 - 27/10/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4424",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4411 - 28/10/2026 10:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4411",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4425 - 29/10/2026 10:30 - SENAD",
+     "value": "4425",
+     "selected": false,
+     "quantidade": "5"
+    },
+    {
+     "name": "4426 - 29/10/2026 11:00 - SENAD",
+     "value": "4426",
+     "selected": false,
+     "quantidade": "6"
+    },
+    {
+     "name": "4397 - 29/10/2026 11:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4397",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4427 - 29/10/2026 12:00 - SENAD",
+     "value": "4427",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "3987 - 30/10/2026 00:00 - PROGRAMA COMPREI",
+     "value": "3987",
+     "selected": false,
+     "quantidade": "19"
+    },
+    {
+     "name": "4432 - 30/10/2026 09:00 - BENEVIDES-PA",
+     "value": "4432",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4438 - 03/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4438",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4420 - 03/11/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4420",
+     "selected": false,
+     "quantidade": "27"
+    },
+    {
+     "name": "4396 - 03/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4396",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4416 - 03/11/2026 11:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4416",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4443 - 04/11/2026 10:30 - JUSTIÇA FEDERAL",
+     "value": "4443",
+     "selected": false,
+     "quantidade": "3"
+    },
+    {
+     "name": "4439 - 05/11/2026 09:00 - LEILÃO ONLINE, PERNAMBUCO",
+     "value": "4439",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4433 - 05/11/2026 11:00 - SENAD",
+     "value": "4433",
+     "selected": false,
+     "quantidade": "5"
+    },
+    {
+     "name": "4442 - 06/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4442",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4437 - 06/11/2026 14:30 - ALIENAÇÕES J.ESTADUAL",
+     "value": "4437",
+     "selected": false,
+     "quantidade": "2"
+    },
+    {
+     "name": "4417 - 09/11/2026 10:30 - JUSTIÇA ESTADUAL - PA",
+     "value": "4417",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4418 - 09/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4418",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4395 - 10/11/2026 10:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4395",
+     "selected": false,
+     "quantidade": "1"
+    },
+    {
+     "name": "4421 - 12/11/2026 09:00 - SANTAREM - PA",
+     "value": "4421",
+     "selected": false,
+     "quantidade": "90"
+    },
+    {
+     "name": "4415 - 18/11/2026 11:00 - JUSTIÇA ESTADUAL - PA",
+     "value": "4415",
+     "selected": false,
+     "quantidade": "1"
+    }
+   ],
+   "selecionadoTexto": "Leilão: 4435 - 13/10/2026 10:00 - JUSTIÇA FEDERAL"
+  },
+  "categorias": {
+   "options": "<option value='' selected=\"seletected\">Categoria (Todos)</option><option  value='11' >TERRENO - (1) lotes</option>",
+   "optionsArray": [
+    {
+     "name": "TERRENO",
+     "value": "11",
+     "selected": false,
+     "quantidade": "1"
+    }
+   ],
+   "selecionadoTexto": ""
+  }
+ }
+}

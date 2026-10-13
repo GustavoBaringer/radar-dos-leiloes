@@ -1,12 +1,13 @@
 import * as cheerio from 'cheerio';
 import { fetchText } from './http.js';
-import type { Connector, CollectResult } from './types.js';
+import type { CollectOptions, Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifyAsset, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import type { TenantAttempt } from '../core/tenant-attempts.js';
+import { throwIfCancelled } from '../core/collection-cancellation.js';
 
 /**
  * LEILOAR — plataforma white-label (CakePHP), N leiloeiros por 1 conector.
@@ -34,8 +35,8 @@ function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-async function tenants(limite: number, tenant?: string): Promise<string[]> {
-  const rows = await query<{ domain: string }>(
+async function tenants(limite: number, tenant?: string, execute: typeof query = query): Promise<string[]> {
+  const rows = await execute<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leiloar' AND http_status=200 AND has_lots IS NOT FALSE
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
@@ -54,12 +55,12 @@ const baseConhecida = new Map<string, string>();
  * `''` padrão mesmo quando a raiz dava 404 e o /externo respondia certo —
  * 12 dos 20 tenants ficavam de fora por isso (medido em 22/09).
  */
-async function base(host: string, observer?: TenantAttempt): Promise<string> {
+async function base(host: string, observer?: TenantAttempt, fetch = fetchText): Promise<string> {
   const conhecida = baseConhecida.get(host);
   if (conhecida != null) return conhecida;
   for (const b of ['', '/externo']) {
     try {
-      const r = await fetchText(`https://${host}${b}/bens/pesquisaAvancada`, {
+      const r = await fetch(`https://${host}${b}/bens/pesquisaAvancada`, {
         method: 'POST',
         headers: { 'user-agent': UA, 'content-type': 'application/x-www-form-urlencoded' },
         body: 'data[Bem][termo]=',
@@ -90,6 +91,142 @@ function statusDe(badges: string[]): LotStatus {
 function dinheiro(v?: string | null): number | null {
   const n = Number(String(v ?? '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
   return isFinite(n) && n > 0 ? n : null;
+}
+
+type NasarCard = { id: string; url: string; title: string; category: string | null; status: LotStatus; appraisal: number | null; minBid: number | null; currentBid: number | null; saleValue: number | null; photo: string | null };
+
+/** Markup from the observed public Nasar event pages, not the empty POST search response. */
+function mesmoHost(a: string, b: string): boolean {
+  const normalized = (v: string) => v.toLowerCase().replace(/^www\./, '');
+  return normalized(a) === normalized(b);
+}
+
+export function parseNasarCards(html: string, pageUrl: string): NasarCard[] {
+  const $ = cheerio.load(html);
+  const out: NasarCard[] = [];
+  $('.card-bem').each((_, el) => {
+    const card = $(el);
+    const href = card.find('a[href*="/lote/"]').first().attr('href') ?? '';
+    let url: URL;
+    try { url = new URL(href, pageUrl); } catch { return; }
+    if (!/^https?:$/.test(url.protocol) || !mesmoHost(url.hostname, new URL(pageUrl).hostname)) return;
+    const id = /^\/externo\/lote\/(\d+)(?:\/|$)/.exec(url.pathname)?.[1];
+    const title = card.find('.card-bem-descricao').first().text().replace(/\s+/g, ' ').trim();
+    if (!id || !title) return;
+    const category = card.find('.card-bem-img-footer p').first().text().replace(/\s*\/$/, '').trim() || null;
+    const price = (label: RegExp) => {
+      const node = card.find('.bem-status-info .col-6').filter((_, n) => label.test($(n).text())).first();
+      return dinheiro(node.next('.col-6').text());
+    };
+    const statusText = card.find('.leilao-status span').first().text().trim();
+    const photo = card.find('.card-bem-img').first().attr('src') ?? null;
+    out.push({
+      id, url: url.toString(), title, category,
+      status: /vendid|arrematad|comprei/i.test(statusText) ? 'vendido' : /encerrad|cancelad|suspens/i.test(statusText) ? 'encerrado' : /aberto/i.test(statusText) ? 'aberto' : 'sem_data',
+      appraisal: price(/valor de avalia[cç][ãa]o/i), minBid: price(/lance m[ií]nimo/i), currentBid: price(/lance atual/i), saleValue: price(/valor de venda/i),
+      photo: photo && !/no-image/i.test(photo) ? new URL(photo, pageUrl).toString() : null,
+    });
+  });
+  return out;
+}
+
+export function nasarLocal(title: string): { city: string; uf: string } | null {
+  const places = [...title.matchAll(/(?:,\s*|\bem\s+)([A-Za-zÀ-ú][^,\/]{2,35})\/([A-Z]{2})(?=\b|[,.;]|$)/g)];
+  const last = places.at(-1);
+  if (!last || !campos.ehUf(last[2])) return null;
+  const city = campos.caixaDeTitulo(last[1].trim());
+  return city ? { city, uf: last[2] } : null;
+}
+
+export function nasarDate(html: string): { date: Date | null; sourceTz: string; rawDate: string | null; suspiciousFuture: boolean } {
+  const $ = cheerio.load(html);
+  const rawDate = $('#conteudo').text().match(/Data\s+(\d{2}\/\d{2}\/\d{4})\s+às\s+(\d{2}:\d{2}:\d{2})/i);
+  const sourceTz = /FORTALEZA/i.test($('#conteudo').text()) ? 'America/Fortaleza' : 'America/Sao_Paulo';
+  if (!rawDate) return { date: null, sourceTz, rawDate: null, suspiciousFuture: false };
+  const [, d, t] = rawDate;
+  const [day, month, year] = d.split('/').map(Number), [hour, minute, second] = t.split(':').map(Number);
+  // Both observed venues are UTC-03; the original date text is retained as provenance.
+  const date = new Date(Date.UTC(year, month - 1, day, hour + 3, minute, second));
+  // Source dates over ten years ahead are retained, but flagged for review.
+  return { date, sourceTz, rawDate: `${d} ${t}`, suspiciousFuture: year > new Date().getFullYear() + 10 };
+}
+
+export async function collectNasar(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch = fetchText): Promise<CollectResult> {
+  const origin = `https://${host}`;
+  const partialReasons = new Set<string>();
+  let root;
+  try { root = await fetch(`${origin}/externo/`, { headers: { 'user-agent': UA }, gapMs: 1100 }); }
+  catch (error) { throwIfCancelled(); observer?.failure('network'); return { lots: [], fetched: 0, skipped: 0, httpStatus: 0, note: `${host}: home network failure` }; }
+  observer?.response(root.status);
+  if (root.status !== 200) return { lots: [], fetched: 0, skipped: 0, httpStatus: root.status, note: `${host}: home HTTP ${root.status}` };
+  const $root = cheerio.load(root.body);
+  const events = [...new Set($root('.card-leilao a[href*="/externo/leilao/"]').map((_, a) => {
+    const link = $root(a).attr('href');
+    if (!link) return null;
+    let url: URL;
+    try { url = new URL(link, origin); } catch { return null; }
+    return /^https?:$/.test(url.protocol) && mesmoHost(url.hostname, new URL(origin).hostname) && /^\/externo\/leilao\/\d+(?:\/|$)/.test(url.pathname) ? url.toString() : null;
+  }).get().filter((url): url is string => url != null))];
+  const lots: CanonicalLot[] = [];
+  const seen = new Set<string>();
+  let fetched = 0, skipped = 0, httpStatus = root.status;
+  if (!events.length) partialReasons.add(`${host}: no observed public events`);
+  let completedEvents = 0;
+  for (const [eventIndex, eventUrl] of events.entries()) {
+    if (lots.length >= limit) break;
+    throwIfCancelled();
+    let response;
+    try { response = await fetch(eventUrl, { headers: { 'user-agent': UA }, gapMs: 1100 }); }
+    catch {
+      throwIfCancelled();
+      observer?.failure('network');
+      partialReasons.add(`${eventUrl}: network failure`);
+      completedEvents++;
+      continue;
+    }
+    httpStatus = response.status;
+    observer?.response(response.status);
+    if (response.status !== 200) { partialReasons.add(`${eventUrl}: HTTP ${response.status}`); completedEvents++; continue; }
+    const eventId = /\/leilao\/(\d+)/.exec(new URL(eventUrl).pathname)?.[1] ?? '';
+    const event = cheerio.load(response.body);
+    const eventTitle = event('#conteudo').text().replace(/\s+/g, ' ').trim();
+    const { date, sourceTz, rawDate, suspiciousFuture } = nasarDate(response.body);
+    const eventLocation = eventTitle.match(/LOCAL:\s*(.+?)\s*-\s*([A-Z]{2})\b/i);
+    const eventCity = eventLocation?.[1] ?? null, eventState = eventLocation?.[2]?.toUpperCase() ?? null;
+    let cards: NasarCard[];
+    try { cards = parseNasarCards(response.body, eventUrl); }
+    catch {
+      observer?.failure('parser');
+      partialReasons.add(`${eventUrl}: parser failure`);
+      completedEvents = eventIndex + 1;
+      continue;
+    }
+    if (!cards.length) { observer?.failure('parser'); partialReasons.add(`${eventUrl}: no cards parsed`); }
+    for (const card of cards) {
+      fetched++;
+      if (seen.has(card.id)) { skipped++; continue; }
+      seen.add(card.id);
+      if (lots.length >= limit || looksLikePart(card.title)) { skipped++; continue; }
+      const category = card.category ?? '';
+      const classified = classifyAsset(card.title, category);
+      const isMachine = /m[aá]quinas|equip\./i.test(category) && /ponte|trator|escavadeira|empilhadeira|guindaste|rolante/i.test(card.title);
+      const assetType = isMachine ? 'veiculo' : classified.assetType;
+      if (assetType === 'outro') { skipped++; continue; }
+      const parsed = parseTitle(card.title);
+      const local = nasarLocal(card.title);
+      lots.push({ sourceId: 'leiloar', externalId: `${host}:${card.id}`, lotUrl: card.url, auctioneerName: leiloeiroDoHost(host), titleRaw: card.title,
+        brand: parsed.brand, model: parsed.model, version: parsed.version, yearMake: parsed.yearMake, yearModel: parsed.yearModel,
+        sourceCategory: category || null, vehicleType: isMachine ? 'maquina' : classified.vehicleType, assetType,
+        docType: /judicial/i.test(eventTitle) ? 'judicial' : null, closingModel: 'pregao_em_horario', auctionStartUtc: date, auctionEndUtc: null, sourceTz,
+        status: card.status, currentBid: card.currentBid, minBid: card.minBid, appraisal: card.appraisal,
+        sellerType: classifySeller(null) as any, city: local?.city ?? null, state: local?.uf ?? null, photos: card.photo ? [card.photo] : [],
+        raw: { tenant: host, eventId, eventTitle, eventCity, eventState, eventDateSource: rawDate, eventDateSuspiciousFuture: suspiciousFuture, saleValue: card.saleValue, category },
+      });
+    }
+    completedEvents = eventIndex + 1;
+  }
+  if (completedEvents < events.length && lots.length >= limit) partialReasons.add(`${host}: listed events unvisited at budget`);
+  return { lots, fetched, skipped, httpStatus, note: partialReasons.size ? [...partialReasons].join('; ') : undefined };
 }
 
 interface Card {
@@ -132,23 +269,18 @@ function lerCards($: cheerio.CheerioAPI, baseUrl: string): Card[] {
   return out;
 }
 
-export const leiloar: Connector = {
-  def: {
-    id: 'leiloar',
-    name: 'Plataforma Leiloar',
-    platform: 'Leiloar',
-    method: 'html',
-    tier: 3,
-    siteUrl: 'https://plataformaleiloar.com.br',
-    notes: 'White-label multi-tenant (CakePHP). POST form-urlencoded em /bens/pesquisaAvancada (raiz ou /externo); paginação por /page:N no path da URL.',
-  },
-  async collect({ limit, observer, tenant }): Promise<CollectResult> {
+export async function collectLeiloar(
+  { limit, observer, tenant }: CollectOptions,
+  io: { fetchText: typeof fetchText; query: typeof query; domains?: string[] } = { fetchText, query },
+): Promise<CollectResult> {
+    const fetch = io.fetchText, lookup = io.query;
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
+    const partialReasons = new Set<string>();
 
-    const dominios = await tenants(Number(process.env.LEILOAR_TENANTS ?? 20), tenant);
+    const dominios = io.domains ?? await tenants(Number(process.env.LEILOAR_TENANTS ?? 20), tenant, lookup);
     const cota = Math.max(POR_PAGINA, Math.ceil(limit / Math.max(1, dominios.length)));
 
     for (const host of dominios) {
@@ -156,8 +288,23 @@ export const leiloar: Connector = {
       const attempt = await observer?.start(host);
       const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
+      if (host === 'nasarleiloes.com.br') {
+        let result: CollectResult | undefined;
+        const remainingTenant = Math.max(0, Math.min(limit - lots.length, cota - (lots.length - antes)));
+        try {
+          result = await collectNasar(host, remainingTenant, attempt, fetch);
+          lots.push(...result.lots.slice(0, remainingTenant));
+          fetched += result.fetched;
+          skipped += result.skipped;
+          httpStatus = result.httpStatus ?? httpStatus;
+          if (result.note) partialReasons.add(result.note);
+        } finally {
+          await attempt?.finish({ fetched: result?.fetched ?? 0, skipped: result?.skipped ?? 0, returned: result?.lots.length ?? 0, truncated: remainingTenant > 0 && (result?.lots.length ?? 0) >= remainingTenant });
+        }
+        continue;
+      }
       try {
-      const b = await base(host, attempt);
+      const b = await base(host, attempt, fetch);
       const baseUrl = `https://${host}${b}`;
       const antes = lots.length;
       let totalAnunciado: number | null = null;
@@ -167,7 +314,7 @@ export const leiloar: Connector = {
         const url = pagina === 1 ? `${baseUrl}/bens/pesquisaAvancada` : `${baseUrl}/bens/pesquisaAvancada/page:${pagina}`;
         let r;
         try {
-          r = await fetchText(url, {
+          r = await fetch(url, {
             method: 'POST',
             headers: { 'user-agent': UA, 'content-type': 'application/x-www-form-urlencoded' },
             body: 'data[Bem][termo]=',
@@ -251,6 +398,18 @@ export const leiloar: Connector = {
       }
       if (lots.length >= limit) break;
     }
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus, note: partialReasons.size ? [...partialReasons].join('; ') : undefined };
+}
+
+export const leiloar: Connector = {
+  def: {
+    id: 'leiloar',
+    name: 'Plataforma Leiloar',
+    platform: 'Leiloar',
+    method: 'html',
+    tier: 3,
+    siteUrl: 'https://plataformaleiloar.com.br',
+    notes: 'White-label multi-tenant (CakePHP). POST form-urlencoded em /bens/pesquisaAvancada (raiz ou /externo); paginação por /page:N no path da URL.',
   },
+  collect: collectLeiloar,
 };
