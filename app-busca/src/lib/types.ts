@@ -126,13 +126,6 @@ export interface StatusNotificacoes {
   dispositivos: { host: string; failures: number; desde: string }[];
 }
 
-export interface TestePush {
-  configurado: boolean;
-  inscricoes: number;
-  entregues: number;
-  dispositivos: { host: string; status: number | null; erro?: string }[];
-}
-
 export interface AccountSummary {
   papel?: string;
   logado?: boolean;

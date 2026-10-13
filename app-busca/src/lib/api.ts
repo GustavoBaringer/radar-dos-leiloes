@@ -1,4 +1,4 @@
-import type { AccountSummary, Alerta, Favorito, Hit, Lot, PaginatedResponse, RespostaMapa, SearchResponse, Stats, StatusNotificacoes, TestePush } from './types';
+import type { AccountSummary, Alerta, Favorito, Hit, Lot, PaginatedResponse, RespostaMapa, SearchResponse, Stats, StatusNotificacoes } from './types';
 
 /**
  * Cliente da API. Um lugar só para `credentials` e para o tratamento de erro,
@@ -76,5 +76,4 @@ export const api = {
   chavePush: () => get<{ publicKey: string | null }>('/api/push/key'),
   inscreverPush: (sub: unknown) => envia<unknown>('/api/push/subscribe', 'POST', sub),
   statusNotificacoes: () => get<StatusNotificacoes>('/api/notificacoes/status'),
-  testarPush: () => envia<TestePush>('/api/push/teste', 'POST', {}),
 };

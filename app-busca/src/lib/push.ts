@@ -70,28 +70,6 @@ export async function sincronizarPushAutorizado(): Promise<{ ok: boolean; motivo
   return { ok: true };
 }
 
-/** Retrato do que o navegador tem, para a tela mostrar onde a cadeia parou. */
-export interface EstadoPush {
-  suportado: boolean;
-  permissao: NotificationPermission | 'indisponivel';
-  registrado: boolean;
-  inscrito: boolean;
-}
-
-export async function estadoPush(): Promise<EstadoPush> {
-  const suportado = podePush() && 'serviceWorker' in navigator;
-  if (!suportado) {
-    return { suportado: false, permissao: 'indisponivel', registrado: false, inscrito: false };
-  }
-  const reg = await navigator.serviceWorker.getRegistration();
-  return {
-    suportado: true,
-    permissao: typeof Notification === 'undefined' ? 'indisponivel' : Notification.permission,
-    registrado: Boolean(reg),
-    inscrito: Boolean(await reg?.pushManager.getSubscription()),
-  };
-}
-
 /**
  * Liga a notificação do navegador neste aparelho.
  *

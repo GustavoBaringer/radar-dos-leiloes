@@ -31,7 +31,7 @@ import { parseSearchInput, safePositiveId, ValidateAlertInput, BoundedInputError
 import { toPublicAlert, toPublicFavorite, toPublicHit, toPublicLot } from './core/public-dto.js';
 import { lotSiteHostSql } from './core/repo.js';
 import { buildMePayload, createAccountContext, VISIBLE_FAVORITE_PREDICATE } from './core/account-context.js';
-import { canaisDisponiveis, testarPushDoDono } from './core/notificar.js';
+import { canaisDisponiveis } from './core/notificar.js';
 import { ROUTE_POLICIES, registerChallengeHttp, registerOperationsMetricsRoute } from './core/antibot/routes.js';
 import { PAGINA_LOGIN } from './web/login-template.js';
 import type { query as DbQuery } from './core/db.js';
@@ -1547,13 +1547,11 @@ app.post('/api/push/subscribe', withReadResources(async (req, reply) => {
 }));
 
 /**
- * Estado da entrega por canal e push de teste, por aparelho.
+ * Estado da entrega por canal e por aparelho.
  *
- * `GET /api/push/key` só dizia se havia chave VAPID; o navegador não tinha como
- * saber se o canal de e-mail existia no servidor, e o servidor não tinha como
- * dizer se o navegador ainda mostrava a notificação. As duas metades juntas
- * fecham o diagnóstico: chave ok + aparelho aceitando + nada aparecendo é
- * navegador (permissão ou inscrição), não servidor.
+ * Existe para o caso em que um canal configurado no alerta não sai: com SMTP
+ * ausente o disparo fica pendente sem erro visível, e o usuário descobre semanas
+ * depois. A tela só mostra isto quando falta canal.
  */
 app.get('/api/notificacoes/status', withReadResources(async (req, reply) => {
   const { userId } = await donoDe(req);
@@ -1570,14 +1568,6 @@ app.get('/api/notificacoes/status', withReadResources(async (req, reply) => {
       desde: i.created_at,
     })),
   });
-}));
-
-app.post('/api/push/teste', withReadResources(async (req, reply) => {
-  const { userId } = await donoDe(req);
-  const resultado = await testarPushDoDono(userId);
-  console.log(`[push] teste de ${userId}: ${resultado.entregues}/${resultado.inscricoes} aparelho(s) aceitaram`
-    + resultado.dispositivos.map((d) => ` ${d.host}=${d.status ?? d.erro}`).join(''));
-  return reply.header('Cache-Control', 'no-store').send(resultado);
 }));
 
 /**
