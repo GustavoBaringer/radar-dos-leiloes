@@ -1,11 +1,20 @@
 FROM node:24-bookworm-slim AS backend-build
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=secret,id=corporate_ca,target=/run/secrets/corporate-ca.pem,required=false \
+    if [ -f /run/secrets/corporate-ca.pem ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/corporate-ca.pem; fi; \
+    npm ci
 COPY tsconfig.json tsconfig.backend.json ./
 COPY scripts/build-backend.mjs scripts/migrate.ts ./scripts/
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 COPY src ./src
-RUN npm run build:backend \
+RUN --mount=type=secret,id=corporate_ca,target=/run/secrets/corporate-ca.pem,required=false \
+    if [ -f /run/secrets/corporate-ca.pem ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/corporate-ca.pem; fi; \
+    npm run build:backend \
     && node node_modules/typescript/bin/tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --experimentalDecorators --emitDecoratorMetadata --esModuleInterop --skipLibCheck --types node --rootDir . --outDir dist scripts/migrate.ts
 
 FROM node:24-bookworm-slim AS busca-build

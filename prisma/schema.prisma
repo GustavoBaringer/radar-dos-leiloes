@@ -1,0 +1,321 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/infra/database/generated"
+  importFileExtension = "js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model alert_hits {
+  id         BigInt   @id @default(autoincrement())
+  alert_id   BigInt
+  lot_id     BigInt
+  seen       Boolean  @default(false)
+  notified   String[] @default([])
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  alerts     alerts   @relation(fields: [alert_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lots       lots     @relation(fields: [lot_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([alert_id, lot_id])
+  @@index([seen, created_at(sort: Desc)], map: "alert_hits_novos")
+}
+
+model alerts {
+  id          BigInt       @id @default(autoincrement())
+  label       String
+  q           String?
+  filters     Json         @default("{}")
+  channels    String[]     @default(["sino"])
+  email       String?
+  enabled     Boolean      @default(true)
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+  last_run_at DateTime?    @db.Timestamptz(6)
+  owner_id    BigInt?
+  alert_hits  alert_hits[]
+  users       users?       @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([owner_id], map: "alerts_owner_idx", where: raw("enabled"))
+}
+
+model auctioneers {
+  id             BigInt   @id @default(autoincrement())
+  registry       String
+  external_id    String
+  name           String
+  matricula      String?
+  junta          String?
+  uf             String?
+  situacao       String?
+  domain         String?
+  domain_origin  String?
+  blocked        Boolean  @default(false)
+  collected_at   DateTime @default(now()) @db.Timestamptz(6)
+  uf_junta       String?
+  ano_posse      String?
+  credenciamento String?
+  associado      Boolean?
+  nivel          String?
+  dominio_leilao String?
+
+  @@unique([registry, external_id])
+  @@index([dominio_leilao], map: "auctioneers_dom_leilao")
+  @@index([domain], map: "auctioneers_domain")
+  @@index([situacao], map: "auctioneers_situacao")
+  @@index([uf_junta], map: "auctioneers_uf")
+}
+
+model bid_history {
+  id          BigInt   @id @default(autoincrement())
+  lot_id      BigInt
+  bid         Decimal  @db.Decimal(14, 2)
+  observed_at DateTime @default(now()) @db.Timestamptz(6)
+  lots        lots     @relation(fields: [lot_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([lot_id, observed_at(sort: Desc)], map: "bid_history_lot")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cadastros {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                    String
+  cpf_cnpj                String   @unique(map: "cadastros_cpf_cnpj_uk")
+  tipo_documento          String
+  email                   String   @unique(map: "cadastros_email_uk")
+  celular                 String
+  status                  String   @default("pendente_pagamento")
+  plano                   String   @default("mensal")
+  valor_mensal            Decimal  @default(69.90) @db.Decimal(10, 2)
+  asaas_customer_id       String?  @unique
+  asaas_subscription_id   String?  @unique
+  consentimento_termos_em DateTime @db.Timestamptz(6)
+  consentimento_versao    String
+  consentimento_texto     String
+  consentimento_ip        String?
+  consentimento_marketing Boolean  @default(false)
+  origem                  String?
+  criado_em               DateTime @default(now()) @db.Timestamptz(6)
+  atualizado_em           DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([status])
+}
+
+model collection_runs {
+  id                         BigInt                       @id @default(autoincrement())
+  source_id                  String
+  job                        String
+  started_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  finished_at                DateTime?                    @db.Timestamptz(6)
+  ok                         Boolean?
+  fetched                    Int                          @default(0)
+  upserted                   Int                          @default(0)
+  skipped                    Int                          @default(0)
+  error                      String?
+  http_status                Int?
+  limite                     Int?
+  tenant_collection_attempts tenant_collection_attempts[]
+
+  @@index([source_id, started_at(sort: Desc)], map: "collection_runs_src")
+}
+
+model discovered_sites {
+  domain       String    @id
+  auctioneers  Int       @default(1)
+  ufs          String[]
+  http_status  Int?
+  has_lots     Boolean?
+  platform     String?
+  connector_id String?
+  title        String?
+  checked_at   DateTime? @db.Timestamptz(6)
+  note         String?
+  sources      sources?  @relation(fields: [connector_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([has_lots], map: "sites_haslots")
+  @@index([platform], map: "sites_platform")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model espera {
+  id            BigInt   @id @default(autoincrement())
+  email         String
+  nome          String?
+  interesse     String?
+  origem        String   @default("landing")
+  consentimento String
+  criado_em     DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model favorites {
+  id         BigInt   @id @default(autoincrement())
+  owner_id   BigInt
+  lot_id     BigInt
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  lots       lots     @relation(fields: [lot_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users    @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([owner_id, lot_id])
+  @@index([owner_id], map: "favorites_owner_idx")
+}
+
+/// This model contains an index with non-default null sort order and requires additional setup for migrations. Visit https://pris.ly/d/default-index-null-ordering for more info.
+model lots {
+  id                BigInt        @id @default(autoincrement())
+  source_id         String
+  external_id       String
+  lot_url           String?
+  title_raw         String
+  brand             String?
+  model             String?
+  version           String?
+  year_make         Int?
+  year_model        Int?
+  km                Int?
+  color             String?
+  fuel              String?
+  plate_masked      String?
+  doc_type          String?
+  closing_model     String        @default("pregao_em_horario")
+  auction_start_utc DateTime?     @db.Timestamptz(6)
+  auction_end_utc   DateTime?     @db.Timestamptz(6)
+  source_tz         String?
+  status            String        @default("sem_data")
+  current_bid       Decimal?      @db.Decimal(14, 2)
+  min_bid           Decimal?      @db.Decimal(14, 2)
+  bid_increment     Decimal?      @db.Decimal(14, 2)
+  appraisal         Decimal?      @db.Decimal(14, 2)
+  fees_pct          Decimal?      @db.Decimal(6, 3)
+  fees_amount       Decimal?      @db.Decimal(14, 2)
+  auctioneer_name   String?
+  auctioneer_reg    String?
+  seller_name       String?
+  seller_type       String?
+  yard              String?
+  city              String?
+  state             String?
+  lat               Float?
+  lon               Float?
+  photos            Json          @default("[]")
+  photo_count       Int           @default(0)
+  financeable       Boolean?
+  has_report        Boolean?
+  raw               Json?
+  search_text       String        @default("")
+  first_seen_at     DateTime      @default(now()) @db.Timestamptz(6)
+  collected_at      DateTime      @default(now()) @db.Timestamptz(6)
+  bid_suspect       Boolean       @default(false)
+  asset_type        String        @default("veiculo")
+  vehicle_type      String?
+  source_category   String?
+  property_type     String?
+  city_key          String?
+  title_display     String?
+  closed_reason     String?
+  closed_at         DateTime?     @db.Timestamptz(6)
+  verified_at       DateTime?     @db.Timestamptz(6)
+  verify_result     String?
+  verify_fails      Int           @default(0)
+  alert_hits        alert_hits[]
+  bid_history       bid_history[]
+  favorites         favorites[]
+  sources           sources       @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([source_id, external_id])
+  @@index([asset_type], map: "lots_asset_type")
+  @@index([source_id, collected_at], map: "lots_ausencia_idx", where: raw("(status = ANY (ARRAY['aberto'::text, 'agendado'::text]))"))
+  @@index([bid_suspect], map: "lots_bid_suspect")
+  @@index([brand, model], map: "lots_brand_model")
+  @@index([auction_start_utc], map: "lots_encerrar_pregao_idx", where: raw("((status = ANY (ARRAY['aberto'::text, 'agendado'::text])) AND (closing_model <> 'timer_por_lote'::text))"))
+  @@index([auction_end_utc], map: "lots_encerrar_timer_idx", where: raw("((status = ANY (ARRAY['aberto'::text, 'agendado'::text])) AND (closing_model = 'timer_por_lote'::text))"))
+  @@index([auction_end_utc], map: "lots_end_at")
+  @@index([current_bid], map: "lots_price")
+  @@index([property_type], map: "lots_property_type", where: raw("(property_type IS NOT NULL)"))
+  @@index([search_text(ops: raw("gin_trgm_ops"))], map: "lots_search_trgm", type: Gin)
+  @@index([auction_start_utc], map: "lots_start_at")
+  @@index([state], map: "lots_state")
+  @@index([status], map: "lots_status")
+  @@index([state, city_key], map: "lots_uf_cidade", where: raw("(city_key IS NOT NULL)"))
+  @@index([vehicle_type], map: "lots_vehicle_type")
+  @@index([source_id, verified_at], map: "lots_verificar_idx", where: raw("(status = ANY (ARRAY['aberto'::text, 'agendado'::text]))"))
+}
+
+model push_subscriptions {
+  endpoint   String   @id
+  p256dh     String
+  auth       String
+  user_agent String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  failures   Int      @default(0)
+  owner_id   BigInt?
+  users      users?   @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([owner_id], map: "push_subscriptions_owner_idx")
+}
+
+model saved_searches {
+  id         BigInt   @id @default(autoincrement())
+  label      String
+  query      Json
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  owner_id   BigInt?
+  users      users?   @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([owner_id], map: "saved_searches_owner_idx")
+}
+
+model sources {
+  id                         String                       @id
+  name                       String
+  platform                   String?
+  method                     String
+  tier                       Int                          @default(1) @db.SmallInt
+  enabled                    Boolean                      @default(true)
+  site_url                   String?
+  notes                      String?
+  discovered_sites           discovered_sites[]
+  lots                       lots[]
+  tenant_collection_attempts tenant_collection_attempts[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tenant_collection_attempts {
+  id              BigInt           @id @default(autoincrement())
+  run_id          BigInt?
+  source_id       String
+  domain          String
+  origin          String
+  job_id          String?
+  scheduled_at    DateTime?        @db.Timestamptz(6)
+  started_at      DateTime         @default(now()) @db.Timestamptz(6)
+  finished_at     DateTime?        @db.Timestamptz(6)
+  state           String           @default("running")
+  fetched         Int              @default(0)
+  skipped         Int              @default(0)
+  returned        Int              @default(0)
+  http_status     Int?
+  http_responses  Int              @default(0)
+  error_kind      String?
+  collection_runs collection_runs? @relation(fields: [run_id], references: [id], onUpdate: NoAction)
+  sources         sources          @relation(fields: [source_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([source_id, domain, started_at(sort: Desc)], map: "tenant_attempts_source_domain_started_idx")
+  @@index([started_at], map: "tenant_attempts_unfinished_idx", where: raw("(state = 'running'::text)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  id                 BigInt               @id @default(autoincrement())
+  sub                String?              @unique(map: "users_sub_uk", where: raw("(sub IS NOT NULL)"))
+  email              String?
+  nome               String?
+  papel              String               @default("comum")
+  criado_em          DateTime             @default(now()) @db.Timestamptz(6)
+  visto_em           DateTime?            @db.Timestamptz(6)
+  alerts             alerts[]
+  favorites          favorites[]
+  push_subscriptions push_subscriptions[]
+  saved_searches     saved_searches[]
+}

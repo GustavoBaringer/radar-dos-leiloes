@@ -4,16 +4,16 @@ Plano vinculado ao [ADR](adr/ADR-001-nest-prisma.md) e ao [PRD](prd/PRD-nest-pri
 
 | ID | Fase | Subtarefa | Dependência | Dono (specialist) | Aceite verificável | Status |
 |---|---|---|---|---|---|---|
-| M1.1 | 1 — Inventário, docs e contratos | Inventariar ~40 rotas: método, URL, auth/papel, query/body, status/envelope, erro, streaming/efeitos. | — | Backend/API | Matriz completa e revisada, referências aos handlers, nenhum endpoint órfão. | Pendente |
-| M1.2 | 1 | Documentar fluxos OIDC/PKCE, cookies assinados, anti-bot, WebSocket, SSR/assets e limites Fastify. | M1.1 | Segurança/backend | Contratos e cenários negativos registrados e cobertos por testes-base. | Pendente |
-| M1.3 | 1 | Catalogar schema/SQL especial, 16 scripts, constraints, índices, transações e locks tenant. | — | Banco de dados | Inventário comparável ao PostgreSQL real, sem baseline marcado. | Pendente |
-| M1.4 | 1 | Fixar contratos de domínio e executor: filtros, normalização, histórico, encerramento/relistagem, worker e CLI. | M1.3 | Domínio/coleta | Casos de regressão reproduzíveis aprovados antes da migração. | Pendente |
-| M1.5 | 1 | Estabelecer baseline de typecheck, build, testes, desempenho e operação local; revisar estimativa. | M1.1–M1.4 | QA/tech lead | Relatório datado com comandos/resultados e estimativa revisada. | Pendente |
-| M2.1 | 2 — Fundação Nest/Prisma/schema | Configurar módulos de aplicação e bootstrap Nest com FastifyAdapter no runtime ESM/Node 24, sem mudar cutover. | M1 | Plataforma/backend | Bootstrap isolado e compilado, host/handler WebSocket preservados. | Pendente |
-| M2.2 | 2 | Fixar Prisma 7, `prisma.config.ts`, adapter `pg` e configuração de ambiente segura. | M1.3 | Banco/Plataforma | Client gerado no build reproduzível; conexão local testada. | Pendente |
-| M2.3 | 2 | Reconciliar schema Prisma com os 16 SQLs, incluindo constraints/indexes/defaults e SQL não representável. | M1.3, M2.2 | Banco de dados | Diff documentado e teste em banco descartável sem drift não explicado. | Pendente |
-| M2.4 | 2 | Criar migrations e baseline integral do banco vazio; provar equivalência antes de marcar clone. | M2.3 | Banco de dados | Banco vazio criado do início ao fim; clone validado; nenhum baseline em produção. | Pendente |
-| M2.5 | 2 | Configurar Jest/Supertest e helpers isolados para teste de domínio, HTTP e banco. | M2.1–M2.4 | QA | Suites executam sem serviços/dados de produção e isolam recursos corretamente. | Pendente |
+| M1.1 | 1 — Inventário, docs e contratos | Inventariar métodos/rotas incluindo plugins security/challenge/ops/WS, static/SSR; auth/papel, entrada, status/envelope, efeitos e owner. | — | Backend/API | Matriz escrita em [contratos HTTP](http-contracts.md), refs para handlers/plugins e parâmetros; sem alegar teste/runtime desta lane. | Concluído |
+| M1.2 | 1 | Documentar OIDC/PKCE, cookie assinado, anti-bot, WebSocket, SSR/assets, erro/header/limites Fastify. | M1.1 | Segurança/backend | Contratos transversais e destino de controllers/services documentados em [contratos HTTP](http-contracts.md). Cobertura executável continua gate futuro. | Concluído |
+| M1.3 | 1 | Catalogar writers de repo/alerts/identidade/descoberta/encerramento/tenant attempts, endpoints/admin, jobs/CLI e scripts one-off; separar authority/rollback. | — | Banco de dados | [Inventário de writers](writer-inventory.md) documenta SQL, guarda/transação, autoridade, rollback e lacunas conhecidas. | Concluído |
+| M1.4 | 1 | Fixar contratos de domínio e executor: filtro efetivo, normalização, histórico, precisão, fim NULL/relistagem, encerramento, worker e CLI. | M1.3 | Domínio/coleta | Regras observadas e refs registradas em [inventário de writers](writer-inventory.md); testes de migração seguem pendentes. | Concluído |
+| M1.5 | 1 | Registrar baseline typecheck/build/146 testes; identificar lacuna de desempenho/operação local e revisar estimativa. | M1.1–M1.4 | QA/tech lead | Baseline fornecido para este plano: typecheck, build e 146 testes Concluídos; nenhuma métrica de produção/performance foi medida ou inferida neste documento. | Concluído |
+| M2.1 | 2 — Fundação Nest/Prisma/schema | Configurar módulos de aplicação e bootstrap Nest com FastifyAdapter no runtime ESM/Node 24, sem mudar cutover. | M1 | Plataforma/backend | Bootstrap compilado opt-in, health/DTO/OpenAPI aprovados; host antigo inalterado. | Concluído |
+| M2.2 | 2 | Fixar Prisma 7, `prisma.config.ts`, adapter `pg` e configuração de ambiente segura. | M1.3 | Banco/Plataforma | Prisma 7.10.0 gerado no build; conexão local e transações testadas. | Concluído |
+| M2.3 | 2 | Reconciliar schema Prisma com os 16 SQLs, incluindo constraints/indexes/defaults e SQL não representável. | M1.3, M2.2 | Banco de dados | Paridade de 344 entradas do catálogo; objetos especiais preservados no SQL. | Concluído |
+| M2.4 | 2 | Criar migrations e baseline integral do banco vazio; provar equivalência antes de marcar clone. | M2.3 | Banco de dados | Deploy em banco vazio e baseline/deploy no clone fixture aprovados; nenhuma operação em produção. | Concluído |
+| M2.5 | 2 | Configurar Jest/Supertest e helpers isolados para teste de domínio, HTTP e banco. | M2.1–M2.4 | QA | Jest unitário, HTTP Supertest e três testes PostgreSQL passaram, além de 146 regressões; gate Oracle aprovado. | Concluído |
 | M3.1 | 3 — Domínio/persistência | Modelar entidades, políticas e validadores puros; classes apenas com responsabilidade concreta. | M1.4, M2.3 | Domínio | Testes Jest cobrem regras existentes e casos limite documentados. | Pendente |
 | M3.2 | 3 | Migrar persistência central para Prisma, mantendo SQL especial e transação de `upsertLots`. | M3.1, M2.4 | Persistência | Integração PostgreSQL comprova atomicidade, histórico e equivalência. | Pendente |
 | M3.3 | 3 | Preservar filtragem imovel/veículo/escopo, anti-colecionáveis, mascaramento e normalização. | M3.1–M3.2 | Domínio/coleta | Fixtures/regressões impedem inserção/reabertura indevida e vazamento de placa. | Pendente |
@@ -32,17 +32,18 @@ Plano vinculado ao [ADR](adr/ADR-001-nest-prisma.md) e ao [PRD](prd/PRD-nest-pri
 | M6.3 | 6 | Remover legado apenas após cobertura/aceite de todas as rotas e fluxos. | M4.5, M5, M6.1–M6.2 | Backend/tech lead | Inventário sem rota dependente, fallback dispensável e aceite operacional registrado. | Pendente |
 | M6.4 | 6 | Entrega final, documentação operacional e pós-cutover monitorado/autorizado. | M6.3 | Operações/Backend | Plano de operação/rollback, métricas e decisão formal de encerramento. | Pendente |
 
-## Evidências de validação (gates, ainda não executados por este backlog)
+## Estado de evidências e gates (contratos documentais concluídos; validações de runtime futuras)
 
 | Verificação | Evidência esperada | Quando |
 |---|---|---|
-| Typecheck | `npm run typecheck` | Cada marco e antes da entrega |
-| Build compilado | `npm run build:backend` + inicialização de `dist` | Fundação, release candidate |
-| Regressões Jest | domínio, normalização, coleta e policies | A cada migração de regra |
+| Baseline Typecheck | `npm run typecheck` — baseline informado como Concluído; não rerun nesta etapa documental | Baseline M1.5; repetir após mudanças de código |
+| Baseline Build | `npm run build:backend` — baseline informado como Concluído; não rerun nesta etapa documental | Baseline M1.5; repetir após mudanças de código |
+| Baseline testes | 146 testes — baseline informado como Concluído; não rerun nesta etapa documental | Baseline M1.5; suites Jest/regressões novas continuam pendentes |
+| Regressões Jest da migração | domínio, normalização, coleta e policies | A cada migração de regra |
 | Integração PostgreSQL real | migrations, SQL especial, atomicidade transacional, relistagem | Fases 2, 3 e 6 |
 | HTTP Supertest | contratos, auth/papéis, erros e limites | Cada rota e gate final |
 | WebSocket nativo | handshake/admission/mensagens/fechamento | Fases 4 e 6 |
 | Front smoke | SSR, assets, fluxos essenciais em loopback | Fases 4 e 6 |
 | Coleta CLI/worker + Redis real | contagens lidos/mapeados/gravados/descartados, ownership/lock BullMQ, autorização e cancelamento | Fases 5 e 6 |
 
-Executar somente em ambiente isolado/local; nunca direcionar teste ou migration a produção, nem iniciar túnel/publicação.
+Sem baseline de desempenho/runtime produção nesta fase; não inventar números. Executar validações futuras somente em ambiente isolado/local; nunca direcionar teste ou migration a produção, nem iniciar túnel/publicação. `GET /api/brands` piloto permanece somente piloto; Jest/Supertest são dependências de teste, sem pacote adicional de runtime nesta lane. Nest core/platform-fastify permanecem dependências de runtime obrigatórias do alvo; nenhuma dependência foi alterada nesta fase.
