@@ -102,6 +102,15 @@ assert.deepEqual(fallbackResponses, [200, 200]);
 assert.deepEqual(fallbackFailures, []);
 assert.equal(fallbackState, 'completed');
 
+// Alguns tenants novos deixam `/leiloes` vazio e expõem os lotes no buscador.
+const searchFallback = await collectSuporteTenant(host, 2, undefined, undefined, (async (url: string) => {
+  if (url.endsWith('/leiloes')) return { status: 200, body: '<script src="https://static.suporteleiloes.com.br/x.js"></script>' };
+  if (url.endsWith('/buscador')) return { status: 200, body: '<script src="https://static.suporteleiloes.com.br/x.js"></script><a href="/oferta/leilao/imoveis/terreno/841/id-877/teste">Lote</a>' };
+  if (url.includes('/oferta/')) return { status: 200, body: payload() };
+  throw new Error(`unexpected search fallback request: ${url}`);
+}) as any);
+assert.equal(searchFallback.lots.length, 1);
+
 // Marco's real card contract is `.flex-leiloes article`, not ABA's `.isotope-item`.
 // This minimized fixture carries the 20 live offers observed on event 351.
 const marcoHost = 'marcotulioleiloes.com.br';
