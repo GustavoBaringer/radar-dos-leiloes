@@ -91,6 +91,11 @@ export interface FetchResult {
   status: number;
   body: string;
   headers: Record<string, string | string[] | undefined>;
+  url?: string;
+}
+
+export class TenantScopeError extends Error {
+  constructor(message: string) { super(message); this.name = 'TenantScopeError'; }
 }
 
 export async function fetchText(url: string, opts: FetchOpts = {}): Promise<FetchResult> {
@@ -134,6 +139,51 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<Fetc
     }
   }
   throw lastErr ?? new Error(`falha ao buscar ${url}`);
+}
+
+/** GET that follows redirects only when they stay on the requested tenant host. */
+export async function fetchTenantText(url: string, tenant: string, opts: FetchOpts = {}): Promise<FetchResult & { url: string }> {
+  const normalize = (host: string) => host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+  const expected = normalize(tenant);
+  const cancel = combinedSignal(opts.signal);
+  let current = new URL(url);
+  if (!['http:', 'https:'].includes(current.protocol) || normalize(current.hostname) !== expected) {
+    throw new TenantScopeError(`tenant URL fora do host solicitado: ${url}`);
+  }
+
+  for (let redirects = 0; ; redirects++) {
+    await throttle(current.host, opts.gapMs ?? DEFAULT_GAP_MS, cancel);
+    const deadline = AbortSignal.timeout(opts.timeoutMs ?? 20000);
+    const signal = cancel ? AbortSignal.any([cancel, deadline]) : deadline;
+    const response = await fetch(current, {
+      method: 'GET',
+      headers: {
+        'user-agent': UA,
+        accept: 'application/json, text/html;q=0.9, */*;q=0.8',
+        'accept-language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        ...opts.headers,
+      },
+      redirect: 'manual',
+      signal,
+    });
+    const location = response.headers.get('location');
+    if ([301, 302, 303, 307, 308].includes(response.status) && location) {
+      await response.body?.cancel().catch(() => {});
+      if (redirects >= 4) throw new Error(`muitos redirects para ${url}`);
+      const next = new URL(location, current);
+      if (!['http:', 'https:'].includes(next.protocol) || normalize(next.hostname) !== expected) {
+        throw new TenantScopeError(`redirect fora do tenant: ${current.href} -> ${next.href}`);
+      }
+      current = next;
+      continue;
+    }
+    return {
+      status: response.status,
+      body: await response.text(),
+      headers: Object.fromEntries(response.headers.entries()),
+      url: current.href,
+    };
+  }
 }
 
 export async function fetchJson<T = any>(url: string, opts: FetchOpts = {}): Promise<{ status: number; data: T | null; raw: string }> {

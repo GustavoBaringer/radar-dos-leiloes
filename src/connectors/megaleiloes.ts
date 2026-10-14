@@ -1,4 +1,5 @@
-import { fetchText } from './http.js';
+import { fetchTenantText } from './http.js';
+import * as cheerio from 'cheerio';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus, AssetType } from '../core/types.js';
 import * as campos from '../core/campos.js';
@@ -55,18 +56,27 @@ function fotoDe(corte: string): string | null {
   return bg.startsWith('//') ? `https:${bg}` : bg;
 }
 
-function tipoDeBem(url: string, titulo: string): AssetType {
+const fold = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+export function tipoDeBem(url: string, titulo: string): AssetType {
+  const foldedTitle = fold(titulo);
   // O site às vezes põe veículo sob /imoveis/ ("Veículo HYUNDAI/HR HDB" em
   // grupolance.com.br/.../imoveis/casas/, 03/10). Título manda no começo do
   // anúncio: se ele abre declarando o bem como veículo, é veículo.
-  if (/^\s*(ve[ií]culo|autom[óo]vel|moto|motocicleta|caminh[ãa]o|[ôo]nibus|trator|bens m[óo]veis)/i.test(titulo)) {
+  if (/^\s*(veiculo|automovel|moto|motocicleta|caminhao|onibus|trator|bens moveis)/.test(foldedTitle)) {
     return 'veiculo';
   }
-  if (/\/imoveis\//i.test(url) || /apartamento|casa|terreno|im[óo]vel|sobrado|gleba|chac|s[íi]tio|fazenda|sala|loja|galp/i.test(titulo)) {
+  if (/\/industrial\//i.test(url) && /\b(maquina|equipamento|prensa|empilhadeira|escavadeira|bobcat|carregadeira|paleteira|injetora)\b/.test(foldedTitle)) return 'veiculo';
+  if (/\/imoveis\//i.test(url) || /apartamento|casa|terreno|imovel|sobrado|gleba|chac|sitio|fazenda|sala|loja|galp/i.test(foldedTitle)) {
     return 'imovel';
   }
   if (/\/veiculos\//i.test(url)) return 'veiculo';
   return 'outro';
+}
+
+export function megaIndustrialPart(title: string): boolean {
+  const foldedTitle = fold(title);
+  return looksLikePart(title) || /\b(torre de empilhadeira|bateria de empilhadeira)\b/.test(foldedTitle);
 }
 
 interface Card {
@@ -82,18 +92,16 @@ interface Card {
   foto: string | null;
 }
 
-function lerCards(html: string, baseUrl: string): Card[] {
+export function lerCards(html: string, baseUrl: string): Card[] {
   const out: Card[] = [];
   for (const bloco of html.split('data-key="').slice(1)) {
     const id = bloco.match(/^(\d+)"/)?.[1];
     if (!id) continue;
     const corte = bloco.slice(0, 6000);
-    const tituloM = corte.match(/class="card-title"[^>]*href="([^"]+)"[^>]*>([^<]+)</) ??
-      corte.match(/class="card-title"[^>]*>([^<]+)</);
+    const tituloM = corte.match(/class="card-title"[^>]*href="([^"]+)"[^>]*>([^<]+)</);
     if (!tituloM) continue;
-    const temHref = tituloM.length > 2;
-    const href = temHref ? tituloM[1] : '';
-    const titulo = (temHref ? tituloM[2] : tituloM[1]).replace(/\s+/g, ' ').trim();
+    const href = tituloM[1];
+    const titulo = tituloM[2].replace(/\s+/g, ' ').trim();
     const localM = corte.match(/class="card-locality"[^>]*title="([^"]*)"/);
     const [cidade, uf] = (localM?.[1] ?? '').split(',').map((s) => s.trim());
     // Última data do bloco = fim da última praça, nos dois templates.
@@ -117,6 +125,16 @@ function lerCards(html: string, baseUrl: string): Card[] {
     });
   }
   return out;
+}
+
+export function nextMegaPages(html: string, pageUrl: string, tenantHost: string, path: string): string[] {
+  const $ = cheerio.load(html), out = new Set<string>(), host = tenantHost.toLowerCase().replace(/^www\./, '');
+  $('a[href*="pagina="]').each((_, a) => {
+    const url = new URL($(a).attr('href')!, pageUrl);
+    if (url.hostname.toLowerCase().replace(/^www\./, '') !== host || url.pathname !== path || url.searchParams.has('ordem')) return;
+    if (Number(url.searchParams.get('pagina')) > 1) out.add(url.href);
+  });
+  return [...out];
 }
 
 /** Monta um conector pra um host desta plataforma — o parser é o mesmo. */
@@ -143,17 +161,22 @@ function conectorDaPlataforma(cfg: {
       let fetched = 0;
       let skipped = 0;
       let httpStatus = 0;
+      let incompleteCategory = false;
       const baseUrl = `https://${cfg.host}`;
 
+      const seenPages = new Set<string>();
       for (const caminho of cfg.caminhos) {
-        for (let pagina = 1; lots.length < limit; pagina++) {
+        const queue = [`${baseUrl}${caminho}`];
+        while (queue.length && lots.length < limit) {
+          const pageUrl = queue.shift()!;
+          if (seenPages.has(pageUrl)) continue;
+          seenPages.add(pageUrl);
           // Passada a última página real, o site não devolve vazio: repete um
           // bloco fixo de "recomendados" pra sempre (34 cards em /veiculos,
           // sempre ≥20) — travou 7h em produção antes desta checagem.
-          const antesDaPagina = lots.length;
           let r;
           try {
-            r = await fetchText(`${baseUrl}${caminho}?pagina=${pagina}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+            r = await fetchTenantText(pageUrl, cfg.host, { headers: { 'user-agent': UA }, gapMs: 1100 });
           } catch {
             break;
           }
@@ -161,19 +184,23 @@ function conectorDaPlataforma(cfg: {
           if (r.status !== 200) break;
 
           const cards = lerCards(r.body, baseUrl);
-          if (!cards.length) break;
+          if (!cards.length) {
+            if (caminho === '/imoveis') incompleteCategory = true;
+            break;
+          }
           fetched += cards.length;
 
           for (const c of cards) {
             if (lots.length >= limit) break;
             if (vistos.has(c.id)) continue;
             vistos.add(c.id);
-            if (!c.titulo || looksLikePart(c.titulo)) {
+            if (!c.titulo || looksLikePart(c.titulo) || (/\/industrial\//i.test(c.url) && megaIndustrialPart(c.titulo))) {
               skipped++;
               continue;
             }
             const assetType = tipoDeBem(c.url, c.titulo);
             const parsed = assetType === 'veiculo' ? parseTitle(c.titulo) : null;
+            if (assetType === 'outro') { skipped++; continue; }
             const local = c.cidade && c.uf ? { city: campos.apararCidade(c.cidade), uf: c.uf } : campos.localDeTexto(c.titulo);
 
             lots.push({
@@ -188,6 +215,7 @@ function conectorDaPlataforma(cfg: {
               yearMake: parsed?.yearMake ?? null,
               yearModel: parsed?.yearModel ?? null,
               assetType,
+              vehicleType: assetType === 'veiculo' && /\/industrial\//i.test(c.url) ? 'maquina' : null,
               docType: c.modalidade ? c.modalidade.toLowerCase() : null,
               closingModel: 'timer_por_lote',
               auctionStartUtc: null,
@@ -204,15 +232,21 @@ function conectorDaPlataforma(cfg: {
               raw: { statusTexto: c.status, modalidade: c.modalidade },
             });
           }
-          // Última página: o total vem no rodapé ("Exibindo 1-48 de 841 itens").
-          if (cards.length < 20) break;
-          // Página cheia mas nenhum id novo: é o bloco de recomendados se
-          // repetindo, não catálogo. O `dedupe` por si só nunca para o loop.
-          if (lots.length === antesDaPagina) break;
+          const $ = cheerio.load(r.body), summary = $('body').text();
+          if (!/Exibindo\s+\d+\s*-\s*\d+\s+de\s+\d+\s+itens/i.test(summary)) {
+            incompleteCategory = true;
+            break;
+          }
+          for (const next of nextMegaPages(r.body, r.url, cfg.host, caminho)) {
+            if (!seenPages.has(next) && !queue.includes(next)) queue.push(next);
+          }
         }
         if (lots.length >= limit) break;
       }
-      return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+      return {
+        lots: lots.slice(0, limit), fetched, skipped, httpStatus,
+        note: `cobertura parcial: /imoveis${incompleteCategory ? ' respondeu sem cards de catálogo (conteúdo editorial/schema não mapeado)' : ''}; /veiculos e /industrial${incompleteCategory ? ' percorridos somente onde houve contrato de cards/total reconhecido' : ' percorridos'}; demais categorias não percorridas`,
+      };
     },
   };
 }
@@ -221,7 +255,7 @@ export const megaleiloes = conectorDaPlataforma({
   id: 'megaleiloes',
   nome: 'Mega Leilões',
   host: 'www.megaleiloes.com.br',
-  caminhos: ['/imoveis', '/veiculos'],
+  caminhos: ['/imoveis', '/veiculos', '/industrial'],
   tier: 2,
 });
 

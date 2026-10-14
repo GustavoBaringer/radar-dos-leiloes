@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="csrf-token" content="">
+        <meta name="go-session-csrf" content="">
+        <meta name="viewport"
+            content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+        <script>
+            document.documentElement.classList.add("v2-js");
+        </script>
+        <title>Agenda de leilões</title>
+            <meta name="description" content="Leilões públicos disponíveis para consulta.">
+            <link rel="canonical" href="https://arrematabem.com.br/agenda">
+            <meta property="og:type" content="website">
+            <meta property="og:title" content="Agenda de leilões">
+            <meta property="og:description" content="Leilões públicos disponíveis para consulta.">
+            <link rel="icon" href="https://cdn.leilotech.workers.dev/website/logos/favicon_nYzFPidHZCKQulQqidqik9JEKkVyWulXicM311zexbSIjwgk1b2p8QNAJNyS.png">
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+
+        <style data-v2-bootstrap>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                min-height: 100vh;
+            }
+
+            #v2-app {
+                min-height: 100vh;
+            }
+
+            #v2-app .flex {
+                display: flex;
+            }
+
+            #v2-app .flex-col {
+                flex-direction: column;
+            }
+
+            #v2-app .flex-1 {
+                flex: 1 1 0%;
+            }
+
+            #v2-app .min-h-screen {
+                min-height: 100vh;
+            }
+
+            html.v2-js #v2-app > .v2-seo-snapshot {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                margin: -1px;
+                padding: 0;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                clip-path: inset(50%);
+                white-space: nowrap;
+                border: 0;
+            }
+        </style>
+            <link rel="preload" as="style" href="/build/assets/vue-sonner-DppCjOAl.css">
+            <link rel="preload" as="style" href="/build/assets/lightgallery-CWrCW2-R.css">
+            <link rel="preload" as="style" href="/build/assets/main-BJqzz798.css">
+            <link rel="modulepreload" as="script" href="/build/assets/@vue-B5e907tc.js">
+            <link rel="modulepreload" as="script" href="/build/assets/vue-router-Cn_c8MeH.js">
+            <link rel="modulepreload" as="script" href="/build/assets/reka-ui-DCksjpfb.js">
+            <link rel="modulepreload" as="script" href="/build/assets/@vueuse-DtWz0yBT.js">
+            <link rel="modulepreload" as="script" href="/build/assets/ohash-BiYk8F2S.js">
+            <link rel="modulepreload" as="script" href="/build/assets/defu-BshOeUjT.js">
+            <link rel="modulepreload" as="script" href="/build/assets/aria-hidden-DvXkyWUv.js">
+            <link rel="modulepreload" as="script" href="/build/assets/@floating-ui-IzVgckEB.js">
+            <link rel="modulepreload" as="script" href="/build/assets/brand-icons-BwjzOz1W.js">
+            <link rel="modulepreload" as="script" href="/build/assets/vue-sonner-Dym1TXc5.js">
+            <link rel="modulepreload" as="script" href="/build/assets/http-BIlU5Pzz.js">
+            <link rel="modulepreload" as="script" href="/build/assets/go-sig-brsvq8Hj.js">
+            <link rel="modulepreload" as="script" href="/build/assets/@apollo-HhlNqT9L.js">
+            <link rel="modulepreload" as="script" href="/build/assets/tslib-DKwZDo0o.js">
+            <link rel="modulepreload" as="script" href="/build/assets/optimism-DUYVV7nu.js">
+            <link rel="modulepreload" as="script" href="/build/assets/@wry-CCbOMIUo.js">
+            <link rel="modulepreload" as="script" href="/build/assets/zen-observable-ts-B-16l2Rl.js">
+            <link rel="modulepreload" as="script" href="/build/assets/graphql-BEd-C2Ko.js">
+            <link rel="modulepreload" as="script" href="/build/assets/ts-invariant-DrQiAHw7.js">
+            <link rel="modulepreload" as="script" href="/build/assets/symbol-observable-COyZChKN.js">
+            <link rel="modulepreload" as="script" href="/build/assets/utils-CgZhhHv9.js">
+            <link rel="modulepreload" as="script" href="/build/assets/clsx-B-dksMZM.js">
+            <link rel="modulepreload" as="script" href="/build/assets/tailwind-merge-Ct12j0u0.js">
+            <link rel="modulepreload" as="script" href="/build/assets/_plugin-vue_export-helper-DlAUqK2U.js">
+            <link rel="modulepreload" as="script" href="/build/assets/class-variance-authority-B8k91cqS.js">
+            <link rel="modulepreload" as="script" href="/build/assets/lucide-vue-next-zZVM-2rK.js">
+            <link rel="modulepreload" as="script" href="/build/assets/impersonation-BYbRKjEW.js">
+            <link rel="modulepreload" as="script" href="/build/assets/laravel-echo-C0SW_kH8.js">
+            <link rel="modulepreload" as="script" href="/build/assets/pusher-js-BUz3smDG.js">
+            <link rel="modulepreload" as="script" href="/build/assets/js-beautify-18QsEkdz.js">
+            <link rel="modulepreload" as="script" href="/build/assets/embla-carousel-autoplay-CjDxzJE7.js">
+            <link rel="modulepreload" as="script" href="/build/assets/embla-carousel-vue-6QiUAYCp.js">
+            <link rel="modulepreload" as="script" href="/build/assets/embla-carousel-reactive-utils-DkegjUUZ.js">
+            <link rel="modulepreload" as="script" href="/build/assets/embla-carousel-CMPFBS9o.js">
+            <link rel="modulepreload" as="script" href="/build/assets/vue-currency-input-C9EkrGwM.js">
+            <link rel="modulepreload" as="script" href="/build/assets/qrcode-V15Bu80h.js">
+            <link rel="modulepreload" as="script" href="/build/assets/dijkstrajs-COg3n3zL.js">
+            <link rel="modulepreload" as="script" href="/build/assets/preload-helper-I4rgV-VL.js">
+            <link rel="modulepreload" as="script" href="/build/assets/lightgallery-B0bH08YL.js">
+            <link rel="stylesheet" href="/build/assets/vue-sonner-DppCjOAl.css" data-navigate-track="reload">
+            <link rel="stylesheet" href="/build/assets/lightgallery-CWrCW2-R.css" data-navigate-track="reload">
+            <link rel="stylesheet" href="/build/assets/main-BJqzz798.css" data-navigate-track="reload">
+            <script type="module" src="/build/assets/main-Bzkx16UH.js" data-navigate-track="reload"></script>
+            <style data-tenant-custom-theme>
+                :root:root {
+  /* Base */
+  --v2-color-primary: #018c96;
+  --v2-page-bg: linear-gradient(to bottom, #fff 0%, #f7f7f7 100%);
+  /* Header - Logo */
+  --v2-header-logo-height-desktop: 3.5rem;
+  /* Header - Navegacao */
+  --v2-header-nav-link-bg-active: #018c96;
+  --v2-header-nav-link-bg-hover: #018c96;
+  --v2-header-nav-link-bg-open: #018c96;
+  --v2-header-nav-link-text-active: #fff;
+  --v2-header-nav-link-text-open: #fff;
+  --v2-header-nav-link-text-active-hover: #fff;
+  --v2-header-nav-link-text-hover: #fff;
+  /* Header - Dropdown */
+  --v2-header-nav-dropdown-item-bg-hover: #f7f7f7;
+  --v2-header-nav-dropdown-item-bg-active: #f7f7f7;
+  /* Header - Dropdown Icons */
+  --v2-header-nav-dropdown-item-icon-bg: #018c96;
+  --v2-header-nav-dropdown-item-icon-text: #fff;
+  --v2-header-nav-dropdown-item-icon-bg-hover: #018c96;
+  --v2-header-nav-dropdown-item-icon-text-hover: #fff;
+  --v2-header-nav-dropdown-item-icon-bg-active: #018c96;
+  --v2-header-nav-dropdown-item-icon-text-active: #fff;
+  /* Banner */
+  --v2-banner-section-bg: linear-gradient(90deg, #018c96 0%, #dedede 35%, #f2f2f2 50%, #dedede 65%, #018c96 100%);
+  --v2-banner-section-padding-y: 0rem;
+  --v2-banner-carousel-shadow: 0 0 13px rgba(0, 0, 0, .2);
+  --v2-banner-placeholder-bg: linear-gradient(90deg, #018c96 0%, #dedede 35%, #f2f2f2 50%, #dedede 65%, #018c96 100%);
+  /* Busca */
+  --v2-section-icon-bg: #00565c;
+  --v2-section-icon-color: #fff;
+  --v2-section-title: #00565c;
+  /* Cards */
+  --v2-card-lotes-badge-bg: #00565c;
+  --v2-card-lotes-badge-border: #00565c;
+  --v2-card-lotes-badge-text: #fff;
+  /* Card footer - Em leilao */
+  --v2-card-footer-live-bg: #018c96;
+  --v2-card-footer-live-border: #018c96;
+  --v2-card-footer-live-text: #fff;
+  --v2-card-footer-live-icon: #fff;
+  --v2-card-footer-live-views: #fff;
+  /* Card footer - Em breve */
+  --v2-card-footer-upcoming-bg: #018c96;
+  --v2-card-footer-upcoming-border: #018c96;
+  --v2-card-footer-upcoming-text: #fff;
+  --v2-card-footer-upcoming-icon: #fff;
+  --v2-card-footer-upcoming-views: #fff;
+  /* Card footer - Em preparacao */
+  --v2-card-footer-preparation-bg: #475569;
+  --v2-card-footer-preparation-border: #475569;
+  --v2-card-footer-preparation-text: #fff;
+  --v2-card-footer-preparation-icon: #fff;
+  --v2-card-footer-preparation-views: #fff;
+  /* Card footer - Proposta venda direta */
+  --v2-card-footer-proposal-bg: oklch(66.6% .179 58.318);
+  --v2-card-footer-proposal-border: oklch(66.6% .179 58.318);
+  --v2-card-footer-proposal-text: #fff;
+  --v2-card-footer-proposal-icon: #fff;
+  --v2-card-footer-proposal-views: #fff;
+  /* Card footer - Suspenso */
+  --v2-card-footer-suspended-bg: #e11d48;
+  --v2-card-footer-suspended-border: #e11d48;
+  --v2-card-footer-suspended-text: #fff;
+  --v2-card-footer-suspended-icon: #fff;
+  --v2-card-footer-suspended-views: #fff;
+  /* Card footer - Retirado */
+  --v2-card-footer-withdrawn-bg: #e11d48;
+  --v2-card-footer-withdrawn-border: #e11d48;
+  --v2-card-footer-withdrawn-text: #fff;
+  --v2-card-footer-withdrawn-icon: #fff;
+  --v2-card-footer-withdrawn-views: #fff;
+  /* Card footer - encerrado */
+  --v2-card-footer-closed-bg: #475569;
+  --v2-card-footer-closed-border: #475569;
+  --v2-card-footer-closed-text: #fff;
+  --v2-card-footer-closed-icon: #fff;
+  --v2-card-footer-closed-views: #fff;
+  /* Inputs */
+  --v2-input-border: #cbd5e1;
+  --v2-input-border-focus: #475569;
+  --v2-input-ring: #475569;
+  /* Footer */
+  --v2-footer-bg: linear-gradient(to bottom, #00565c 0%, #018c96 85%, #00c8d6 100%);
+  --v2-footer-heading: #1c1c1c;
+  --v2-footer-border: #9e9e9e;
+  --v2-footer-link: #fafafa;
+  --v2-footer-link-hover: #fafafa;
+  --v2-footer-social-icon: #fafafa;
+  --v2-footer-text-strong: #fafafa;
+  --v2-footer-text-muted: #fafafa;
+  --v2-input-border: #cbd5e1;
+  --v2-copyright-link: #fff;
+  --v2-copyright-link-hover: #cbd5e1;
+  /* Copyright */
+  --v2-copyright-bg: #00363a;
+  --v2-copyright-border: #00c8d6;
+  --v2-copyright-text: #cbd5e1;
+  /** arredondamento dos elementos */
+  --v2-banner-carousel-radius: 0rem;
+  --v2-search-radius: 1rem;
+  --v2-search-button-radius: 1rem;
+  --v2-section-icon-radius: 1rem;
+  --v2-card-lotes-badge-radius: 1rem;
+  --v2-header-nav-dropdown-item-icon-radius: 1rem;
+  --v2-lote-cta-primary-radius: 1rem;
+  --v2-action-button-radius: 1rem;
+  --v2-leilao-search-button-radius: 1rem;
+  --v2-leilao-search-radius: 1rem;
+  --v2-lote-cta-secondary-radius: 1rem;
+  --v2-panel-radius: 1rem;
+  --v2-header-cta-radius: 1rem;
+  --v2-header-login-button-radius: 1rem;
+  --v2-header-nav-link-radius: 1rem;
+  --v2-input-radius: 1rem;
+  --v2-card-radius: 1rem;
+  --v2-header-nav-dropdown-radius: 1rem;
+  --v2-header-nav-dropdown-item-radius: 1rem;
+  --v2-label-radius: 1rem;
+}
+
+            </style>
+
+        <style data-v2-font-guard>
+            #v2-app,
+            #v2-app :where(:not(svg, svg *)) {
+                font-family: var(--v2-font-sans) !important;
+            }
+
+            #v2-app :where(code, pre, kbd, samp, .font-mono) {
+                font-family: var(--v2-font-mono) !important;
+            }
+        </style>
+    </head>
+    <body>
+        <noscript>
+            <p>Esta página precisa de JavaScript habilitado.</p>
+        </noscript>
+
+        <div id="v2-app"><section class="v2-seo-snapshot" aria-label="Conteúdo público"><h1>Agenda de leilões</h1><p>Leilões públicos disponíveis para consulta.</p><nav><ul><li><a href="/agenda">Agenda de leilões</a></li><li><a href="/venda-direta">Venda direta</a></li><li><a href="/encerrados">Leilões encerrados</a></li><li><a href="/leilao/719/itens-para-escritorio">ITENS PARA ESCRITÓRIO</a><span>Goiânia/GO</span></li><li><a href="/lote/1332/itens-para-escritorio">ITENS PARA ESCRITÓRIO</a></li><li><a href="/leilao/707/01-uma-mesa-em-inox-medindo-350x120m">01 (UMA) MESA EM INOX, MEDINDO 3,50X1,20M</a><span>Goiânia/GO</span></li><li><a href="/lote/1319/01-uma-mesa-em-inox-medindo-350x120m">01 (UMA) MESA EM INOX, MEDINDO 3,50X1,20M</a></li><li><a href="/leilao/721/imovel-rural-em-guarinosgo">IMÓVEL RURAL EM GUARINOS/GO</a><span>Goiânia/GO</span></li><li><a href="/lote/1333/imovel-rural-em-guarinosgo">IMÓVEL RURAL EM GUARINOS/GO</a></li><li><a href="/leilao/735/apartamento-no-502-condominio-ville-serra-dourada">APARTAMENTO Nº 502 CONDOMÍNIO VILLE SERRA DOURADA</a><span>Goiânia/GO</span></li><li><a href="/lote/1372/apartamento-no-502-condominio-ville-serra-dourada">APARTAMENTO Nº 502 CONDOMÍNIO VILLE SERRA DOURADA</a></li><li><a href="/leilao/745/lote-de-terras-em-goiania-go">LOTE DE TERRAS EM GOIÂNIA-GO</a><span>Goiânia/GO</span></li><li><a href="/lote/1386/lote-de-terras-em-goiania-go">LOTE DE TERRAS EM GOIÂNIA-GO</a></li><li><a href="/leilao/743/apartamento-n-105-no-residencial-viver-fama">APARTAMENTO N° 105 NO RESIDENCIAL VIVER FAMA</a><span>Goiânia/GO</span></li><li><a href="/lote/1383/apartamento-n-105-no-residencial-viver-fama">APARTAMENTO N° 105 NO RESIDENCIAL VIVER FAMA</a></li><li><a href="/leilao/729/apartamento-no-edificio-azteca">APARTAMENTO NO EDIFÍCIO AZTECA</a><span>Goiânia/GO</span></li><li><a href="/lote/1362/apartamento-no-edificio-azteca-st-bela-vista">APARTAMENTO NO EDIFÍCIO AZTECA ST. BELA VISTA</a></li><li><a href="/leilao/741/imovel-residencial-em-goiania-vila-legionarias-go">IMÓVEL RESIDENCIAL EM GOIÂNIA - VILA LEGIONÁRIAS - GO</a><span>Goiânia/GO</span></li><li><a href="/lote/1381/imovel-residencial-em-goiania-vila-legionarias-go">IMÓVEL RESIDENCIAL EM GOIÂNIA - VILA LEGIONÁRIAS - GO</a></li><li><a href="/leilao/713/apartamento-n-904-e-box-n-98-do-ed-antonio-poteiro">APARTAMENTO N° 904 E BOX N° 98 DO ED. ANTÔNIO POTEIRO</a><span>Goiânia/GO</span></li><li><a href="/lote/1326/apartamento-n-904-e-box-n-98-do-ed-antonio-poteiro">APARTAMENTO N° 904 E BOX N° 98 DO ED. ANTÔNIO POTEIRO</a></li><li><a href="/leilao/714/fiatstrada-working">FIAT/STRADA WORKING</a><span>Goiânia/GO</span></li><li><a href="/lote/1327/fiat-strada-working">FIAT STRADA WORKING</a></li><li><a href="/leilao/727/imovel-no-parque-atheneu-goianiago">IMÓVEL NO PARQUE ATHENEU - GOIÂNIA/GO</a><span>Goiânia/GO</span></li><li><a href="/lote/1360/imovel-no-parque-atheneu-goianiago">IMÓVEL NO PARQUE ATHENEU - GOIÂNIA/GO</a></li><li><a href="/leilao/728/apartamento-res-guaranis-i-goianiago">APARTAMENTO RES GUARANIS I - GOIÂNIA/GO</a><span>Goiânia/GO</span></li><li><a href="/lote/1361/apartamento-res-guaranis-i-goianiago">APARTAMENTO RES GUARANIS I - GOIÂNIA/GO</a></li></ul></nav></section></div>
+
+        <script>
+            window.__TENANT__ = {"id":"arrematabem"};
+            window.__USER__ = null;
+            window.__V2_PREFIX__ = "/";
+            window.__TURNSTILE__ = {"site_key":"0x4AAAAAACu69bMhsudQBpaH","theme":"light","size":"normal","appearance":"interaction-only","execution":"render"};
+            window.__FEATURES__ = {"contact_form":true,"show_card_visits":true,"grouped_nav":true,"search_tabs":true,"leiloes_encerrados":true,"v2_promo_section":false};
+            window.__HOME_CONFIG__ = {"leiloes_home_per_page":12,"leiloes_home_infinite_scroll":true};
+            window.__SITE_PROMO__ = {"badge":null,"title":null,"subtitle":null,"image_url":null,"clients_label":null,"form_title":null,"form_helper":null,"button_label":null,"disclaimer":null,"benefits":[{"icon":null,"label":null},{"icon":null,"label":null},{"icon":null,"label":null}]};
+            window.__SITE_CLIENT_LOGOS__ = null;
+                window.__GO_K__ = "SXMkKI0mhd9K6Bt9m+J1v3SuGYL1Qm9lSNbQkzgyBm4=";
+            window.__presencePayload = {"dedupeId":"session:127.0.0.1|curl/8.18.0","deviceIcon":"fa-solid fa-desktop","deviceLabel":"curl","icon":"fa-solid fa-user-secret","iconColor":"text-zinc-500 dark:text-zinc-400","ip":"127.0.0.1","isAdmin":false,"joinedAt":1791929082,"name":"Visitante","path":"/agenda","tenantId":"arrematabem","type":"visitor_desktop","uaLabel":"curl em desconhecido"};
+            window.__PUSHER__ = {"enabled":true,"key":"88j5fm5zxvqxvfgo5wsv_alc","cluster":"mt1","host":"ws.leilotech.com.br","port":443};
+        </script>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4a1a43b3a15c727',t:'MTc5MTkyOTA4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

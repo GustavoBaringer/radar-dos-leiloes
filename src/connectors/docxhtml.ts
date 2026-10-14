@@ -51,10 +51,28 @@ function statusDe(txt: string, fim?: Date | null): LotStatus {
   return 'sem_data';
 }
 
-function tipo(titulo: string, cat?: string | null): 'veiculo' | 'imovel' | 'outro' {
-  const t = `${titulo} ${cat ?? ''}`;
-  if (/im[oó]vel|apartamento|casa|terreno|gleba|rural|urbano|loteamento|galp[aã]o/i.test(t)) return 'imovel';
-  if (/ve[ií]culo|autom[óo]vel|carro|moto|caminh|fiat|ford|vw|volks|honda|toyota|gm\b|chevrolet|hyundai|renault|peugeot|yamaha/i.test(t)) return 'veiculo';
+/**
+ * Evidência nomeada, não dedução.
+ *
+ * A API Roisoft não manda categoria (`LET_NOME` veio null nos 102 itens do
+ * Leilões Brasil medidos em 13/10/2026), então `classifyAsset` cai no padrão
+ * final `veiculo/carro` e chamaria de carro "4533 - LOTE - COM 378 M2",
+ * "M-4391 - MISTO - COM ÁREA DE 268,32m²" e "65 UNDS. DE MESAS E CADEIRAS".
+ * A versão anterior tinha o problema inverso: só reconhecia 12 marcas, então
+ * "ONIBUS MARCOPOLO", "TRATOR LS U80R", "CHACARA" e "SOBRADO" caíam em
+ * `outro` e 62 de 102 lotes reais foram descartados.
+ *
+ * Veículo exige palavra que o nomeie (genérico ou marca). Imóvel usa os
+ * marcadores de área/matrícula. O que não é nenhum dos dois fica `outro` —
+ * some da vitrine em vez de virar carro.
+ */
+export function tipo(titulo: string, cat?: string | null): 'veiculo' | 'imovel' | 'outro' {
+  const t = fold(`${titulo} ${cat ?? ''}`);
+  if (/\b(imove|imoveis|apartamento|casa|sobrado|kitnet|kitinete|terreno|gleba|chacara|sitio|rural|urbano|loteamento|galpao|sala|loja|predio|vaga|matricula|area (com|construida|total))\b/.test(t)) return 'imovel';
+  // Genéricos novos ("ônibus", "trator", "escavadeira") + as marcas que a
+  // versão anterior já acertava. "fazenda" fica de fora de propósito: no
+  // vlance "Honda/NXR 150 - Fazenda Nova/GO" é moto, não imóvel.
+  if (/\b(veiculo|automovel|carro|moto|motocicleta|trator|trilha|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|niveladora|carregadeira|onibus|microonibus|caminhao|caminhonete|utilitario|camioneta|carreta|reboque|embarcacao|lancha|barco|navio|fiat|ford|vw|volks|honda|toyota|gm|chevrolet|hyundai|renault|peugeot|yamaha|citroen|bmw|nissan|mitsubishi|volvo|scania|iveco|mercedes|mmc)\b/.test(t)) return 'veiculo';
   return 'outro';
 }
 
@@ -259,45 +277,76 @@ async function coletarArremate(limit: number): Promise<{ lots: CanonicalLot[]; f
   return { lots, fetched, status };
 }
 
-async function coletarRoiSoft(limit: number): Promise<{ lots: CanonicalLot[]; fetched: number; status: number }> {
+/** Tenants cujo contrato Roisoft foi medido por resposta pública da própria API. */
+export const ROISOFT_HOSTS = new Set([
+  'caiapoleiloes.com.br', 'leiloesbrasil.com.br', 'sancarleiloes.com.br', 'leiloeiroeduardo.com.br',
+]);
+
+async function coletarRoiSoft(limit: number, soHost?: string): Promise<{ lots: CanonicalLot[]; fetched: number; status: number; note?: string }> {
   // O Norte Leilões saiu daqui: a API dele exige POST + Origin/Referer (GET
   // devolve 403 medido em 13/10/2026) e hoje tem coletor próprio (coletarNorte).
+  // Contrato Roisoft medido em 13/10/2026 nas 4 homes (mesma meta Author=Roisoft,
+  // mesma rota /lotes/listar-dados, mesma forma {dados,dadosPaginacao}). A API
+  // ignora porPagina=40 e devolve 20 por página — ler só pagina=1 truncava o
+  // catálogo em 20 de 102 (Leilões Brasil) e em 20 de 22 (Caiapó).
   const tenants = [
     { host: 'caiapoleiloes.com.br', site: 'https://www.caiapoleiloes.com.br', api: 'https://www.caiapoleiloes.com.br', nome: 'Caiapó Leilões' },
-  ];
+    { host: 'leiloesbrasil.com.br', site: 'https://www.leiloesbrasil.com.br', api: 'https://www.leiloesbrasil.com.br', nome: 'Leilões Brasil' },
+    { host: 'sancarleiloes.com.br', site: 'https://www.sancarleiloes.com.br', api: 'https://www.sancarleiloes.com.br', nome: 'Sancar Leilões' },
+    { host: 'leiloeiroeduardo.com.br', site: 'https://www.leiloeiroeduardo.com.br', api: 'https://www.leiloeiroeduardo.com.br', nome: 'Leiloeiro Eduardo' },
+  ].filter(t => !soHost || t.host === soHost);
   const lots: CanonicalLot[] = [];
   let fetched = 0, status = 0;
+  const parciales: string[] = [];
   for (const t of tenants) {
     if (lots.length >= limit) break;
-    let r;
-    try {
-      r = await fetchJson<any>(`${t.api}/lotes/listar-dados?pagina=1&porPagina=40&filters=false&api=true`, {
-        headers: { 'user-agent': UA, referer: `${t.site}/` }, gapMs: 1100,
-      });
-    } catch {
-      continue;
-    }
-    status = r.status;
-    const itens = Array.isArray(r.data?.dados) ? r.data.dados : [];
-    fetched += itens.length;
-    for (const l of itens) {
+    // Sem this.ponto de parada explícito, a paginação nunca terminaria; o teto
+    // é de 40 páginas porque nenhum tenant medido passou de 6.
+    const MAX_PAGINAS = 40;
+    let pagina = 1;
+    let pageCount = 1;
+    let itensVistos = 0;
+    do {
       if (lots.length >= limit) break;
-      const id = String(l.LEL_ID ?? '').trim();
-      const titulo = String(l.titulo ?? l.descricao ?? '').trim();
-      if (!id || !titulo) continue;
-      const foto = l.fotos?.[0]?.imgUrl_285x220 ?? l.fotos?.[0]?.imgUrl ?? l.imgUrl_285x220 ?? l.imgUrl ?? null;
-      const url = l.urlLote && String(l.urlLote).startsWith('http') ? String(l.urlLote) : `${t.site}/lote/${id}`;
-      const situacao = `${l.LEL_SITUACAO ?? ''} ${l.LEI_SITE_SITUACAO ?? ''}`;
-      const valor = dinheiro(l.valorLance);
-      const lot = canon({
-        host: t.host, id, url, titulo, foto, status: situacao, fim: dataRoi(l.LED_DIA_F),
-        min: valor, atual: /LANCE|ARREMATADO/i.test(String(l.LEL_SITUACAO ?? '')) ? valor : null,
-        auctioneer: t.nome, categoria: l.LET_NOME ?? null,
-      });
-      if (lot) lots.push(lot);
-    }
+      let r;
+      try {
+        r = await fetchJson<any>(`${t.api}/lotes/listar-dados?pagina=${pagina}&porPagina=40&filters=false&api=true`, {
+          headers: { 'user-agent': UA, referer: `${t.site}/` }, gapMs: 1100,
+        });
+      } catch {
+        parciales.push(`${t.host}: pagina ${pagina} falhou`);
+        break;
+      }
+      status = r.status;
+      const itens = Array.isArray(r.data?.dados) ? r.data.dados : [];
+      const pag = r.data?.dadosPaginacao ?? {};
+      pageCount = Number(pag.pageCount ?? 1) || 1;
+      fetched += itens.length;
+      itensVistos += itens.length;
+      if (!itens.length && pagina <= pageCount) parciales.push(`${t.host}: pagina ${pagina} de ${pageCount} veio vazia`);
+      for (const l of itens) {
+        if (lots.length >= limit) break;
+        const id = String(l.LEL_ID ?? '').trim();
+        const titulo = String(l.titulo ?? l.descricao ?? '').trim();
+        if (!id || !titulo) continue;
+        const foto = l.fotos?.[0]?.imgUrl_285x220 ?? l.fotos?.[0]?.imgUrl ?? l.imgUrl_285x220 ?? l.imgUrl ?? null;
+        const url = l.urlLote && String(l.urlLote).startsWith('http') ? String(l.urlLote) : `${t.site}/lote/${id}`;
+        const situacao = `${l.LEL_SITUACAO ?? ''} ${l.LEI_SITE_SITUACAO ?? ''}`;
+        const valor = dinheiro(l.valorLance);
+        const lot = canon({
+          host: t.host, id, url, titulo, foto, status: situacao, fim: dataRoi(l.LED_DIA_F),
+          min: valor, atual: /LANCE|ARREMATADO/i.test(String(l.LEL_SITUACAO ?? '')) ? valor : null,
+          auctioneer: t.nome, categoria: l.LET_NOME ?? null,
+        });
+        if (lot) lots.push(lot);
+      }
+      pagina += 1;
+    } while (pagina <= pageCount && pagina <= MAX_PAGINAS);
+    if (itensVistos === 0) parciales.push(`${t.host}: API respondeu sem nenhum lote no momento`);
+    else if (lots.length >= limit) parciales.push(`${t.host}: limite ${limit} atingido em ${itensVistos} itens lidos`);
+    else if (pagina > MAX_PAGINAS) parciales.push(`${t.host}: parou no teto de ${MAX_PAGINAS} páginas`);
   }
-  return { lots, fetched, status };
+  return { lots, fetched, status, note: parciales.length ? parciales.join('; ') : undefined };
 }
 
 /* ------------------------------------------------------------------ *
@@ -519,6 +568,16 @@ export const docxhtml: Connector = {
     if (tenant !== undefined) {
       if (tenant === NORTE.host) {
         const r = await coletarNorte(limit);
+        return {
+          lots: r.lots,
+          fetched: r.fetched,
+          skipped: Math.max(0, r.fetched - r.lots.length),
+          httpStatus: r.status,
+          ...(r.note ? { note: r.note } : {}),
+        };
+      }
+      if (ROISOFT_HOSTS.has(tenant)) {
+        const r = await coletarRoiSoft(limit, tenant);
         return {
           lots: r.lots,
           fetched: r.fetched,

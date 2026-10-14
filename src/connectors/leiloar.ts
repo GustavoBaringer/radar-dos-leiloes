@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { fetchText } from './http.js';
+import { fetchText, fetchTenantText, TenantScopeError, type FetchResult } from './http.js';
 import type { CollectOptions, Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
@@ -7,7 +7,7 @@ import { parseTitle, classifyAsset, classifySeller, looksLikePart } from '../cor
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import type { TenantAttempt } from '../core/tenant-attempts.js';
-import { throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
 
 /**
  * LEILOAR — plataforma white-label (CakePHP), N leiloeiros por 1 conector.
@@ -30,6 +30,7 @@ import { throwIfCancelled } from '../core/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const POR_PAGINA = 10;
+const CAKE_TENANTS = new Set(['leiloesfederal.com.br', 'prosperarleiloes.com.br']);
 
 function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
@@ -149,6 +150,144 @@ export function nasarDate(html: string): { date: Date | null; sourceTz: string; 
   const date = new Date(Date.UTC(year, month - 1, day, hour + 3, minute, second));
   // Source dates over ten years ahead are retained, but flagged for review.
   return { date, sourceTz, rawDate: `${d} ${t}`, suspiciousFuture: year > new Date().getFullYear() + 10 };
+}
+
+type CakeCard = { id: string; url: string; title: string; category: string | null; status: LotStatus; appraisal: number | null; minBid: number | null; date: Date | null; city: string | null; state: string | null; photo: string | null; machine: boolean };
+
+const cakeDate = (text: string): Date | null => {
+  const matches = [...text.matchAll(/(\d{2})\/(\d{2})\/(\d{4})\s+às\s+(\d{2}):(\d{2})(?::(\d{2}))?/gi)];
+  const m = matches.at(-1);
+  if (!m) return null;
+  const [, d, month, year, hour, minute, second = '0'] = m;
+  const value = Date.parse(`${year}-${month}-${d}T${hour}:${minute}:${second}-03:00`);
+  return Number.isFinite(value) ? new Date(value) : null;
+};
+
+const cakeMoney = (text: string, label: RegExp): number | null => {
+  const m = label.exec(text);
+  return m ? dinheiro(m[1]) : null;
+};
+
+/** Parser for the observed public CakePHP `.card-bem` listings of Federal and Prosperar. */
+export function parseCakeCards(html: string, pageUrl: string): CakeCard[] {
+  const $ = cheerio.load(html);
+  const pageHost = new URL(pageUrl).hostname.toLowerCase().replace(/^www\./, '');
+  const cards: CakeCard[] = [];
+  $('.card-bem').each((_, el) => {
+    const card = $(el);
+    const href = card.find('a[href*="/lote/"]').first().attr('href');
+    if (!href) return;
+    let url: URL;
+    try { url = new URL(href, pageUrl); } catch { return; }
+    if (!/^https?:$/.test(url.protocol) || url.hostname.toLowerCase().replace(/^www\./, '') !== pageHost) return;
+    const id = /\/lote\/(\d+)(?:\/|$)/.exec(url.pathname)?.[1];
+    if (!id || cards.some((item) => item.id === id)) return;
+    const description = card.find('.card-bem-descricao').first();
+    const firstLine = (description.text().trim().split(/\n+/)[0] ?? '').replace(/\s+/g, ' ').trim();
+    const localText = card.find('#bem-local').first().text().replace(/\s+/g, ' ').trim();
+    const title = ((pageHost === 'leiloesfederal.com.br' ? firstLine || localText : card.find('.card-bem-leilao p').first().text().trim()) || firstLine).replace(/\s+/g, ' ');
+    if (!title) return;
+    const text = card.text().replace(/\s+/g, ' ').trim();
+    const pageText = $('body').text().replace(/\s+/g, ' ').trim();
+    const statusText = card.find('.leilao-status').text().trim().toLowerCase();
+    const status: LotStatus = /vendid|arrematad/.test(statusText) ? 'vendido'
+      : /suspens|cancelad|encerrad/.test(statusText) ? 'encerrado'
+        : /aberto/.test(statusText) ? 'aberto' : 'sem_data';
+    const category = card.find('.card-bem-img-footer p').first().text().replace(/\s+/g, ' ').trim() || null;
+    const categoryText = category ?? '';
+    const machine = /compressor de refrigera[cç][ãa]o industrial/i.test(`${title} ${text}`);
+    const local = campos.localDeTexto(title) ?? campos.localDeTexto(localText);
+    cards.push({
+      id, url: url.href, title, category,
+      status,
+      appraisal: cakeMoney(text, /Avalia[cç][ãa]o\s*:?\s*R\$\s*([\d.]+,\d{2})/i),
+      minBid: cakeMoney(text, /Lance\s*(?:Inicial|M[ií]nimo)\s*:?\s*R\$\s*([\d.]+,\d{2})/i),
+      date: cakeDate(text) ?? cakeDate(pageText),
+      city: local?.city ?? null, state: local?.uf ?? null,
+      photo: card.find('img.card-bem-img').first().attr('src') ?? null,
+      machine: machine && /compressor|industrial|diversos/i.test(categoryText + ' ' + title),
+    });
+  });
+  return cards;
+}
+
+export async function collectCakeTenant(host: string, limit: number, request: (url: string, tenant: string) => Promise<FetchResult & { url: string }> = fetchTenantText as any, observer?: TenantAttempt): Promise<CollectResult> {
+  const normalized = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+  if (!CAKE_TENANTS.has(normalized)) throw new Error(`tenant CakePHP não revisado: ${host}`);
+  const lots: CanonicalLot[] = [], seen = new Set<string>(), notes: string[] = [];
+  let fetched = 0, skipped = 0, httpStatus = 0;
+  const path = normalized === 'prosperarleiloes.com.br' ? '/externo/' : '/';
+  const get = async (url: string) => {
+    throwIfCancelled();
+    const response = await request(url, normalized);
+    const finalUrl = new URL(response.url);
+    if (finalUrl.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '') !== normalized) throw new TenantScopeError(`redirect fora do tenant: ${url} -> ${response.url}`);
+    observer?.response(response.status);
+    httpStatus = response.status;
+    if (response.status !== 200) throw new Error(`${response.status} ${response.url}`);
+    return { ...response, url: response.url };
+  };
+  try {
+    const home = await get(`https://${host}${path}`);
+    const pages: Array<{ url: string; body: string }> = [];
+    if (normalized === 'leiloesfederal.com.br') {
+      const $home = cheerio.load(home.body);
+      const events = [...new Set($home('a[href]').map((_, a) => {
+        const href = $home(a).attr('href');
+        if (!href) return null;
+        const link = new URL(href, home.url);
+        return link.hostname.toLowerCase().replace(/^www\./, '') === normalized && /^\/leilao\/\d+(?:\/|$)/.test(link.pathname) ? link.href : null;
+      }).get().filter((item): item is string => item != null))];
+      for (const event of events) {
+        if (lots.length >= limit) break;
+        const result = await get(event);
+        pages.push({ url: result.url, body: result.body });
+      }
+      pages.push({ url: home.url, body: home.body });
+    } else pages.push({ url: home.url, body: home.body });
+
+    for (const page of pages) {
+      throwIfCancelled();
+      for (const card of parseCakeCards(page.body, page.url)) {
+        fetched++;
+        if (seen.has(card.id)) { skipped++; continue; }
+        seen.add(card.id);
+        if (lots.length >= limit || looksLikePart(card.title)) { skipped++; continue; }
+        const classified = classifyAsset(card.title, card.category ?? '');
+        const assetType = card.machine ? 'veiculo' : classified.assetType;
+        if (assetType === 'outro') { skipped++; continue; }
+        const parsed = parseTitle(card.title);
+        const propertyType = /pr[eé]dio\s+comercial|im[oó]vel\s+comercial|galp[aã]o|sala\s+comercial/i.test(`${card.title} ${card.category}`) ? 'comercial'
+          : /apartamento/i.test(`${card.title} ${card.category}`) ? 'apartamento'
+            : /casa|sobrado/i.test(card.title) ? 'casa'
+            : /terreno|gleba|loteamento/i.test(card.title) ? 'terreno'
+              : /fazenda|s[ií]tio|ch[aá]cara|rural/i.test(card.title) ? 'rural'
+                : undefined;
+        lots.push({
+          sourceId: 'leiloar', externalId: `${normalized}:${card.id}`, lotUrl: card.url,
+          auctioneerName: leiloeiroDoHost(normalized), titleRaw: card.title,
+          brand: parsed.brand, model: parsed.model, version: parsed.version,
+          yearMake: parsed.yearMake, yearModel: parsed.yearModel,
+          sourceCategory: card.category, assetType,
+          vehicleType: card.machine ? 'maquina' : classified.vehicleType,
+          propertyType,
+          closingModel: 'pregao_em_horario', auctionStartUtc: null, auctionEndUtc: card.date,
+          sourceTz: 'America/Sao_Paulo', status: card.status,
+          minBid: card.minBid, appraisal: card.appraisal,
+          sellerType: classifySeller(null) as any, city: card.city, state: card.state,
+          photos: card.photo ? [new URL(card.photo, page.url).href] : [],
+          raw: { tenant: normalized, cakeListing: page.url },
+        });
+      }
+    }
+    if (normalized === 'prosperarleiloes.com.br') notes.push('denominador do catálogo não publicado; cobertura parcial');
+    else notes.push('catálogo parcial: apenas home pública e eventos nela vinculados; total geral não observado');
+    return { lots, fetched, skipped, httpStatus, note: notes.length ? notes.join('; ') : undefined };
+  } catch (error) {
+    if (error instanceof CollectionCancellationError || error instanceof TenantScopeError) throw error;
+    observer?.failure('network');
+    return { lots, fetched, skipped, httpStatus, note: `catálogo parcial: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
 export async function collectNasar(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch = fetchText): Promise<CollectResult> {
@@ -288,6 +427,21 @@ export async function collectLeiloar(
       const attempt = await observer?.start(host);
       const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
+      if (CAKE_TENANTS.has(host.toLowerCase().replace(/^www\./, '').replace(/\.$/, ''))) {
+        let result: CollectResult | undefined;
+        try {
+          result = await collectCakeTenant(host, limit - lots.length, fetchTenantText as any, attempt);
+          lots.push(...result.lots);
+          fetched += result.fetched;
+          skipped += result.skipped;
+          httpStatus = result.httpStatus ?? httpStatus;
+          if (result.note) partialReasons.add(result.note);
+          truncated = result.lots.length >= limit - antes;
+        } finally {
+          await attempt?.finish({ fetched: result?.fetched ?? 0, skipped: result?.skipped ?? 0, returned: result?.lots.length ?? 0, truncated });
+        }
+        continue;
+      }
       if (host === 'nasarleiloes.com.br') {
         let result: CollectResult | undefined;
         const remainingTenant = Math.max(0, Math.min(limit - lots.length, cota - (lots.length - antes)));
@@ -386,8 +540,11 @@ export async function collectLeiloar(
             raw: { tenant: host, totalAnunciado, badges: c.badges },
           });
         }
-        if (totalAnunciado != null && lots.length - antes >= totalAnunciado) { naturalEnd = true; break; }
-        if (cards.length < POR_PAGINA) { naturalEnd = true; break; }
+      if (totalAnunciado != null && lots.length - antes >= totalAnunciado) { naturalEnd = true; break; }
+      if (cards.length < POR_PAGINA) { naturalEnd = true; break; }
+      }
+      if (totalAnunciado != null && lots.length - antes < totalAnunciado) {
+        partialReasons.add(`${host}: catálogo parcial (${lots.length - antes} de ${totalAnunciado} resultados anunciados observados)`);
       }
       if (!naturalEnd && (lots.length >= limit || lots.length - antes >= cota)) truncated = true;
       } catch (error) {

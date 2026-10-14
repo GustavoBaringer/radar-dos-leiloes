@@ -168,10 +168,13 @@ const agente = new Agent({ connect: { rejectUnauthorized: false } }).compose(
   interceptors.redirect({ maxRedirections: 4 }),
 );
 
-const PLATAFORMAS: Array<[string, RegExp]> = [
+export const PLATAFORMAS: Array<[string, RegExp]> = [
   ['mega', /megaleiloes\.com\.br|Mega Leilões/i],
   ['grupolance', /grupolance\.com\.br|Grupo Lance/i],
-  ['portalzuk', /portalzuk\.com\.br|zukerman\.com\.br|frazaoleiloes\.com\.br|lut\.com\.br|Zuk/i],
+  // `\bZuk\b`, não `Zuk`: sem fronteira a alternativa casava "SUZUKI" no card de
+  // veículo e gravava platform=portalzuk em site da Suporte Leilões (medido em
+  // rapidaovende.com.br e fernandalimaleiloes.com.br, 13/10/2026).
+  ['portalzuk', /portalzuk\.com\.br|zukerman\.com\.br|frazaoleiloes\.com\.br|lut\.com\.br|\bZuk\b/i],
   ['parquedosleiloes', /parquedosleiloes\.com\.br|Parque dos Leilões/i],
   ['lucianleiloes', /lucianleiloes\.com\.br|Lucian Leilões/i],
   ['hasta-publica', /hastapublica\.com\.br|valland\.com\.br|Valland Leilões|LoteSmall/i],

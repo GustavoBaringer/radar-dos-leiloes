@@ -11,12 +11,13 @@
  * 401 mesmo com Referer e Origin do tenant.
  */
 import * as cheerio from 'cheerio';
-import { fetchText } from './http.js';
+import { fetchText, fetchTenantText, TenantScopeError } from './http.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
 import * as campos from '../core/campos.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
+import { classifyAsset, classifySeller } from '../core/normalize.js';
 import { eventoEncerrado, eventosAtivos, eventNextPages, ofertaLinks, parseSuporteOferta, parseSuporteDetalhe } from './suporte-oferta.js';
 import type { TenantAttempt } from '../core/tenant-attempts.js';
 import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
@@ -253,6 +254,82 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
   }
 }
 
+const WEB_HOST = 'webleiloes.com.br';
+const normalizeHost = (host: string) => host.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+
+const dataUtcWeb = (value: string): Date | null => {
+  const m = /(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const [, d, month, year, hour, minute] = m;
+  const time = Date.parse(`${year}-${month}-${d}T${hour}:${minute}:00-03:00`);
+  return Number.isFinite(time) ? new Date(time) : null;
+};
+
+function propertyTypeWeb(category: string): CanonicalLot['propertyType'] {
+  const value = category.toLowerCase();
+  if (/apartamento/.test(value)) return 'apartamento';
+  if (/casa/.test(value)) return 'casa';
+  if (/terreno|gleba/.test(value)) return 'terreno';
+  if (/rural|fazenda|s[ií]tio|ch[aá]cara/.test(value)) return 'rural';
+  if (/comercial|galp[aã]o|pr[eé]dio|sala/.test(value)) return 'comercial';
+  if (/vaga/.test(value)) return 'vaga';
+  return 'outro';
+}
+
+/** WebLeilões' Yii product detail contract, separate from Suporte Leilões v1. */
+export function parseWebLote(html: string, pageUrl: string): CanonicalLot | null {
+  const $ = cheerio.load(html);
+  let product: any;
+  for (const node of $('script[type="application/ld+json"]').toArray()) {
+    try {
+      const parsed = JSON.parse($(node).contents().text());
+      const candidates = Array.isArray(parsed) ? parsed : [parsed];
+      product = candidates.find((item) => item?.['@type'] === 'Product');
+      if (product) break;
+    } catch { /* unrelated or malformed JSON-LD */ }
+  }
+  if (!product || typeof product.sku !== 'string' || !/^\d+$/.test(product.sku) || typeof product.name !== 'string') return null;
+  const page = new URL(pageUrl);
+  const itemUrl = new URL(String(product.url ?? pageUrl), pageUrl);
+  if (!['http:', 'https:'].includes(itemUrl.protocol) || normalizeHost(itemUrl.hostname) !== WEB_HOST) return null;
+  const category = String(product.category ?? '').replace(/\s*>\s*/g, ' / ').trim();
+  const classification = classifyAsset(product.name, category);
+  if (classification.assetType !== 'imovel') return null;
+  const statusText = $('.card-status').first().text().trim().toLowerCase();
+  const status: LotStatus = /aberto|lances/.test(statusText) ? 'aberto'
+    : /vendid|arrematad/.test(statusText) ? 'vendido'
+      : /encerrad|suspens|cancelad/.test(statusText) ? 'encerrado' : 'sem_data';
+  const activeInstance = $('.instance-row.active').first();
+  const instance = activeInstance.length ? activeInstance : $('.instance-row').last();
+  const endUtc = dataUtcWeb(instance.find('.instance-row-date').text());
+  const minBid = num(instance.find('.instance-row-value').text());
+  const bodyText = $('body').text().replace(/\s+/g, ' ');
+  const appraisalMatch = /Valor de avalia[cç][ãa]o\s*R\$\s*([\d.]+,\d{2})/i.exec(bodyText);
+  const appraisal = appraisalMatch ? num(appraisalMatch[1]) : null;
+  const images = Array.isArray(product.image) ? product.image : product.image ? [product.image] : [];
+  const imagesSafe = images.filter((x: unknown): x is string => typeof x === 'string' && /^https?:\/\//i.test(x));
+  const local = product.offers?.availableAtOrFrom?.address;
+  return {
+    sourceId: 'suporteleiloes', externalId: product.sku, lotUrl: itemUrl.href,
+    titleRaw: product.name, sourceCategory: category, assetType: 'imovel',
+    propertyType: propertyTypeWeb(category), closingModel: 'pregao_em_horario',
+    auctionStartUtc: null, auctionEndUtc: endUtc, sourceTz: 'America/Sao_Paulo', status,
+    currentBid: null, minBid,
+    appraisal, auctioneerName: 'WebLeilões', sellerType: classifySeller(null) as any,
+    city: typeof local?.addressLocality === 'string' ? local.addressLocality : null,
+    state: typeof local?.addressRegion === 'string' ? local.addressRegion : null,
+    photos: imagesSafe, raw: { tenant: WEB_HOST, productSku: product.sku, category },
+  };
+}
+
+export async function collectWebLeiloes(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantObserver,
+  request: typeof fetchTenantText = fetchTenantText, assetTypes?: string[]): Promise<CollectResult> {
+  const normalized = normalizeHost(host);
+  if (normalized !== WEB_HOST) throw new Error(`tenant WebLeilões inválido: ${host}`);
+  // ponytail: fail closed until Oracle resolves the 68 existing Web SKU collisions with LeilãoBrasil; source URLs/raw are not identity evidence.
+  return { lots: [], fetched: 0, skipped: 0, note: 'WebLeilões bloqueado: identidade dos 68 SKUs sobrescritos ainda não reconciliada; coleta/persistência suspensa.' };
+}
+
 /** A assinatura que separa tenant genuíno de falso positivo da descoberta. */
 function ehSuporteLeiloes(html: string): boolean {
   return /static\.suporteleiloes\.com\.br|suporteleiloes/i.test(html);
@@ -480,7 +557,10 @@ export const suporteleiloes: Connector = {
       'White-label multi-tenant, duas gerações de front (v1 Laravel implementada, v2 Next.js pendente). A coluna platform tem falso positivo: superbid.net. Validar assinatura antes de coletar.',
   },
 
-  async collect({ limit, assetTypes, observer, tenant }): Promise<CollectResult> {
+  async collect({ limit, assetTypes, observer, tenant }, request: typeof fetchText = fetchText): Promise<CollectResult> {
+    if (tenant && normalizeHost(tenant) === WEB_HOST) {
+      throw new Error('WebLeilões bloqueado: identidade dos 68 SKUs sobrescritos ainda não reconciliada; coleta/persistência suspensa.');
+    }
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
@@ -489,7 +569,7 @@ export const suporteleiloes: Connector = {
 
     for (const host of await eligibleTenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60), tenant)) {
       if (lots.length >= limit) break;
-      const normalized = host.toLowerCase().replace(/^www\./, '');
+      const normalized = normalizeHost(host);
       const lookupExisting = async (lotUrl: string, proposedId: string) => {
         const rows = await query<{ external_id: string; same_url: boolean }>(`SELECT external_id,
             lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
@@ -501,13 +581,15 @@ export const suporteleiloes: Connector = {
         if (!rows.length) return null;
         return rows[0].same_url ? rows[0].external_id : { collision: true as const };
       };
-      const result = FOLLOWUP_TENANTS.has(normalized)
-        ? await collectDiscoveredTenant(host, limit - lots.length, assetTypes, observer, fetchText, lookupExisting)
-          : await collectSuporteTenant(host, limit - lots.length, assetTypes, observer);
+      const result = normalized === WEB_HOST
+        ? await collectWebLeiloes(host, limit - lots.length, observer, fetchTenantText, assetTypes)
+          : FOLLOWUP_TENANTS.has(normalized)
+          ? await collectDiscoveredTenant(host, limit - lots.length, assetTypes, observer, request, lookupExisting)
+          : await collectSuporteTenant(host, limit - lots.length, assetTypes, observer, request);
       lots.push(...result.lots);
       fetched += result.fetched;
       skipped += result.skipped;
-      status = result.lastStatus || status;
+      status = (result as any).httpStatus || (result as any).lastStatus || status;
       const resultNote = (result as typeof result & { note?: string }).note;
       if (resultNote) notes.push(`${normalized}: ${resultNote}`);
     }

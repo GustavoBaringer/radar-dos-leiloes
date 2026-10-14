@@ -1,4 +1,5 @@
-import { fetchText } from './http.js';
+import { fetchText, fetchTenantText } from './http.js';
+import * as cheerio from 'cheerio';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
@@ -7,8 +8,8 @@ import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 
 /**
- * LEILOTECH — 1 domínio só (topoleiloes.com.br), catálogo pequeno (~12 lotes
- * medido em 22/09). Sem paginação na `/agenda`: é tudo o que o tenant tem.
+ * LEILOTECH keeps the discovered-tenant parser; ArremataBem uses a separate
+ * public `/agenda` snapshot contract with dedicated lot URLs.
  *
  * A listagem NÃO traz preço nem status por item — só a página de detalhe tem
  * o `<dl>` com Status/Categoria/Avaliação. Com 12 lotes, 1 requisição por
@@ -55,11 +56,28 @@ function dinheiro(v?: string | null): number | null {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-function lerDl(html: string): Record<string, string> {
+export function lerDl(html: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of html.matchAll(/<dt>([^<]+)<\/dt>\s*<dd>([^<]*)<\/dd>/gi)) {
     out[m[1].trim().toLowerCase()] = m[2].trim();
   }
+  return out;
+}
+
+export function agendaLots(html: string, host: string): Array<{ id: string; slug: string; title: string; url: string }> {
+  const $ = cheerio.load(html), base = `https://${host}`, seen = new Set<string>(), out: Array<{ id: string; slug: string; title: string; url: string }> = [];
+  $('#v2-app a[href*="/lote/"]').each((_, anchor) => {
+    const href = $(anchor).attr('href');
+    if (!href) return;
+    const url = new URL(href, base);
+    if (url.hostname.toLowerCase().replace(/^www\./, '') !== 'arrematabem.com.br') return;
+    const match = /^\/lote\/(\d+)\/([^/]+)$/.exec(url.pathname);
+    if (!match || seen.has(match[1])) return;
+    const title = $(anchor).text().replace(/\s+/g, ' ').trim();
+    if (!title) return;
+    seen.add(match[1]);
+    out.push({ id: match[1], slug: match[2], title, url: url.href });
+  });
   return out;
 }
 
@@ -78,6 +96,7 @@ export const leilotech: Connector = {
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
+    let arremataPartial = false;
 
     const dominios = await tenants(Number(process.env.LEILOTECH_TENANTS ?? 5), tenant);
 
@@ -87,9 +106,14 @@ export const leilotech: Connector = {
       const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
       let truncated = false;
       try {
+      const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+      const arremata = normalizedHost === 'arrematabem.com.br';
+      if (arremata) arremataPartial = true;
       let r;
       try {
-        r = await fetchText(`https://${host}/agenda`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+        r = arremata
+          ? await fetchTenantText(`https://${host}/agenda`, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
+          : await fetchText(`https://${host}/agenda`, { headers: { 'user-agent': UA }, gapMs: 1100 });
       } catch {
         attempt?.failure('network');
         continue;
@@ -98,24 +122,31 @@ export const leilotech: Connector = {
       httpStatus = r.status;
       if (r.status !== 200) continue;
 
-      const vistos = new Set<string>();
-      const links: Array<{ id: string; slug: string; titulo: string }> = [];
-      for (const m of r.body.matchAll(/href="\/lote\/(\d+)\/([^"]+)"[^>]*>([^<]+)</g)) {
-        if (vistos.has(m[1])) continue;
-        vistos.add(m[1]);
-        links.push({ id: m[1], slug: m[2], titulo: m[3].replace(/&#39;/g, "'").replace(/&amp;/g, '&').trim() });
-      }
+      const links: Array<{ id: string; slug: string; title: string; url: string }> = arremata
+        ? agendaLots(r.body, normalizedHost)
+        : (() => {
+          const seen = new Set<string>(), found: Array<{ id: string; slug: string; title: string; url: string }> = [];
+          for (const m of r.body.matchAll(/href="\/lote\/(\d+)\/([^"]+)"[^>]*>([^<]+)</g)) {
+            if (seen.has(m[1])) continue;
+            seen.add(m[1]);
+            const slug = m[2];
+            found.push({ id: m[1], slug, title: m[3].replace(/&#39;/g, "'").replace(/&amp;/g, '&').trim(), url: `https://${host}/lote/${m[1]}/${slug}` });
+          }
+          return found;
+        })();
       fetched += links.length;
 
       for (const l of links) {
         if (lots.length >= limit) { truncated = true; break; }
-        if (!l.titulo || looksLikePart(l.titulo)) {
+        if (!l.title || looksLikePart(l.title)) {
           skipped++;
           continue;
         }
         let dr;
         try {
-          dr = await fetchText(`https://${host}/lote/${l.id}/${l.slug}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+          dr = arremata
+            ? await fetchTenantText(l.url, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
+            : await fetchText(l.url, { headers: { 'user-agent': UA }, gapMs: 1100 });
         } catch {
           attempt?.failure('network');
           skipped++;
@@ -127,16 +158,16 @@ export const leilotech: Connector = {
           continue;
         }
         const dl = lerDl(dr.body);
-        const parsed = parseTitle(l.titulo);
-        const local = campos.localDeTexto(l.titulo);
+        const parsed = parseTitle(l.title);
+        const local = campos.localDeTexto(l.title);
         const foto = dr.body.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? null;
 
         lots.push({
           sourceId: 'leilotech',
-          externalId: `${host}:${l.id}`,
-          lotUrl: `https://${host}/lote/${l.id}/${l.slug}`,
+          externalId: arremata ? `${normalizedHost}:${l.id}` : `${host}:${l.id}`,
+          lotUrl: dr.url ?? l.url,
           auctioneerName: leiloeiroDoHost(host),
-          titleRaw: l.titulo,
+          titleRaw: l.title,
           brand: parsed.brand,
           model: parsed.model,
           version: parsed.version,
@@ -149,7 +180,7 @@ export const leilotech: Connector = {
           // parseTitle é sinal forte de veículo, palavra de imóvel no título
           // vale mais que o campo da fonte.
           assetType: /im[óo]vel|apartamento|casa|sobrado|terreno|sala\s+comercial|barrac[ãa]o|fra[çc][ãa]o\s+ideal|vaga\s+de\s+garagem/i.test(
-            `${dl.categoria ?? ''} ${l.titulo}`,
+            `${dl.categoria ?? ''} ${l.title}`,
           )
             ? 'imovel'
             : /ve[íi]culo/i.test(dl.categoria ?? '') || parsed.brand
@@ -165,7 +196,7 @@ export const leilotech: Connector = {
           city: local?.city ?? null,
           state: local?.uf ?? null,
           photos: foto ? [foto] : [],
-          raw: { tenant: host, dl },
+          raw: { tenant: arremata ? normalizedHost : host, dl },
         });
       }
       if (lots.length >= limit) truncated = true;
@@ -177,6 +208,9 @@ export const leilotech: Connector = {
         await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
       }
     }
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+    return {
+      lots: lots.slice(0, limit), fetched, skipped, httpStatus,
+      note: arremataPartial ? 'cobertura parcial: apenas /agenda; /venda-direta e /encerrados são populações separadas, não incluídas' : undefined,
+    };
   },
 };
