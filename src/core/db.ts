@@ -1,15 +1,31 @@
 import pg from 'pg';
+import { queryResultWithClient } from '../infra/database/query.js';
+import { PrismaService } from '../infra/database/prisma.service.js';
 
-// numeric do Postgres chega como string no driver; o app trabalha com number.
-pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
-pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
+let legacyAdminPool: pg.Pool | undefined;
 
-export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL ?? 'postgres://leilao:leilao@127.0.0.1:5433/leilao',
-  max: 10,
-});
+/** Explicit, temporary pg gateway for maintenance scripts that require connect()/BEGIN. */
+function getLegacyAdminPool(): pg.Pool {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for legacy admin database access');
+  return (legacyAdminPool ??= new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 }));
+}
 
-export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-  const res = await pool.query(sql, params);
-  return res.rows as T[];
+export const pool = {
+  async query<T = any>(sql: string, params: unknown[] = []): Promise<{ rows: T[]; rowCount: number }> {
+    return queryResultWithClient(PrismaService.getInstance(), sql, params);
+  },
+  // Administrative script-only compatibility; runtime query/upsert uses Prisma.
+  connect: () => getLegacyAdminPool().connect(),
+  async end(): Promise<void> {
+    await Promise.all([
+      PrismaService.disconnectInstance(),
+      legacyAdminPool?.end(),
+    ]);
+    legacyAdminPool = undefined;
+  },
+};
+
+export async function query<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const result = await pool.query<T>(sql, params);
+  return result.rows;
 }

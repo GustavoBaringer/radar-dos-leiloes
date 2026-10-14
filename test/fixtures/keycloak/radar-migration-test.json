@@ -1,0 +1,23 @@
+{
+  "realm": "radar-migration-test",
+  "enabled": true,
+  "sslRequired": "none",
+  "roles": { "realm": [{ "name": "radar-admin" }, { "name": "radar-user" }] },
+  "clients": [{
+    "clientId": "radar-test-web", "name": "Disposable migration test client", "enabled": true,
+    "protocol": "openid-connect", "publicClient": false, "secret": "radar-test-client-secret",
+    "standardFlowEnabled": true, "directAccessGrantsEnabled": true,
+    "redirectUris": ["http://127.0.0.1:45450/auth/callback", "http://localhost:45450/auth/callback"],
+    "webOrigins": ["http://127.0.0.1:45450", "http://localhost:45450"],
+    "attributes": { "pkce.code.challenge.method": "S256" },
+    "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "email"]
+  }],
+  "users": [
+    { "username": "radar-admin-test", "enabled": true, "email": "admin@example.test", "emailVerified": true,
+      "firstName": "Fixture", "lastName": "Admin", "credentials": [{ "type": "password", "value": "radar-test-password", "temporary": false }],
+      "realmRoles": ["radar-admin", "radar-user"] },
+    { "username": "radar-user-test", "enabled": true, "email": "user@example.test", "emailVerified": true,
+      "firstName": "Fixture", "lastName": "User", "credentials": [{ "type": "password", "value": "radar-user-password", "temporary": false }],
+      "realmRoles": ["radar-user"] }
+  ]
+}

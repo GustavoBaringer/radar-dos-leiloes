@@ -12,6 +12,8 @@
  */
 import { query } from './db.js';
 import { VERIFICADORES, temVerificador, type LoteParaVerificar, type Veredito } from './verificacao.js';
+import { VENCIDO, TERMINAL } from '../infra/database/queries/lot-status.js';
+export { VENCIDO, TERMINAL } from '../infra/database/queries/lot-status.js';
 
 /**
  * Lote vencido pelo relógio.
@@ -28,19 +30,12 @@ import { VERIFICADORES, temVerificador, type LoteParaVerificar, type Veredito } 
  * Sem saber se venceu, o certo é NÃO tratar como vencido — quem fecha esses é a
  * regra de ausência abaixo, que não precisa arbitrar prazo nenhum.
  */
-export const VENCIDO = `COALESCE(
-  (closing_model = 'timer_por_lote' AND auction_end_utc < now())
-  OR (closing_model <> 'timer_por_lote' AND auction_start_utc <= now())
-, FALSE)`;
-
 /**
  * "Não está mais à venda" — a pergunta que a busca, a faceta e os alertas fazem.
  * 'vendido' é tão terminal quanto 'encerrado': 125 lotes vendidos e confirmados
  * na fonte apareciam na busca porque só `status <> 'encerrado'` era testado, e
  * a janela de proposta da fonte segue no futuro depois de a unidade sair.
  */
-export const TERMINAL = `(status IN ('encerrado','vendido') OR ${VENCIDO})`;
-
 /** Quantas varreduras completas seguidas sem ver o lote antes de encerrá-lo. */
 const CICLOS_PARA_AUSENCIA = Number(process.env.ENCERRAR_APOS_CICLOS ?? 3);
 /** Abaixo disto a coleta é refresh quente, não varredura de catálogo. */
