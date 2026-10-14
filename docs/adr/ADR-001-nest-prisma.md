@@ -4,6 +4,10 @@
 - **Data:** 2026-10-14
 - **Base de referência:** `405a219`.
 
+## Checkpoint de implementação
+
+A fundação e a fase 3 foram aprovadas (`867a92d`, `7149efd`); a fase 4 está validada como implementação aditiva: Nest nativo opt-in, controllers/services, auth/PKCE, assets/SSR, imagens e WebSocket. Gate final de build/typecheck/Jest passou (14 suites/67 testes). O servidor padrão (`src/server.ts`) permanece no host legado; não houve cutover nem validação de produção. Workers/CLI, locks/ownership/cancelamento compartilhados, browser smoke, default runtime e rollback operacional seguem pendentes nas fases 5–6. Não declarar migração concluída.
+
 ## Contexto
 
 O backend é ESM TypeScript e roda em Fastify, com build compilado existente (`package.json:5-15`, `scripts/build-backend.mjs`). O host concentra HTTP, sessão/OIDC/PKCE, papéis, recursos anti-bot e streaming; há também WebSocket nativo, arquivos estáticos e renderização web (`src/legacy-host.ts:1-39`; `src/core/antibot/ws-admission.ts`). Aproximadamente 40 rotas constituem contratos existentes; a migração não pode alterar seus envelopes, permissões, cookies, códigos, cabeçalhos ou comportamento de assets/streaming.

@@ -19,7 +19,7 @@ Escopo observado em `src/legacy-host.ts` e plugins importados, antes de migrar H
 | `GET /robots.txt` | Público | — | text/plain robots com allow `/api/img`, demais API bloqueadas | SEO; `:900-920` |
 | `GET /sitemap.xml` | Público | — | XML com rotas públicas não-API | SEO; `:922-936` |
 | `GET /api/home` | Conta | sem query | `{recentes,leiloeiros,fontes,total,totalLeiloeiros,ufs}`; cards decorados por conta | SQL leitura de lots/auctioneers; `:960-992` |
-| `GET /api/vitrine` | Público | sem filtros ou paginação | agregado/categorias/UF/leiloeiros, até 8 lotes + heroes/encerrando/porHora | Único endpoint aberto de dados, consultas somente leitura; `:1001-1119` |
+| `GET /api/vitrine` | Público | sem filtros ou paginação | agregado/categorias/UF/leiloeiros, até 8 lotes + heroes/encerrando/porHora | Acesso público limitado, consultas somente leitura; `:1001-1119` |
 | `POST /api/espera` | Público | body `{email,nome?,interesse?,consentimento}` | 200 `{ok:true}` inclusive duplicado; 400 `{erro}` | INSERT `espera`, consentimento; `:1121-1146` |
 | `POST /api/cadastro` | Público | body nome/documento/email/celular/consentimento/consentimentoVersao/marketing/origem | sucesso 201 `{ok,proximoPasso,mensagem}` anti-enumeração; 400 `{erro,campo}`; 429 | INSERT cadastro, rate limit Redis quando anti-bot não enforce; sem integração de pagamento neste handler; `:1148-1216` |
 | `GET /api/home/leiloeiro` | Conta | `?nome` string obrigatória | array até 24 cards; query inválida: 400 `{error|erro}` | SELECT lots + contexto conta; `:1218-1233` |
@@ -67,7 +67,13 @@ Escopo observado em `src/legacy-host.ts` e plugins importados, antes de migrar H
 - Headers CSP, `nosniff`, `x-frame-options`, referrer-policy e `no-store` em rotas sensíveis são transversais (`legacy-host.ts:203-232`). `registerAntibot` hook order: rate IP antes de auth e account depois; preservar policies e códigos (`core/antibot/fastify.ts:131-157`).
 - WebSocket é protocolo nativo em `@fastify/websocket`, não Socket.IO. Admission valida sessão/abuso e reservation Redis, attach/release no upgrade e filtros de entrega no servidor (`legacy-host.ts:1792-1849`; `core/antibot/ws-admission.ts`).
 
-## Destino proposto para a lane Nest (sem implementação nesta fase)
+## Implementação Nest aditiva validada (fase 4)
+
+O backend Nest tem runtime opt-in via `NEST_BOOTSTRAP=1`/`createRadarApplication`; o servidor padrão (`src/server.ts`) continua legado. O inventário estático de métodos/caminhos identifica 43 rotas de negócio (incluindo WS), dois helpers de segurança por lado e um health novo; conta 49 rotas antigas (inclui quatro assets explícitos de challenge) e 46 novas (assets via wildcard). HEAD automático e nomes de parâmetros são normalizados no inventário. Testes HTTP exercitam grupos de contratos, sem comprovar comparação runtime exaustiva rota a rota dessas 43 rotas. `GET /api/brands` é atendido pelo `CatalogController` nativo; não registrar também o módulo piloto de brands. `configurePageAssets` monta apenas `/assets/` do client compilado; `configureHttpPlatform` serve os arquivos estáticos da raiz web e `PagesService` atende SSR. Foi validado acesso anônimo e cache imutável de 31.536.000s para assets com hash.
+
+Auth nativa foi validada com senha Keycloak e callback HTTP PKCE (não browser UI), issuer/`session_state` não vazios, JWKS e leitura de identidade no PostgreSQL. Metadata opcional do callback tem strings limitadas; JWKS continua usando configuração confiável, sem URL de metadata do IdP. Política existente de conta continua produzindo 401/403 onde aplicável; `/api/vitrine` mantém acesso público limitado; páginas e recursos públicos seguem a matriz, sitemap só landing pública. Imagens têm testes de upstream ausente/503 e falha degradada. WebSocket permanece nativo, com testes de auth/hello, privacidade owner/admin e cleanup. Browser smoke e cutover não estão cobertos/concluídos.
+
+## Destino proposto para etapas ainda não migradas
 
 | Grupo de contrato | Controller sugerido | Service sugerido | Owner explícito |
 |---|---|---|---|

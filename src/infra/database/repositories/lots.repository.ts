@@ -551,8 +551,8 @@ export async function getLot(id: number, opcoes: { interno?: boolean } = {}, que
   return toPublicLot({ ...lot, bid_history: history }, opcoes);
 }
 
-export async function getStats() {
-  const [totals] = await query<any>(`
+export async function getStats(queryFn: QueryFunction = query) {
+  const [totals] = await queryFn(`
     SELECT COUNT(*)::int AS lots,
            COUNT(*) FILTER (WHERE status='aberto')::int AS abertos,
            COUNT(*) FILTER (WHERE status='agendado')::int AS agendados,
@@ -565,14 +565,14 @@ export async function getStats() {
            COUNT(*) FILTER (WHERE asset_type='imovel')::int AS imoveis,
            COUNT(*) FILTER (WHERE asset_type='outro')::int AS outros
     FROM lots`);
-  const bySource = await query(`
+  const bySource = await queryFn(`
     SELECT l.source_id, s.name, s.site_url, COUNT(*)::int AS lots,
            COUNT(*) FILTER (WHERE l.auction_end_utc IS NOT NULL)::int AS com_fim,
            COUNT(*) FILTER (WHERE l.current_bid IS NOT NULL)::int AS com_lance,
            COUNT(*) FILTER (WHERE l.km IS NOT NULL)::int AS com_km,
            MAX(l.collected_at) AS ultima_coleta
     FROM lots l JOIN sources s ON s.id = l.source_id GROUP BY 1,2,3 ORDER BY 4 DESC`);
-  const runs = await query(`
+  const runs = await queryFn(`
     SELECT source_id, job, started_at, finished_at, ok, fetched, upserted, skipped, error, http_status
     FROM collection_runs ORDER BY started_at DESC LIMIT 20`);
   return { totals, bySource, runs };
