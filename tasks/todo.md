@@ -13,5 +13,5 @@
 ## Etapas posteriores — não iniciar antes do gate anterior
 
 - [x] Etapa 2: quatro scripts migrados para transações Prisma; gateway core/db.pool.connect retirado. Provas PostgreSQL dos callbacks/CAS/rollback e falha de backup aprovadas; revisão Oracle sem P1/P2 introduzido. Limites de cleanup e concorrência registrados em admin-layer5.md; sem apply de produção.
-- [ ] Etapa 3: QA agregado, benchmark 15 mil lotes e revisão final.
+- [x] Etapa 3: QA agregado aprovado (Jest 121, isolated 146, compiled 20), benchmark 15 mil lotes / 30 mil históricos e revisão final Oracle GO. Tempos 58,515 s / 52,743 s; provas dedicadas reutilizadas e limites registrados em aggregate-qa3.md.
 - [ ] Etapa 4: browser/runtime/Docker, runbooks de deploy/rollback e cutover controlado.
