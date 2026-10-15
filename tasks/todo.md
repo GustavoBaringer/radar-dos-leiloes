@@ -12,6 +12,6 @@
 
 ## Etapas posteriores — não iniciar antes do gate anterior
 
-- [ ] Etapa 2: transações administrativas Prisma e retirada de pg.connect; prova real de rollback/dry-run/CAS/backup.
+- [x] Etapa 2: quatro scripts migrados para transações Prisma; gateway core/db.pool.connect retirado. Provas PostgreSQL dos callbacks/CAS/rollback e falha de backup aprovadas; revisão Oracle sem P1/P2 introduzido. Limites de cleanup e concorrência registrados em admin-layer5.md; sem apply de produção.
 - [ ] Etapa 3: QA agregado, benchmark 15 mil lotes e revisão final.
 - [ ] Etapa 4: browser/runtime/Docker, runbooks de deploy/rollback e cutover controlado.
