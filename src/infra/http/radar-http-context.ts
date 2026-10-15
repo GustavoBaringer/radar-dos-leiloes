@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type { Papel } from '../../core/auth.js';
-import { createAccountContext } from '../../core/account-context.js';
 import { createResourcePool } from '../../core/antibot/resources.js';
 import { loadAntibotConfig } from '../../core/antibot/config.js';
 import { loadChallengeConfig, createChallengeService } from '../../core/antibot/challenge.js';
@@ -32,7 +31,6 @@ export class RadarHttpContext {
   readonly oidc: RadarHttpOptions['dependencies']['oidc'];
   readonly jobs: RadarHttpOptions['dependencies']['jobs'];
   readonly runtime: RadarHttpOptions['dependencies']['runtime'];
-  readonly accountContext: ReturnType<typeof createAccountContext>;
   readonly telemetry: ReturnType<typeof createOperationsTelemetry>;
   readonly imageTelemetry = createImageTelemetry();
   readonly challenge: ReturnType<typeof createChallengeService>;
@@ -53,7 +51,6 @@ export class RadarHttpContext {
     this.oidc = options.dependencies.oidc;
     this.jobs = options.dependencies.jobs;
     this.runtime = options.dependencies.runtime;
-    this.accountContext = createAccountContext(this.data.query);
     const antibot = loadAntibotConfig(this.env);
     const challenge = loadChallengeConfig(this.env);
     this.telemetry = createOperationsTelemetry({ antibotMode: antibot.mode, challengeMode: challenge.mode,

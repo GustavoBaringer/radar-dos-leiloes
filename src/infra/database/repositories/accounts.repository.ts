@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { VENCIDO } from '../queries/lot-status.js';
-import { VISIBLE_FAVORITE_PREDICATE } from '../../../core/account-context.js';
+import { VISIBLE_FAVORITE_PREDICATE } from './account-context.repository.js';
 import { auctioneerSiteNameSql, lotSiteHostSql } from './lots.repository.js';
 
 export const ACCOUNTS_QUERY = 'ACCOUNTS_QUERY';

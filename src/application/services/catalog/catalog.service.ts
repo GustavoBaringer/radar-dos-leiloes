@@ -2,12 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Identidade } from '../../../domain/identity/identidade.js';
-import { createAccountContext } from '../../../core/account-context.js';
+import { AccountContextService } from '../accounts/account-context.service.js';
 import type { PublicLot } from '../../../domain/lots/public-dto.js';
 import { toPublicLot } from '../../../domain/lots/public-dto.js';
 import { parseQuery } from '../../../domain/lots/normalize.js';
 import type { SearchParams } from '../../../domain/search/search-params.js';
-import { CATALOG_QUERY, type CatalogQuery, CatalogRepository } from '../../../infra/database/repositories/catalog.repository.js';
+import { CatalogRepository } from '../../../infra/database/repositories/catalog.repository.js';
 
 export type CatalogActor = Pick<Identidade, 'userId' | 'papel'>;
 
@@ -30,14 +30,10 @@ function requireActor(actor: CatalogActor): CatalogActor {
 
 @Injectable()
 export class CatalogService {
-  private readonly accountContext: ReturnType<typeof createAccountContext>;
-
   constructor(
     private readonly repository: CatalogRepository,
-    @Inject(CATALOG_QUERY) query: CatalogQuery,
-  ) {
-    this.accountContext = createAccountContext(query);
-  }
+    @Inject(AccountContextService) private readonly accountContext: AccountContextService,
+  ) {}
 
   async home(actorInput: CatalogActor) {
     const actor = requireActor(actorInput);

@@ -7,6 +7,7 @@ import { RADAR_HTTP_CONTEXT } from '../../modules/http-platform/http-platform.mo
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 import { formatMoney, loadLotRenderer, escapeHtml } from '../../../infra/web/page-renderer.js';
 import { PagesRepository } from '../../../infra/web/pages.repository.js';
+import { AccountContextService } from '../accounts/account-context.service.js';
 
 export interface PagePlan { status?: number; contentType?: string; headers?: Record<string, string>; location?: string; body?: unknown }
 export interface PageRequest { protocol: string; host?: string; forwardedHost?: string; forwardedProto?: string; userAgent?: string }
@@ -18,6 +19,7 @@ export class PagesService {
   constructor(
     @Inject(RADAR_HTTP_CONTEXT) private readonly context: RadarHttpContext,
     private readonly pages: PagesRepository,
+    @Inject(AccountContextService) private readonly accountContext: AccountContextService,
   ) {}
 
   landing(): PagePlan {
@@ -52,7 +54,7 @@ export class PagesService {
     const isCrawler = Boolean(actor?.userId === 0 && CRAWLER.test(req.userAgent ?? ''));
     let lotForRender: ReturnType<typeof toPublicLot> & { favorited?: boolean };
     if (actor && actor.userId > 0) {
-      lotForRender = (await this.context.accountContext.decorateLots(actor.userId, [publicLot]))[0]!;
+      lotForRender = (await this.accountContext.decorateLots(actor.userId, [publicLot]))[0]!;
     } else if (isCrawler) {
       // Public crawler SSR never queries account-owned favorites or exposes internal columns.
       lotForRender = { ...publicLot, favorited: false };

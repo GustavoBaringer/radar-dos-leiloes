@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from '@jest/globals';
 import { AccountsService, AccountsServiceError } from '../../../dist/src/application/services/accounts/accounts.service.js';
 import { AccountsRepository } from '../../../dist/src/infra/database/repositories/accounts.repository.js';
+import { AccountContextService } from '../../../dist/src/application/services/accounts/account-context.service.js';
+import { AccountContextRepository } from '../../../dist/src/infra/database/repositories/account-context.repository.js';
 
 const userA = { userId: 11, sub: 'user-a', email: 'a@example.test', nome: 'A', papel: 'comum' };
 const userB = { userId: 22, sub: 'user-b', email: 'b@example.test', nome: 'B', papel: 'comum' };
@@ -36,7 +38,7 @@ function setup(overrides = {}) {
   const repository = new AccountsRepository(query);
   const throttle = overrides.throttle ?? { consume: async () => false };
   const counter = overrides.counter ?? (async () => 3);
-  const service = new AccountsService(repository, query, throttle, counter, { ...config, ...overrides.config });
+  const service = new AccountsService(repository, new AccountContextService(new AccountContextRepository(query)), throttle, counter, { ...config, ...overrides.config });
   return { calls, query, repository, service };
 }
 

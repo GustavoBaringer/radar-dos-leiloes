@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from '@jest/globals';
 import { CatalogService, CatalogServiceError } from '../../../dist/src/application/services/catalog/catalog.service.js';
 import { CatalogRepository } from '../../../dist/src/infra/database/repositories/catalog.repository.js';
 import { BRAND_LIST } from '../../../dist/src/domain/lots/normalize.js';
+import { AccountContextService } from '../../../dist/src/application/services/accounts/account-context.service.js';
+import { AccountContextRepository } from '../../../dist/src/infra/database/repositories/account-context.repository.js';
 
 const user = { userId: 314, papel: 'comum' };
 const admin = { userId: 1, papel: 'admin' };
@@ -39,7 +41,7 @@ function setup() {
     throw new Error(`Unexpected catalog SQL: ${sql}`);
   };
   const repository = new CatalogRepository(query);
-  return { calls, query, repository, service: new CatalogService(repository, query), setSearchRows: (rows) => { searchRows = rows; }, setDetailRows: (rows) => { detailRows = rows; } };
+  return { calls, query, repository, service: new CatalogService(repository, new AccountContextService(new AccountContextRepository(query))), setSearchRows: (rows) => { searchRows = rows; }, setDetailRows: (rows) => { detailRows = rows; } };
 }
 
 describe('CatalogService', () => {

@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { createAccountContext, buildMePayload } from '../../../core/account-context.js';
+import { buildMePayload } from '../../../domain/accounts/account-context.js';
+import { AccountContextService } from './account-context.service.js';
 import type { Identidade } from '../../../domain/identity/identidade.js';
 import type { Alerta } from '../../../domain/alerts/alert-types.js';
 import { toPublicAlert, toPublicFavorite, toPublicHit } from '../../../domain/lots/public-dto.js';
 import { celularValido, documento, emailValido } from '../../../domain/identity/cadastro.js';
 import { BoundedInputError, paginateRows, parsePagination, safePositiveId, ValidateAlertInput } from '../../../domain/search/request-bounds.js';
-import { ACCOUNTS_QUERY, AccountsRepository, type AccountsQuery } from '../../../infra/database/repositories/accounts.repository.js';
+import { AccountsRepository } from '../../../infra/database/repositories/accounts.repository.js';
 
 export const REGISTRATION_THROTTLE = 'REGISTRATION_THROTTLE';
 export const ALERT_CANDIDATE_COUNTER = 'ALERT_CANDIDATE_COUNTER';
@@ -45,17 +46,13 @@ const texto = (value: unknown, max: number): string => typeof value === 'string'
 
 @Injectable()
 export class AccountsService {
-  private readonly accountContext: ReturnType<typeof createAccountContext>;
-
   constructor(
     private readonly repository: AccountsRepository,
-    @Inject(ACCOUNTS_QUERY) query: AccountsQuery,
+    @Inject(AccountContextService) private readonly accountContext: AccountContextService,
     @Inject(REGISTRATION_THROTTLE) private readonly throttle: RegistrationThrottle,
     @Inject(ALERT_CANDIDATE_COUNTER) private readonly countCandidates: AlertCandidateCounter,
     @Inject(ACCOUNTS_RUNTIME_CONFIG) private readonly runtime: AccountsRuntimeConfig,
-  ) {
-    this.accountContext = createAccountContext(query);
-  }
+  ) {}
 
   async me(actorInput: AccountActor, context: { oidc: boolean; saiuEmDev: boolean }) {
     const actor = requireActor(actorInput);

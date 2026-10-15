@@ -8,7 +8,7 @@ import {
   type AccountContextQuery,
 } from '../src/core/account-context.js';
 import { VENCIDO } from '../src/core/encerramento.js';
-import type { PublicLot } from '../src/core/public-dto.js';
+import type { PublicLot } from '../src/domain/lots/public-dto.js';
 import type { query as dbQuery } from '../src/core/db.js';
 
 const queryTypeCompatibility: AccountContextQuery = null as unknown as typeof dbQuery;
