@@ -1,5 +1,6 @@
-import { avaliarAlertas } from '../../../core/alerts.js';
-import { aplicarLimitesDeEntrega, enviarPush, enviarEmail, type LimitesEntrega } from '../../../core/notificar.js';
+import { Inject, Injectable } from '@nestjs/common';
+import { avaliarAlertas } from '../../../infra/database/repositories/alerts.repository.js';
+import { NotificationService, type LimitesEntrega } from '../notifications/notification.service.js';
 
 /**
  * O que acontece DEPOIS de gravar lotes, seja qual for o caminho de coleta.
@@ -19,7 +20,16 @@ export interface ResultadoPosColeta {
   adiados?: number;
 }
 
-export async function processarAposColeta(
+export const POST_COLLECTION_EVALUATE = Symbol('POST_COLLECTION_EVALUATE');
+
+@Injectable()
+export class PostCollectionService {
+  constructor(
+    @Inject(NotificationService) private readonly notifications: NotificationService,
+    @Inject(POST_COLLECTION_EVALUATE) private readonly evaluate: typeof avaliarAlertas = avaliarAlertas,
+  ) {}
+
+async processarAposColeta(
   novos: number[],
   publicar?: (payload: unknown) => Promise<unknown>,
   limites?: LimitesEntrega,
@@ -28,17 +38,17 @@ export async function processarAposColeta(
   if (!novos.length) return vazio;
 
   try {
-    const disparos = await avaliarAlertas(novos);
+    const disparos = await this.evaluate(novos);
     if (!disparos.length) return vazio;
 
     if (publicar) await publicar({ type: 'alertas', disparos });
     // O hit já está no banco antes daqui: o teto decide só o que sai por push e
     // e-mail agora. Quem chama sem limite entrega cada lote novo como aviso.
     const janela = limites
-      ? await aplicarLimitesDeEntrega(disparos, limites)
+      ? await this.notifications.aplicarLimitesDeEntrega(disparos, limites)
       : { disparos, adiados: 0 };
-    const push = await enviarPush(janela.disparos);
-    const email = await enviarEmail(janela.disparos);
+    const push = await this.notifications.enviarPush(janela.disparos);
+    const email = await this.notifications.enviarEmail(janela.disparos);
     return {
       disparos: disparos.length,
       push,
@@ -53,3 +63,7 @@ export async function processarAposColeta(
     return vazio;
   }
 }
+}
+
+const postCollectionService = new PostCollectionService(new NotificationService());
+export const processarAposColeta = postCollectionService.processarAposColeta.bind(postCollectionService);
