@@ -6,6 +6,8 @@ import { POST_COLLECTION_EVALUATE, PostCollectionService } from '../../services/
 import { COLLECTION_DEPENDENCIES, CollectionService, type CollectionExecutionDependencies } from '../../services/collection/collection.service.js';
 import { DiscoveryModule, type DiscoveryModuleOptions } from '../discovery/discovery.module.js';
 import { ClosureModule, type ClosureModuleOptions } from '../closure/closure.module.js';
+import { LiveBidsModule } from '../live-bids/live-bids.module.js';
+import type { LiveBidsDependencies } from '../../services/live-bids/live-bids.service.js';
 
 export interface CollectionModuleOptions {
   /** Complete I/O substitute for isolated tests; does not initialize a database. */
@@ -15,6 +17,7 @@ export interface CollectionModuleOptions {
   discoveryDependencies?: DiscoveryModuleOptions['dependencies'];
   closure?: boolean;
   closureDependencies?: ClosureModuleOptions['dependencies'];
+  liveBidsDependencies?: LiveBidsDependencies;
 }
 
 @Module({})
@@ -28,6 +31,7 @@ export class CollectionModule {
         ...(options.dependencies ? [] : [DatabaseModule, NotificationsModule.forRoot()]),
         ...(includeDiscovery ? [DiscoveryModule.forRoot({ database: false, dependencies: options.discoveryDependencies })] : []),
         ...(includeClosure ? [ClosureModule.forRoot({ database: false, dependencies: options.closureDependencies })] : []),
+        ...(options.liveBidsDependencies ? [LiveBidsModule.forRoot(options.liveBidsDependencies)] : []),
       ],
       providers: [
         ...(options.dependencies ? [] : [
@@ -55,7 +59,7 @@ export class CollectionModule {
         },
         CollectionService,
       ],
-      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : []), ...(includeClosure ? [ClosureModule] : [])],
+      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : []), ...(includeClosure ? [ClosureModule] : []), ...(options.liveBidsDependencies ? [LiveBidsModule] : [])],
     };
   }
 }

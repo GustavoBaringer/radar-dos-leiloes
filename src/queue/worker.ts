@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker, type Job, type Processor, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources, registrarLeituraAoVivo } from '../core/repo.js';
-import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
+import { LEITORES, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
@@ -35,6 +35,11 @@ const getPublisher = () => publisher ??= makeRedis();
 let collectionContext: Promise<CollectionContext> | undefined;
 const getCollectionContext = () => collectionContext ??= createCollectionContext({
   overrides: createWorkerDeps(), discovery: DEPLOY.discover, closure: DEPLOY.close || DEPLOY.verify,
+  liveBidsDependencies: {
+    lotesQuentes, leitores: LEITORES, registrarLeituraAoVivo,
+    publicar: (payload) => getPublisher().publish(CHANNEL_UPDATES, payload),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  },
 });
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
@@ -266,53 +271,7 @@ function descansoRecoletaMin(fim: Date): number {
 /* ------------------------------------------------------------------ */
 
 const AO_VIVO = process.env.AO_VIVO !== '0';
-const proximaLeitura = new Map<number, number>();
-/** Lote quente que o canal não conseguiu ler → fonte dele. Essas fontes voltam para o refresh. */
-const semCanalLotes = new Map<number, string>();
-const semCanal = { has: (fonte: string) => [...semCanalLotes.values()].includes(fonte) };
-let lendoAoVivo = false;
-
-async function cicloAoVivo() {
-  if (lendoAoVivo) return;
-  lendoAoVivo = true;
-  try {
-    const agora = Date.now();
-    const lotes = await lotesQuentes(Object.keys(LEITORES));
-    const vivos = new Set(lotes.map((l) => l.id));
-    for (const id of proximaLeitura.keys()) if (!vivos.has(id)) proximaLeitura.delete(id);
-    for (const id of semCanalLotes.keys()) if (!vivos.has(id)) semCanalLotes.delete(id);
-
-    const mudancas = [];
-    let lidos = 0;
-    for (const lote of lotes) {
-      const intervalo = intervaloMs(lote.fim, agora);
-      if (intervalo == null || (proximaLeitura.get(lote.id) ?? 0) > agora) continue;
-      // Jitter de até 20%: leitura sempre no mesmo segundo é assinatura de robô.
-      proximaLeitura.set(lote.id, agora + intervalo * (1 + Math.random() * 0.2));
-      let leitura = null;
-      try {
-        leitura = await LEITORES[lote.sourceId](lote);
-      } catch (e: any) {
-        console.error(`[aovivo] ${lote.sourceId} ${lote.externalId}:`, e.message);
-      }
-      lidos++;
-      if (!leitura) {
-        semCanalLotes.set(lote.id, lote.sourceId);
-        continue;
-      }
-      semCanalLotes.delete(lote.id);
-      const m = await registrarLeituraAoVivo(lote.id, leitura.lance, leitura.fim);
-      if (m) mudancas.push(m);
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    if (mudancas.length) await getPublisher().publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: mudancas }));
-    if (lidos) console.log(`[aovivo] ${lidos} lidos · ${mudancas.length} lances novos · ${semCanalLotes.size} sem canal`);
-  } catch (e: any) {
-    console.error('[aovivo] falhou:', e.message);
-  } finally {
-    lendoAoVivo = false;
-  }
-}
+async function cicloAoVivo() { await (await getCollectionContext()).liveBids!.ciclo(); }
 
 async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob' | 'authorizePersistence'> = {}) {
   const quentes = new Map<string, number>();
@@ -331,8 +290,9 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
      GROUP BY l.source_id`)) {
     if (!enabledSource(row.source_id) || FORA_DO_REFRESH.has(row.source_id)) continue;
     // Fonte com canal ao vivo só recoleta pelo lote que o canal não alcançou.
-    const aoVivo = AO_VIVO && row.source_id in LEITORES;
-    if (aoVivo && !semCanal.has(row.source_id)) continue;
+    const liveBids = (await getCollectionContext()).liveBids!;
+    const aoVivo = AO_VIVO && liveBids.temLeitor(row.source_id);
+    if (aoVivo && !liveBids.semCanal(row.source_id)) continue;
     const descansoMin = aoVivo ? 15 : descansoRecoletaMin(new Date(row.fim));
     if (row.ultima && Date.now() - new Date(row.ultima).getTime() < descansoMin * 60_000) continue;
     quentes.set(row.source_id, 120);
