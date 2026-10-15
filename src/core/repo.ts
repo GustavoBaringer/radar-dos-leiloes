@@ -1,5 +1,5 @@
 import { query, pool } from './db.js';
-import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico, termoComoRegex, looksLikeCollectible } from './normalize.js';
+import { buildSearchText, parseQuery, scrubPlates, classifyAsset, classifyProperty, chaveCidade, marcaCanonica, completaVeiculo, tituloDeVeiculoLimpo, vendedorPublico, termoComoRegex, looksLikeCollectible, tipoForteDoTitulo } from './normalize.js';
 import { VENCIDO, TERMINAL } from './encerramento.js';
 import * as campos from './campos.js';
 import type { CanonicalLot } from './types.js';
@@ -90,7 +90,10 @@ export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
       }
       // Imóvel nunca carrega tipo de veículo: sem esta trava, "Sala Comercial"
       // herdava 'carro' do classificador e entrava no filtro de veículo.
-      const vehicleType = assetType === 'veiculo' ? (l.vehicleType ?? cls.vehicleType) : null;
+      // Sinais inequívocos do título (ex.: caminhão LS, ônibus OF, vans Sprinter)
+      // têm precedência sobre categorias genéricas que o conector tenha enviado.
+      const forte = tipoForteDoTitulo(titleRaw, l.sourceCategory);
+      const vehicleType = assetType === 'veiculo' ? (forte ?? l.vehicleType ?? cls.vehicleType) : null;
       // Espelho do de cima: veículo nunca carrega tipo de imóvel.
       const propertyType =
         assetType === 'imovel' ? (l.propertyType ?? classifyProperty(titleRaw, l.sourceCategory)) : null;

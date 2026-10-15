@@ -43,7 +43,7 @@ const BRANDS: BrandDef[] = [
       NIVUS: ['nivus'],
       POLO: ['polo'],
       VIRTUS: ['virtus'],
-      GOL: ['gol', 'novo gol'],
+      GOL: ['gol', 'novo gol', 'vwgol', 'vw gol'],
       SAVEIRO: ['saveiro'],
       VOYAGE: ['voyage'],
       JETTA: ['jetta'],
@@ -216,7 +216,7 @@ const BRANDS: BrandDef[] = [
     aliases: ['citroen', 'citroën'],
     models: {
       C3: ['c3'],
-      C4: ['c4', 'c4 cactus', 'c4 lounge'],
+      C4: ['c4', 'c4 cactus', 'c4 lounge', 'c4 pallas', 'pallas'],
       AIRCROSS: ['aircross'],
       JUMPER: ['jumper'],
       JUMPY: ['jumpy'],
@@ -281,7 +281,25 @@ const BRANDS: BrandDef[] = [
   {
     canonical: 'VOLVO',
     aliases: ['volvo'],
-    models: { XC40: ['xc40'], XC60: ['xc60'], FH: ['fh'], VM: ['vm'] },
+    models: {
+      XC40: ['xc40'],
+      XC60: ['xc60'],
+      XC90: ['xc90'],
+      C30: ['c30'],
+      C40: ['c40'],
+      EX30: ['ex30'],
+      V40: ['v40'],
+      V60: ['v60'],
+      S60: ['s60'],
+      FH: ['fh', 'fh 460', 'fh 540', 'fh 400', 'fh 440', 'fh 420', 'fh 480', 'fh 500', 'fh 520', 'fh 12', 'fh 16'],
+      VM: ['vm', 'vm 260', 'vm 270', 'vm 330', 'vm 210', 'vm 220', 'vm 240', 'vm 280', 'vm 290', 'vm 310'],
+      FM: ['fm', 'fm 370', 'fm 380', 'fm 400', 'fm 440', 'fm 460', 'fm 480', 'fm 500', 'fm 10', 'fm 11', 'fm 12'],
+      FMX: ['fmx', 'fmx 460', 'fmx 500', 'fmx 370', 'fmx 380', 'fmx 420', 'fmx 440', 'fmx 480', 'fmx 540'],
+      NH: ['nh', 'nh12', 'nh 12', 'nh12380', 'nh 380'],
+      NL: ['nl', 'nl10', 'nl 10', 'nl12', 'nl 12', 'nl 340', 'nl 400'],
+      N10: ['n10', 'n 10'],
+      N12: ['n12', 'n 12'],
+    },
   },
   { canonical: 'KIA', aliases: ['kia'], models: { SPORTAGE: ['sportage'], CERATO: ['cerato'], SORENTO: ['sorento'], PICANTO: ['picanto'] } },
   { canonical: 'SCANIA', aliases: ['scania'], models: { R440: ['r440'], P310: ['p310'], G420: ['g420'] } },
@@ -314,10 +332,11 @@ const PART_MARKERS = [
   'cabecote', 'bronzina', 'bronzinas', 'pistao', 'virabrequim', 'radiador',
   'parachoque', 'para choque', 'retrovisor', 'farol', 'lanterna', 'capo',
   'porta dianteira', 'porta traseira', 'sucata de cabine', 'motor parcial',
-  'jogo de', 'kit de', 'par de', 'lote de pecas', 'pecas diversas',
+  'jogo de', 'jogos de', 'kit de', 'kits de', 'par de', 'lote de pecas', 'pecas diversas',
   'cambio do', 'motor do', 'caixa de cambio', 'diferencial do', 'turbina do',
   'mobilete', 'bomba injetora', 'cabine de', 'eixo de', 'eixos de',
-  'motor avulso', 'pecas kawasaki',
+  'motor avulso', 'pecas kawasaki', 'lona de freio', 'lonas de freio',
+  'pastilha de freio', 'pastilhas de freio', 'disco de freio', 'discos de freio',
 ];
 
 /**
@@ -377,7 +396,9 @@ export function completaVeiculo(titleRaw: string, brand: string | null, vehicleT
 export function looksLikePart(title: string): boolean {
   const f = fold(title);
   return PART_MARKERS.some((m) => f.includes(fold(m))) ||
-    (/\bkawasaki\b.{0,30}\bpecas?\b|\bpecas?\b.{0,30}\bkawasaki\b/.test(f));
+    (/\bkawasaki\b.{0,30}\bpecas?\b|\bpecas?\b.{0,30}\bkawasaki\b/.test(f)) ||
+    (/\b(material pneus|jogo de pneus|pneus perfil|pneus para|pneus meia vida|\d+\s*pneus\b)/.test(f)) ||
+    (/^cabine\b|\b(cabine|carcaca|dente de cacamba|ponta de cacamba)\b.{0,30}\b(volvo|scania|mercedes|mb|caminhao|escavadeira)\b/.test(f));
 }
 
 export function looksLikeCollectible(title: string): boolean {
@@ -457,6 +478,9 @@ export function parseTitle(titleRaw: string, hintBrand?: string | null, hintMode
     const aliasesByLen = [...brandIndex.entries()].sort((a, b) => b[0].length - a[0].length);
     for (const [aliasCompact, def] of aliasesByLen) {
       if (aliasCompact.length < 2) continue;
+      if (aliasCompact === 'mb' && def.canonical === 'MERCEDES-BENZ') {
+        if (/\b(gol|vwgol|voyage|polo|fox|saveiro|virtus|crossfox|spacefox)\b/.test(folded) || /^vw\b/.test(folded)) continue;
+      }
       const spaced = [...def.aliases, def.canonical].map(fold).find((a) => compact(a) === aliasCompact) ?? aliasCompact;
       const esc = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (
@@ -829,7 +853,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   [/\bdax ?110\b/, 'moto'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
-  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|caio|o 4\d{2} (rs|rse))\b/, 'onibus'],
+  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|mascarello|masc\b|gran ?mini|caio|irizar|o 4\d{2} (rs|rse)|o[- ]?500|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4}|b58|b7r|b9r|b1[012][mr]?|b270f)\b/, 'onibus'],
   // Família que no Brasil só existe em caminhão. "AX0R" com zero no lugar do O
   // aparece cru no vlance. "Titan" ficou de fora: é VW 19.320 Titan e Honda CG
   // 125 Titan ao mesmo tempo — o CG já é pego pela regra de moto.
@@ -850,7 +874,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // SAVEIRO CS ST MB 2015/2015" entravam como caminhão — três carros dentro do
   // filtro de pesado, sem erro em lugar nenhum. O código da Mercedes só vale
   // com a marca ou o "caminhão" no título, nas duas regras logo abaixo.
-  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|actros|arocs|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
+  [/\b(caminh[oa]o|scania|atego|ax[o0]r|accelo|a[cç]{1,2}ello|actros|arocs|atron|constellation|worker|tector|eurocargo|stralis|daf ?xf|man ?tg|volkswagen \d{1,2} \d{3}[a-z]?|f ?4000|cavalo mecanico|bitrem|rodotrem|cargo ?(?!19|20)\d{3,4}[a-z]?)\b/, 'caminhao'],
   [/\bmercedes ?mb ?\d{4}\b/, 'caminhao'],
   // "CAMINHÃO CAÇAMBA MB 1113": com o tipo no título, o código volta a valer.
   [/\bcaminh[ao].{0,40}\bmb ?\d{4}\b/, 'caminhao'],
@@ -859,11 +883,14 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // anúncio de um Gol, não casa em nenhum dos dois.
   [/\bmb ?\d{4} (ls|lk|la|cav|cam|trator)\b/, 'caminhao'],
   [/\bmb ?\d{4}\b.{0,24}\b(eixos|[468]x[24]|8x4)\b/, 'caminhao'],
-  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
-  // Linha "L" da Mercedes-Benz por extenso (não abreviada "MB"): achado em
-  // 24/09, "Mercedes-Benz/L-2013" no vlance virava carro — sem categoria de
-  // fonte, nada no dicionário via o "L" solto como sinal de caminhão.
-  [/\b(mercedes|m ?\.? ?benz|mb)\b.{0,20}?\bl\s?(1[0-9]{3}|2[0-9]{3})\b/, 'caminhao'],
+  // Caminhões Volvo nos dois sentidos (com ou sem espaço, com ou sem número)
+  [/\bvolvo\b.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b/, 'caminhao'],
+  // Códigos de chassi pesado Volvo com tração de eixo
+  [/\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b/, 'caminhao'],
+  // Linha "L", "LS", "LK", "LA" da Mercedes-Benz (com ou sem a marca explícita no título)
+  [/\b(ls|lk|la|lak|lb|lks)\s?[-/]?\s?(312|[12]\d{3})\b|\bl\s?(312|[12]\d{3})\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\bls\b|\bls\b.{0,15}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
   // "VW/8.140" e "VW/8.150E" (prefixo de 1 dígito, série 140/Delivery) saíam
   // do "vw ?\d{2} ?\d{3}\b" de cima: exigia 2 dígitos, e o "\b" final falhava
   // quando o sufixo vem colado a letra ("150E"). Achado em 24/09 no bomvalor,
@@ -879,8 +906,9 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // valer sem a marca do lado — por isso não entra solto na lista de cima.
   [/\bhonda\b.{0,15}?\bcg\b/, 'moto'],
   [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro|caminhonete|pickup)\b/, 'picape'],
-  [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[469]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
-  [/\b(sprinter|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo)\b/, 'utilitario'],
+  [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[4679]0|c ?40|ex ?[349]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
+  [/\b(sprinter[a-z]?|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo|mb ?180\s?d?)\b/, 'utilitario'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(31[0-5]|41[4-6]|51[5-7])\s?(cdi|spri|street|d\b)/, 'utilitario'],
 ];
 
 /**
@@ -919,7 +947,7 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
  * Medido em 13/10 sobre os 19.264 veículos do índice: 14 lotes.
  */
 const CAMINHAO_INEQUIVOCO =
-  /\bhyundai ?\/? ?hr\b|volvo.{0,8}\b(nl ?1[02]?|n12)\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b/;
+  /\bhyundai ?\/? ?hr\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak)\s?[-/]?\s?\d{3,4}\b|\b(atron|a[cç]{1,2}ello)\b/;
 /**
  * Código de caminhão da Volkswagen colado à marca, nos dois sentidos
  * ("12140 H - VOLKSWAGEN" e "VOLKSWAGEN 12.140"): a regra do `vw \d{2} \d{3}`
@@ -1009,14 +1037,21 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
-  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|actros|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mercedes ?mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
-  [/\bvolvo\b.{0,15}\b(vm|fh|fm) ?\d{2,3}\b/, 'caminhao'],
-  [/\b(onibus|microonibus|marcopolo|comil|neobus|caio)\b/, 'onibus'],
+  [/\b(scania|daf|man tg|agrale|atego|axor|accelo|a[cç]{1,2}ello|actros|atron|constellation|cargo|worker|vw ?\d{2} ?\d{3}|volkswagen \d{1,2} \d{3}[a-z]?|mercedes ?mb ?\d{4}|fh ?\d{3}|r440|p310|tector|bitrem|cavalo mecanico|hyundai\/?hr|hr ?hdb|h ?100)\b/, 'caminhao'],
+  // Caminhões Volvo nos dois sentidos (com ou sem espaço, com ou sem número)
+  [/\bvolvo\b.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b/, 'caminhao'],
+  // Códigos de chassi pesado Volvo com tração de eixo
+  [/\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b/, 'caminhao'],
+  [/\b(ls|lk|la|lak|lb|lks)\s?[-/]?\s?(312|[12]\d{3})\b|\bl\s?(312|[12]\d{3})\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\bls\b|\bls\b.{0,15}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
+  [/\b(onibus|micro ?onibus|marcopolo|comil|neobus|caio|mascarello|masc\b|gran ?mini|busscar|irizar|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4}|o[- ]?500|b58|b7r|b9r|b1[012][mr]?|b270f)\b/, 'onibus'],
   [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],
-  [/\b(sprinter|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia)\b/, 'utilitario'],
+  [/\b(sprinter[a-z]?|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|mb ?180\s?d?)\b/, 'utilitario'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(31[0-5]|41[4-6]|51[5-7])\s?(cdi|spri|street|d\b)/, 'utilitario'],
   // "2008" e "3008" só valem colados à marca: sozinhos casavam com ANO/MODELO
   // 2008 e transformaram 30 lotes (inclusive uma retroescavadeira) em SUV.
-  [/\b(peugeot[ /-]*[23]008|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|tucson|ix35|sw4|rav4|ecosport|asx|outlander|sportage|xc40|xc60|tiguan|taos|territory|commander|bronco|jimny|corolla cross)\b/, 'suv'],
+  [/\b(peugeot[ /-]*[23]008|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|tucson|ix35|sw4|rav4|ecosport|asx|outlander|sportage|xc ?[4679]0|c ?40|ex ?[349]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross)\b/, 'suv'],
   [/\b(reboque|semirreboque|semi ?reboque|carreta|randon|trailer)\b/, 'reboque'],
   [/\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|ensiladeiras?|motoniveladora|betoneira)\b/, 'maquina'],
   [/\b(lancha|barco|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao)\b/, 'nautico'],
