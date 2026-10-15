@@ -7,6 +7,7 @@ import { query } from '../core/db.js';
 import { collectionJobContext, observerForCollection } from '../application/services/collection/collection-observer.js';
 import { CollectionService, type CollectionExecutionDependencies, type CollectionExecutionOptions } from '../application/services/collection/collection-execution.js';
 import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
+import { JobOwnership } from '../infra/queue/job-ownership.js';
 import { CollectionCancellationError } from '../infra/collection/collection-cancellation.js';
 import { workerDeployment, boundedCollection } from './deployment.js';
 import {
@@ -19,7 +20,7 @@ import {
   tenantScheduleItems,
   tenantExecutionOptions,
 } from './tenant-coverage.js';
-import { CHANNEL_UPDATES, createTenantCollectQueue, makeRedis, QUEUE_COLLECT_TENANT, type CollectJob } from './runtime.js';
+import { CHANNEL_UPDATES, createTenantCollectQueue, makeRedis, REDIS_URL, QUEUE_COLLECT_TENANT, type CollectJob } from './runtime.js';
 
 export interface TenantWorkerJob extends Job<CollectJob> {
   token?: string;
@@ -31,6 +32,7 @@ export interface TenantProcessorDependencies {
   settings: ReturnType<typeof workerDeployment>;
   publish?: CollectionExecutionOptions['publish'];
   service?: CollectionService;
+  ownership?: JobOwnership;
 }
 
 export interface TenantProcessor {
@@ -43,9 +45,10 @@ export function createTenantProcessor(deps: TenantProcessorDependencies): Tenant
   const service = deps.service ?? new CollectionService(deps.execution);
   const controllers = new Map<string, AbortController>();
   const cancel = (jobIds: string[], kind: 'shutdown' | 'lock_lost' = 'lock_lost') => {
+    if (deps.ownership) return deps.ownership.cancel(jobIds, kind);
     for (const id of jobIds) controllers.get(id)?.abort(new CollectionCancellationError(kind));
   };
-  const cancelAll = () => cancel([...controllers.keys()], 'shutdown');
+  const cancelAll = () => deps.ownership ? deps.ownership.cancel(undefined, 'shutdown') : cancel([...controllers.keys()], 'shutdown');
 
   const process: Processor<CollectJob> = async (job, token, bullSignal) => {
     const { sourceId, tenant, limit, timeoutMs: requestedTimeout } = job.data ?? ({} as CollectJob);
@@ -65,8 +68,8 @@ export function createTenantProcessor(deps: TenantProcessorDependencies): Tenant
     const sourceTimeout = deps.settings.sourceTimeouts[sourceId] ?? TENANT_DEFAULT_TIMEOUT_MS;
     const finalTimeout = Math.min(TENANT_DEFAULT_TIMEOUT_MS, sourceTimeout, requestedTimeout ?? TENANT_DEFAULT_TIMEOUT_MS);
     const id = job.id ?? job.name;
-    const controller = new AbortController();
-    controllers.set(id, controller);
+    const controller = deps.ownership?.track(id) ?? new AbortController();
+    if (!deps.ownership) controllers.set(id, controller);
     const onBullAbort = () => controller.abort(new CollectionCancellationError('shutdown', 'tenant worker closing'));
     if (bullSignal?.aborted) onBullAbort();
     else bullSignal?.addEventListener('abort', onBullAbort, { once: true });
@@ -81,15 +84,17 @@ export function createTenantProcessor(deps: TenantProcessorDependencies): Tenant
         metadata: collectionJobContext(job, 'cron'),
         signal: controller.signal,
         checkEmptyHttpFailure: true,
-        authorizePersistence: () => {
+        authorizePersistence: async () => {
           if (!token) throw new CollectionCancellationError('lock_lost', `job ${id} has no lock token`);
+          await deps.ownership?.authorize(job, token);
         },
         publish: deps.publish,
       });
       return { runId: result.runId, fetched: result.result.fetched, upserted: result.upserted, skipped: result.result.skipped };
     } finally {
       bullSignal?.removeEventListener('abort', onBullAbort);
-      controllers.delete(id);
+      if (deps.ownership) deps.ownership.release(id, controller);
+      else if (controllers.get(id) === controller) controllers.delete(id);
     }
   };
   return { process, cancel, cancelAll };
@@ -109,6 +114,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
   const settings = workerDeployment();
   let processor: TenantProcessor | undefined;
   let context: CollectionContext | undefined;
+  let ownership: JobOwnership | undefined;
 
   const publish = async (payload: unknown) => {
     publisher ??= makeRedis();
@@ -130,6 +136,8 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
       if (stopped) throw new Error('tenant worker runtime already stopped');
       if (started) return;
       context = await createCollectionContext({ overrides: execution });
+      ownership = new JobOwnership(REDIS_URL);
+      await ownership.start();
       const readiness = coverageReadiness();
       console.log(`[tenant-worker] cobertura configurada=${readiness.configured}/${readiness.union}; pendentes=${readiness.pending.length}`);
       if (readiness.pending.length) console.warn(`[tenant-worker] pendentes: ${readiness.pending.map((item) => item.domain).join(', ')}`);
@@ -157,6 +165,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
       processor = createTenantProcessor({
         execution,
         service: context.service,
+        ownership,
         isSourceEnabled: async (sourceId) => {
           const rows = await query<{ enabled: boolean }>('SELECT enabled FROM sources WHERE id = $1', [sourceId]);
           return rows[0]?.enabled === true;
@@ -168,10 +177,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
       worker = new Worker<CollectJob>(QUEUE_COLLECT_TENANT, processor.process, { connection: workerConnection, concurrency: 2 });
       worker.on('failed', (job, error) => console.error(`[tenant-worker] ${job?.data.tenant ?? 'unknown'} failed: ${error.message}`));
       worker.on('error', (error) => console.error('[tenant-worker] worker:', error.message));
-      worker.on('lockRenewalFailed', (jobIds) => {
-        console.error(`[tenant-worker] lost locks: ${jobIds.join(' ')}`);
-        processor?.cancel(jobIds, 'lock_lost');
-      });
+      ownership.monitor(worker);
       started = true;
       console.log(`[tenant-worker] consuming ${QUEUE_COLLECT_TENANT} (concurrency=2; pairs=${tenantScheduleItems(enabled).length}/${readiness.union})`);
     },
@@ -187,6 +193,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
         ...(publisher ? [publisher.quit()] : []),
         ...(context ? [context.close()] : []),
       ]);
+      ownership?.close();
       workerConnection = undefined;
       publisher = undefined;
       started = false;

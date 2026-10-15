@@ -24,6 +24,8 @@ import {
   type CollectionMetadata,
 } from '../application/services/collection/collection-execution.js';
 import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
+import { JobOwnership } from '../infra/queue/job-ownership.js';
+import { REDIS_URL } from './runtime.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -119,13 +121,8 @@ export async function executeWorkerCollect(
   );
 }
 
-/** Coletas em andamento, por job: shutdown e perda de lock derrubam só o que está rodando. */
-const emAndamento = new Map<string, AbortController>();
-
-function cancelarEmAndamento(kind: 'shutdown' | 'lock_lost', jobIds?: string[], message?: string) {
-  const alvos = jobIds ? jobIds.filter((id) => emAndamento.has(id)) : [...emAndamento.keys()];
-  for (const id of alvos) emAndamento.get(id)!.abort(new CollectionCancellationError(kind, message));
-}
+let collectOwnership: JobOwnership | undefined;
+let refreshOwnership: JobOwnership | undefined;
 
 /** Freio ANTES da rede: sem isto, cada chamador teria que consultar por
  * conta própria e um deles esqueceria (ver [[freio]]). */
@@ -133,7 +130,7 @@ async function runCollect(
   sourceId: string,
   limit: number,
   metadata: CollectionMetadata = { origin: 'unknown' },
-  exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {},
+  exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob' | 'authorizePersistence'> = {},
   tenant?: string,
 ) {
   const operation = async () => {
@@ -176,10 +173,10 @@ async function runCollect(
  * volta como `failed` para o BullMQ. Repetir de dentro daqui criaria um segundo
  * run sem ninguém olhar o motivo (e `maxStartedAttempts` não existe em BullMQ).
  */
-const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
+const processarCollect: Processor<CollectJob> = async (job, token, sinal) => {
   const id = job.id ?? job.name;
-  const controller = new AbortController();
-  emAndamento.set(id, controller);
+  const ownership = collectOwnership!;
+  const controller = ownership.track(id);
   // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
   const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
   if (sinal) {
@@ -190,20 +187,21 @@ const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
     return await runCollect(job.data.sourceId, job.data.limit, collectionJobContext(job, 'cron'), {
       signal: controller.signal,
       queueJob: job,
+      authorizePersistence: () => ownership.authorize(job, token),
     }, job.data.tenant);
   } catch (err: any) {
     console.error(`[collect] ${job.data.sourceId} falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
   } finally {
     sinal?.removeEventListener('abort', fechando);
-    emAndamento.delete(id);
+    ownership.release(id, controller);
   }
 };
 
-const processarRefresh: Processor<RefreshJob> = async (job, _token, sinal) => {
+const processarRefresh: Processor<RefreshJob> = async (job, token, sinal) => {
   const id = job.id ?? job.name;
-  const controller = new AbortController();
-  emAndamento.set(id, controller);
+  const ownership = refreshOwnership!;
+  const controller = ownership.track(id);
   // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
   const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
   if (sinal) {
@@ -214,13 +212,14 @@ const processarRefresh: Processor<RefreshJob> = async (job, _token, sinal) => {
     return await runRefresh(collectionJobContext(job, 'refresh'), {
       signal: controller.signal,
       queueJob: job,
+      authorizePersistence: () => ownership.authorize(job, token),
     });
   } catch (err: any) {
     console.error(`[refresh] falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
   } finally {
     sinal?.removeEventListener('abort', fechando);
-    emAndamento.delete(id);
+    ownership.release(id, controller);
   }
 };
 
@@ -314,7 +313,7 @@ async function cicloAoVivo() {
   }
 }
 
-async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {}) {
+async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob' | 'authorizePersistence'> = {}) {
   const quentes = new Map<string, number>();
 
   // Timer por lote: limite pequeno basta, porque o conector dessas fontes
@@ -596,16 +595,17 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
     timers.push(t);
   };
 
-  const aoPerderLock = (jobIds: string[]) => {
-    console.error(`[collect] lock não renovado em ${jobIds.join(' ')} — cancelando a coleta antes do próximo passo`);
-    cancelarEmAndamento('lock_lost', jobIds, 'lockRenewalFailed');
-  };
-
   return {
     async start() {
       if (ligado) return;
       ligado = true;
       const context = await getCollectionContext();
+      collectOwnership = new JobOwnership(REDIS_URL);
+      await collectOwnership.start();
+      if (DEPLOY.refresh) {
+        refreshOwnership = new JobOwnership(REDIS_URL);
+        await refreshOwnership.start();
+      }
       if (AO_VIVO) periodico(cicloAoVivo, 15_000);
       if (DEPLOY.close) periodico(cicloDeEncerramento, 60_000);
       if (DEPLOY.verify) periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
@@ -622,15 +622,13 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       workers.push(
         new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: DEPLOY.concurrency })
           .on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message))
-          .on('error', (err) => console.error('[collect] worker:', err.message))
-          .on('lockRenewalFailed', aoPerderLock),
+          .on('error', (err) => console.error('[collect] worker:', err.message)),
         ...(DEPLOY.refresh ? [new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? processarRefresh, {
           connection: makeRedis(),
           concurrency: 1,
         })
           .on('failed', (_job, err) => console.error('[refresh] falhou:', err.message))
-          .on('error', (err) => console.error('[refresh] worker:', err.message))
-          .on('lockRenewalFailed', aoPerderLock)] : []),
+          .on('error', (err) => console.error('[refresh] worker:', err.message))] : []),
         ...(DEPLOY.discover ? [new Worker<DiscoverJob>(
           QUEUE_DISCOVER,
           deps.discover ?? (async (job) => {
@@ -643,6 +641,8 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
           .on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message))
           .on('error', (err) => console.error('[discover] worker:', err.message))] : []),
       );
+      collectOwnership.monitor(workers[0]);
+      if (refreshOwnership) refreshOwnership.monitor(workers[1]);
 
       await agendarTudo();
       if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect, context.service);
@@ -657,13 +657,17 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
     async stop() {
       if (!ligado) return;
       ligado = false;
-      cancelarEmAndamento('shutdown', undefined, 'worker encerrando');
+      collectOwnership?.cancel(undefined, 'shutdown');
+      refreshOwnership?.cancel(undefined, 'shutdown');
       for (const t of timers.splice(0)) clearInterval(t);
       const stopped = await Promise.allSettled([daily?.stop(), ...workers.splice(0).map((w) => w.close())]);
       await Promise.allSettled(cycles);
-      if (collectionContext) {
-        try { await (await collectionContext).close(); }
-        finally { collectionContext = undefined; }
+      try {
+        if (collectionContext) await (await collectionContext).close();
+      } finally {
+        collectionContext = undefined;
+        collectOwnership?.close(); refreshOwnership?.close();
+        collectOwnership = undefined; refreshOwnership = undefined;
       }
       const failure = stopped.find(result => result.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
