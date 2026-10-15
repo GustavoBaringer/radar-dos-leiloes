@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { idDoSlug, slugDoLote } from './core/slug.js';
-import { VENCIDO } from './core/encerramento.js';
+import { VENCIDO } from './infra/database/queries/lot-status.js';
 import { criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './infra/auth/session.js';
 import { documento, celularValido, emailValido } from './core/cadastro.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';

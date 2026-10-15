@@ -5,6 +5,7 @@ import { NotificationsModule } from '../notifications/notifications.module.js';
 import { POST_COLLECTION_EVALUATE, PostCollectionService } from '../../services/collection/post-collection.js';
 import { COLLECTION_DEPENDENCIES, CollectionService, type CollectionExecutionDependencies } from '../../services/collection/collection.service.js';
 import { DiscoveryModule, type DiscoveryModuleOptions } from '../discovery/discovery.module.js';
+import { ClosureModule, type ClosureModuleOptions } from '../closure/closure.module.js';
 
 export interface CollectionModuleOptions {
   /** Complete I/O substitute for isolated tests; does not initialize a database. */
@@ -12,17 +13,21 @@ export interface CollectionModuleOptions {
   overrides?: Partial<CollectionExecutionDependencies>;
   discovery?: boolean;
   discoveryDependencies?: DiscoveryModuleOptions['dependencies'];
+  closure?: boolean;
+  closureDependencies?: ClosureModuleOptions['dependencies'];
 }
 
 @Module({})
 export class CollectionModule {
   static forRoot(options: CollectionModuleOptions = {}): DynamicModule {
     const includeDiscovery = Boolean(options.discoveryDependencies || (options.discovery && !options.dependencies));
+    const includeClosure = Boolean(options.closureDependencies || (options.closure && !options.dependencies));
     return {
       module: CollectionModule,
       imports: [
         ...(options.dependencies ? [] : [DatabaseModule, NotificationsModule.forRoot()]),
         ...(includeDiscovery ? [DiscoveryModule.forRoot({ database: false, dependencies: options.discoveryDependencies })] : []),
+        ...(includeClosure ? [ClosureModule.forRoot({ database: false, dependencies: options.closureDependencies })] : []),
       ],
       providers: [
         ...(options.dependencies ? [] : [
@@ -50,7 +55,7 @@ export class CollectionModule {
         },
         CollectionService,
       ],
-      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : [])],
+      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : []), ...(includeClosure ? [ClosureModule] : [])],
     };
   }
 }

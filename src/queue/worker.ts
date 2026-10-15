@@ -7,7 +7,6 @@ import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
-import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
 import { observerForCollection } from '../application/services/collection/collection-observer.js';
 import { collectionJobContext } from '../infra/queue/collection-job-context.js';
@@ -34,7 +33,9 @@ import {
 let publisher: ReturnType<typeof makeRedis> | undefined;
 const getPublisher = () => publisher ??= makeRedis();
 let collectionContext: Promise<CollectionContext> | undefined;
-const getCollectionContext = () => collectionContext ??= createCollectionContext({ overrides: createWorkerDeps(), discovery: DEPLOY.discover });
+const getCollectionContext = () => collectionContext ??= createCollectionContext({
+  overrides: createWorkerDeps(), discovery: DEPLOY.discover, closure: DEPLOY.close || DEPLOY.verify,
+});
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
 for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
@@ -411,7 +412,7 @@ async function cicloDeEncerramento() {
   if (travado) return;
   travado = true;
   try {
-    const r = await encerrarLotes();
+    const r = await (await getCollectionContext()).closure!.encerrarLotes();
     const total = r.porPrazo + r.porAusencia;
     if (total) {
       console.log(`[encerrar] prazo: ${r.porPrazo} · ausente na fonte: ${r.porAusencia}`);
@@ -443,7 +444,7 @@ async function cicloDeVerificacao() {
   if (verificando) return;
   verificando = true;
   try {
-    const r = await verificarCandidatos(DEPLOY.verifyLimit);
+    const r = await (await getCollectionContext()).closure!.verificarCandidatos(DEPLOY.verifyLimit);
     if (r.verificados) {
       console.log(
         `[verificar] ${r.verificados} conferidos na origem: ${r.encerrados} encerrados, ` +

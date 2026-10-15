@@ -19,7 +19,7 @@
  * outras duas sem verificar nada.
  */
 import { spawnSync } from 'node:child_process';
-import { VERIFICADORES } from '../src/core/verificacao.ts';
+import { VERIFICADORES } from '../src/infra/verification/verifiers.ts';
 
 const sql = (q) =>
   spawnSync('docker', ['exec', 'leilao-db', 'psql', '-U', 'leilao', '-d', 'leilao', '-t', '-A', '-c', q], {
