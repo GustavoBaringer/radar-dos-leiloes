@@ -7,7 +7,6 @@ import { LEITORES, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
-import { consultaFreio } from '../core/freio.js';
 import { observerForCollection } from '../application/services/collection/collection-observer.js';
 import { collectionJobContext } from '../infra/queue/collection-job-context.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
@@ -34,7 +33,7 @@ let publisher: ReturnType<typeof makeRedis> | undefined;
 const getPublisher = () => publisher ??= makeRedis();
 let collectionContext: Promise<CollectionContext> | undefined;
 const getCollectionContext = () => collectionContext ??= createCollectionContext({
-  overrides: createWorkerDeps(), discovery: DEPLOY.discover, closure: DEPLOY.close || DEPLOY.verify,
+  overrides: createWorkerDeps(), discovery: DEPLOY.discover, closure: DEPLOY.close || DEPLOY.verify, brake: true,
   liveBidsDependencies: {
     lotesQuentes, leitores: LEITORES, registrarLeituraAoVivo,
     publicar: (payload) => getPublisher().publish(CHANNEL_UPDATES, payload),
@@ -149,7 +148,7 @@ async function runCollect(
     const connector = getConnector(sourceId);
     const bounded = boundedCollection(DEPLOY, sourceId, connector?.def.method ?? 'html', limit);
     limit = bounded.limit;
-    const freio = tenant === undefined ? await consultaFreio(sourceId) : { permite: true, seguidas: 0, motivo: 'normal' as const };
+    const freio = tenant === undefined ? await (await getCollectionContext()).brake!.consultaFreio(sourceId) : { permite: true, seguidas: 0, motivo: 'normal' as const };
     if (!freio.permite) {
       console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
       return { fetched: 0, upserted: 0, skipped: 0, freado: true };

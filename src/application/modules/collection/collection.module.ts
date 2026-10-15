@@ -8,6 +8,8 @@ import { DiscoveryModule, type DiscoveryModuleOptions } from '../discovery/disco
 import { ClosureModule, type ClosureModuleOptions } from '../closure/closure.module.js';
 import { LiveBidsModule } from '../live-bids/live-bids.module.js';
 import type { LiveBidsDependencies } from '../../services/live-bids/live-bids.service.js';
+import { CollectionBrakeModule } from '../collection-brake/collection-brake.module.js';
+import type { CollectionBrakeDependencies } from '../../services/collection/collection-brake.service.js';
 
 export interface CollectionModuleOptions {
   /** Complete I/O substitute for isolated tests; does not initialize a database. */
@@ -18,6 +20,8 @@ export interface CollectionModuleOptions {
   closure?: boolean;
   closureDependencies?: ClosureModuleOptions['dependencies'];
   liveBidsDependencies?: LiveBidsDependencies;
+  brake?: boolean;
+  brakeDependencies?: CollectionBrakeDependencies;
 }
 
 @Module({})
@@ -25,6 +29,7 @@ export class CollectionModule {
   static forRoot(options: CollectionModuleOptions = {}): DynamicModule {
     const includeDiscovery = Boolean(options.discoveryDependencies || (options.discovery && !options.dependencies));
     const includeClosure = Boolean(options.closureDependencies || (options.closure && !options.dependencies));
+    const includeBrake = Boolean(options.brakeDependencies || (options.brake && !options.dependencies));
     return {
       module: CollectionModule,
       imports: [
@@ -32,6 +37,7 @@ export class CollectionModule {
         ...(includeDiscovery ? [DiscoveryModule.forRoot({ database: false, dependencies: options.discoveryDependencies })] : []),
         ...(includeClosure ? [ClosureModule.forRoot({ database: false, dependencies: options.closureDependencies })] : []),
         ...(options.liveBidsDependencies ? [LiveBidsModule.forRoot(options.liveBidsDependencies)] : []),
+        ...(includeBrake ? [CollectionBrakeModule.forRoot(options.brakeDependencies)] : []),
       ],
       providers: [
         ...(options.dependencies ? [] : [
@@ -59,7 +65,7 @@ export class CollectionModule {
         },
         CollectionService,
       ],
-      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : []), ...(includeClosure ? [ClosureModule] : []), ...(options.liveBidsDependencies ? [LiveBidsModule] : [])],
+      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : []), ...(includeClosure ? [ClosureModule] : []), ...(options.liveBidsDependencies ? [LiveBidsModule] : []), ...(includeBrake ? [CollectionBrakeModule] : [])],
     };
   }
 }
