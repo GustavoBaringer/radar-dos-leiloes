@@ -39,9 +39,9 @@ if (runAt < 0 && !schedule) {
   const { pool, query } = await import('../src/core/db.js');
   const { getConnector } = await import('../src/connectors/index.js');
   const { startRun, finishRun, upsertLots } = await import('../src/core/repo.js');
-  const { processarAposColeta } = await import('../src/core/pos-coleta.js');
-  const { observerForCollection } = await import('../src/core/collection-observer.js');
-  const { executeCollection } = await import('../src/core/collection-execution.js');
+  const { processarAposColeta } = await import('../src/application/services/collection/post-collection.js');
+  const { observerForCollection } = await import('../src/application/services/collection/collection-observer.js');
+  const { executeCollection } = await import('../src/application/services/collection/collection-execution.js');
   const { tenantExecutionOptions } = await import('../src/queue/tenant-coverage.js');
   const deployment = workerDeployment();
   let pub: ReturnType<typeof makeRedis> | undefined;

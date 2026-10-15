@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { executeCollection, type CollectionExecutionDependencies } from '../src/core/collection-execution.js';
-import { observerForCollection } from '../src/core/collection-observer.js';
+import { executeCollection, type CollectionExecutionDependencies } from '../src/application/services/collection/collection-execution.js';
+import { observerForCollection } from '../src/application/services/collection/collection-observer.js';
 import { assertTenantSourceIsEnabled, tenantExecutionOptions } from '../src/queue/tenant-coverage.js';
 
 let started: Array<[string, string, number]> = [];

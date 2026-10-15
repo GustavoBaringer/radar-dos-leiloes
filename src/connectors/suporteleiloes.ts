@@ -20,7 +20,7 @@ import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller } from '../core/normalize.js';
 import { eventoEncerrado, eventosAtivos, eventNextPages, ofertaLinks, parseSuporteOferta, parseSuporteDetalhe } from './suporte-oferta.js';
 import type { TenantAttempt } from '../core/tenant-attempts.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 /** 1 = Veículos, 2 = Imóveis. Confirmado idêntico em 6 tenants. */

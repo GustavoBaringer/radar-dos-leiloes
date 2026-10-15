@@ -7,7 +7,7 @@ import {
   collectionSignal,
   throwIfCancelled,
   withCollectionCancellation,
-} from '../src/core/collection-cancellation.js';
+} from '../src/infra/collection/collection-cancellation.js';
 import { fetchText } from '../src/connectors/http.js';
 import { comNavegador, getJsonViaNavegador } from '../src/connectors/navegador.js';
 import { createTenantObserver } from '../src/core/tenant-attempts.js';

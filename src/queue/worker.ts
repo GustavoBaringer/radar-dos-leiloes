@@ -4,25 +4,25 @@ import { Worker, type Job, type Processor, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources, registrarLeituraAoVivo } from '../core/repo.js';
 import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
-import { processarAposColeta } from '../core/pos-coleta.js';
+import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
 import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
-import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
+import { collectionJobContext, observerForCollection } from '../application/services/collection/collection-observer.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
 import { refreshBatch } from './refresh-batch.js';
 import { createDailyWorkerRuntime } from './daily-worker.js';
 import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
-import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfAborted } from '../infra/collection/collection-cancellation.js';
 import {
   executeCollection,
   type CollectionExecutionDependencies,
   type CollectionExecutionOptions,
   type CollectionExecutionResult,
   type CollectionMetadata,
-} from '../core/collection-execution.js';
+} from '../application/services/collection/collection-execution.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,

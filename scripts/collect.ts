@@ -1,11 +1,11 @@
 import { pool } from '../src/core/db.js';
 import { connectors, getConnector } from '../src/connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources } from '../src/core/repo.js';
-import { processarAposColeta } from '../src/core/pos-coleta.js';
+import { processarAposColeta } from '../src/application/services/collection/post-collection.js';
 import { makeRedis, CHANNEL_UPDATES } from '../src/queue/runtime.js';
-import { observerForCollection } from '../src/core/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies } from '../src/core/collection-execution.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import { observerForCollection } from '../src/application/services/collection/collection-observer.js';
+import { executeCollection, type CollectionExecutionDependencies } from '../src/application/services/collection/collection-execution.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 
 const only = process.argv[2];
 const limit = Number(process.argv[3] ?? 400);

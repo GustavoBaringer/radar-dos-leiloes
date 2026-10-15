@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as cheerio from 'cheerio';
 import { collectLeiloar, collectNasar, nasarDate, nasarLocal, parseNasarCards } from '../src/connectors/leiloar.js';
 import { classifyAsset } from '../src/core/normalize.js';
-import { withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import { withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 const dir = new URL('../fixtures/leiloar/nasar/', import.meta.url);
 const load = async (id: number) => {

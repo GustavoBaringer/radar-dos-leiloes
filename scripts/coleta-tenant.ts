@@ -1,8 +1,8 @@
 import { pool, query } from '../src/core/db.js';
 import { getConnector } from '../src/connectors/index.js';
 import { startRun, finishRun, upsertLots } from '../src/core/repo.js';
-import { observerForCollection } from '../src/core/collection-observer.js';
-import { executeCollection, type CollectionExecutionResult } from '../src/core/collection-execution.js';
+import { observerForCollection } from '../src/application/services/collection/collection-observer.js';
+import { executeCollection, type CollectionExecutionResult } from '../src/application/services/collection/collection-execution.js';
 import { classifyAsset, looksLikeCollectible } from '../src/core/normalize.js';
 import { guardTenantLots, normalizeHost, normalizeLotUrl } from './coleta-tenant-audit.js';
 

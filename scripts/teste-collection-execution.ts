@@ -5,8 +5,8 @@ import {
   type CollectionExecutionDependencies,
   type CollectionExecutionOptions,
   type CollectionRunData,
-} from '../src/core/collection-execution.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+} from '../src/application/services/collection/collection-execution.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 import type { Connector, CollectResult } from '../src/connectors/types.js';
 import type { UpsertOutcome } from '../src/core/repo.js';
 

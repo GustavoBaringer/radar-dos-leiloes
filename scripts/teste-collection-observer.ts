@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { collectionJobContext, observerForCollection } from '../src/core/collection-observer.js';
+import { collectionJobContext, observerForCollection } from '../src/application/services/collection/collection-observer.js';
 
 function fake() {
   const calls: Array<{ sql: string; params?: any[] }> = [];

@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { createWorkerDeps, executeWorkerCollect, runRefreshSources, type WorkerCollectOptions } from '../src/queue/worker.js';
 import { collectQueue, refreshQueue, discoverQueue } from '../src/queue/queues.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 import type {
   CollectionExecutionDependencies,
   CollectionRunData,
-} from '../src/core/collection-execution.js';
+} from '../src/application/services/collection/collection-execution.js';
 import type { Connector, CollectResult } from '../src/connectors/types.js';
 import type { UpsertOutcome } from '../src/core/repo.js';
 

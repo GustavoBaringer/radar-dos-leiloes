@@ -6,7 +6,7 @@ import * as campos from '../core/campos.js';
 import { parseTitle, classifyAsset, classifyProperty, classifySeller, looksLikeCollectible, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 /**
  * Plataforma white-label SOLEON: um conector para N leiloeiros.

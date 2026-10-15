@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { refreshBatch } from '../src/queue/refresh-batch.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 import { boundedCollection, workerDeployment } from '../src/queue/deployment.js';
 
 test('one failing source does not starve the remaining refresh sources',async()=>{

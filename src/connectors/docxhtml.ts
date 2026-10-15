@@ -3,7 +3,7 @@ import { fetchJson, fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, classifyAsset, fold } from '../core/normalize.js';
-import { throwIfCancelled } from '../core/collection-cancellation.js';
+import { throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 import * as campos from '../core/campos.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';

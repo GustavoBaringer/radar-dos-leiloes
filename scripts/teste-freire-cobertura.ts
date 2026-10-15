@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { collectLeiloesFreire, leiloesfreire, lerCards, mapearLote, normalizarTenantFreire, relancarCancelamento, statusDe } from '../src/connectors/leiloesfreire.js';
-import { CollectionCancellationError, withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError, withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 const article = (id: number, title: string, status: string, price: string, image = '/retro.jpg') => `
 <article class="single_product">

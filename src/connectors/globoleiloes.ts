@@ -3,7 +3,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { classifySeller } from '../core/normalize.js';
-import { CollectionCancellationError, combinedSignal } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, combinedSignal } from '../infra/collection/collection-cancellation.js';
 
 const HOST = 'https://globoleiloes.com.br';
 // Mesmo objeto no CDN vive em DUAS árvores e só uma delas responde 200: os lotes

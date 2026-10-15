@@ -4,7 +4,7 @@ import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { classifyAsset, classifyProperty, parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const HOST = 'https://www.leiloesfreire.com.br';
 const DOMAIN = 'leiloesfreire.com.br';

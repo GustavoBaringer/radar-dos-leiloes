@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright-core';
-import { combinedSignal, erroDeCancelamento, throwIfAborted } from '../core/collection-cancellation.js';
+import { combinedSignal, erroDeCancelamento, throwIfAborted } from '../infra/collection/collection-cancellation.js';
 
 /**
  * superbid (Cloudflare) e caixa (Radware/ShieldSquare) exigem um navegador de

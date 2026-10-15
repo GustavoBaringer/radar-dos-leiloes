@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { collectSoleon } from '../src/connectors/soleon.js';
-import { withCollectionCancellation, CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import { withCollectionCancellation, CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 import type { query } from '../src/core/db.js';
 
 const originalDomains = process.env.SOLEON_DOMAINS;

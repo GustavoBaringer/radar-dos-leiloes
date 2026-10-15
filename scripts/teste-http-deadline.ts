@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer, type RequestListener, type Server } from 'node:http';
 import test from 'node:test';
 import { fetchText } from '../src/connectors/http.js';
-import { CollectionCancellationError, withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError, withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 function signal() {
   let resolve!: () => void;

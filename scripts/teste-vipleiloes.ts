@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { collectVipLeiloes } from '../src/connectors/vipleiloes.js';
-import { CollectionCancellationError, withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError, withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 function attemptTracker() {
   const attempts: Array<{ domain: string; responses: number[]; failures: string[]; stats?: any }> = [];

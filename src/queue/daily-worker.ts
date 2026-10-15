@@ -4,10 +4,10 @@ import { getConnector } from '../connectors/index.js';
 import { fetchText } from '../connectors/http.js';
 import { query } from '../core/db.js';
 import { finishRun, startRun, upsertLots } from '../core/repo.js';
-import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies } from '../core/collection-execution.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
-import { processarAposColeta } from '../core/pos-coleta.js';
+import { collectionJobContext, observerForCollection } from '../application/services/collection/collection-observer.js';
+import { executeCollection, type CollectionExecutionDependencies } from '../application/services/collection/collection-execution.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
+import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { DAILY_SITES, dailySite, dailyScheduleItems } from './daily-coverage.js';
 import { makeRedis, type CollectJob } from './runtime.js';
 

@@ -2,11 +2,11 @@ import { pathToFileURL } from 'node:url';
 import { Worker, type Job, type Processor } from 'bullmq';
 import { getConnector } from '../connectors/index.js';
 import { finishRun, startRun, upsertLots } from '../core/repo.js';
-import { processarAposColeta } from '../core/pos-coleta.js';
+import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { query, pool } from '../core/db.js';
-import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies, type CollectionExecutionOptions } from '../core/collection-execution.js';
-import { CollectionCancellationError } from '../core/collection-cancellation.js';
+import { collectionJobContext, observerForCollection } from '../application/services/collection/collection-observer.js';
+import { executeCollection, type CollectionExecutionDependencies, type CollectionExecutionOptions } from '../application/services/collection/collection-execution.js';
+import { CollectionCancellationError } from '../infra/collection/collection-cancellation.js';
 import { workerDeployment, boundedCollection } from './deployment.js';
 import {
   assertTenantCoveragePair,
