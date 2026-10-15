@@ -1,4 +1,5 @@
-import { createTenantObserver, type TenantObserver, type TenantObserverContext } from '../../../core/tenant-attempts.js';
+import { createTenantObserver } from './tenant-observer.js';
+import type { TenantObserver, TenantObserverContext } from '../../../domain/collection/tenant-attempts.js';
 
 type Execute = (sql: string, params?: any[]) => Promise<any[]>;
 
@@ -11,12 +12,4 @@ export function observerForCollection(
   return execute ? createTenantObserver(context, execute) : createTenantObserver(context);
 }
 
-export function collectionJobContext(job: { id?: string } | undefined, origin: 'cron' | 'refresh') {
-  const jobId = job?.id;
-  const match = jobId?.match(/^repeat:.*:(\d{13})$/);
-  const timestamp = match ? Number(match[1]) : NaN;
-  const scheduledAt = Number.isSafeInteger(timestamp) && Number.isFinite(new Date(timestamp).getTime())
-    ? new Date(timestamp)
-    : undefined;
-  return { origin, ...(jobId ? { jobId } : {}), ...(scheduledAt ? { scheduledAt } : {}) };
-}
+export { collectionJobContext } from '../../../infra/queue/collection-job-context.js';

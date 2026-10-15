@@ -257,7 +257,7 @@ async function lotesJaConhecidos(lookup: typeof query = query): Promise<Map<stri
   return new Map(rows.map((r) => [r.external_id, { auctioneerName: r.auctioneer_name, auctionStartUtc: r.auction_start_utc }]));
 }
 
-async function lerDetalhe(url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch: typeof fetchText = fetchText): Promise<{ leiloeiro: string | null; auctionStartUtc: Date | null; failure?: string }> {
+async function lerDetalhe(url: string, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt, fetch: typeof fetchText = fetchText): Promise<{ leiloeiro: string | null; auctionStartUtc: Date | null; failure?: string }> {
   try {
     const r = await fetch(url, { gapMs: 1100, timeoutMs: 30000 });
     observer?.response(r.status);

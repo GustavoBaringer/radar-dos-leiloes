@@ -61,7 +61,7 @@ async function tenants(limite: number, tenant?: string): Promise<string[]> {
  * Cache por leilão: 589 lotes se agrupam em 199 eventos, então é ~1 requisição
  * a cada 3 lotes, não 1 por lote.
  */
-async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | null>, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<string | null> {
+async function leiloeiroDoLeilao(urlLote: string, cache: Map<string, string | null>, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt): Promise<string | null> {
   const slug = /\/leilao\/([^/]+)\/lote_id\//.exec(urlLote)?.[1];
   if (!slug) return null;
   const chave = `${new URL(urlLote).host}:${slug}`;

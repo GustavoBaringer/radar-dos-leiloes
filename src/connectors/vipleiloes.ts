@@ -4,7 +4,7 @@ import type { FetchOpts, FetchResult } from './http.js';
 import type { CanonicalLot } from '../core/types.js';
 import { classifyAsset, classifyProperty, looksLikeCollectible, looksLikePart, parseTitle } from '../core/normalize.js';
 import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
-import type { TenantAttempt } from '../core/tenant-attempts.js';
+import type { TenantAttempt } from '../domain/collection/tenant-attempts.js';
 import type { Connector, CollectOptions, CollectResult } from './types.js';
 
 /** População revisada deste conector: só estes domínios podem ser coletados. */

@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Connector, CollectResult } from '../../../connectors/types.js';
 import type { UpsertOutcome } from '../../../core/repo.js';
-import type { TenantObserverContext } from '../../../core/tenant-attempts.js';
-import type { TenantObserver } from '../../../core/tenant-attempts.js';
+import type { TenantObserverContext } from '../../../domain/collection/tenant-attempts.js';
+import type { TenantObserver } from '../../../domain/collection/tenant-attempts.js';
 import { guaranteedTenantObserver } from './guaranteed-tenant-observer.js';
 import type { PersistenceControl } from '../../../domain/collection/persistence-control.js';
 import {

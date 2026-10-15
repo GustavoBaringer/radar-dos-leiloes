@@ -1,5 +1,5 @@
 import type { CanonicalLot, SourceDef } from '../core/types.js';
-import type { TenantObserver } from '../core/tenant-attempts.js';
+import type { TenantObserver } from '../domain/collection/tenant-attempts.js';
 
 export interface CollectResult {
   lots: CanonicalLot[];

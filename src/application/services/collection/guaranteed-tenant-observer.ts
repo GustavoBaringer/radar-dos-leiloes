@@ -1,4 +1,4 @@
-import type { TenantAttempt, TenantObserver } from '../../../core/tenant-attempts.js';
+import type { TenantAttempt, TenantObserver } from '../../../domain/collection/tenant-attempts.js';
 
 /** Open before population selection, close after persistence, even if the adapter never starts. */
 export async function guaranteedTenantObserver(observer: TenantObserver, domain: string) {

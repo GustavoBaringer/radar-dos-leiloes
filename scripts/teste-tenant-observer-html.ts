@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Agent, MockAgent } from 'undici';
 import { pool } from '../src/core/db.js';
-import { createTenantObserver } from '../src/core/tenant-attempts.js';
+import { createTenantObserver } from '../src/application/services/collection/tenant-observer.js';
 import { soleon } from '../src/connectors/soleon.js';
 import { leilaopro } from '../src/connectors/leilaopro.js';
 import { leilotech } from '../src/connectors/leilotech.js';
