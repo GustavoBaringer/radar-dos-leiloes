@@ -1,6 +1,6 @@
-/** Casca de linha de comando: a rotina mora em src/core/descoberta.ts e também roda pela fila. */
-import { pool } from '../src/core/db.js';
-import { rodarDescoberta } from '../src/core/descoberta.js';
+/** Casca de linha de comando: rotina e worker compartilham DiscoveryService. */
+import { createDiscoveryContext } from '../src/bootstrap/discovery-context.js';
 
-console.log(await rodarDescoberta('fenaju'));
-await pool.end();
+const context = await createDiscoveryContext();
+try { console.log(await context.service.rodarDescoberta('fenaju')); }
+finally { await context.close(); }

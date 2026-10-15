@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 
 // A função não é exportada; o teste avalia o módulo com um shim mínimo para não
 // obrigar a mudar a fronteira do arquivo só por causa do teste.
-const src = readFileSync('src/core/descoberta.ts', 'utf8');
+const src = readFileSync('src/domain/discovery/discovery.ts', 'utf8');
 const corpo = /function host\(v\?: string \| null\): string \| null \{[\s\S]*?\n\}/.exec(src)[0]
   .replace(/: string \| null/g, '').replace(/v\?/, 'v');
 const host = new Function(`${corpo}; return host;`)();

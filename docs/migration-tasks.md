@@ -47,3 +47,5 @@ Plano vinculado ao [ADR](adr/ADR-001-nest-prisma.md) e ao [PRD](prd/PRD-nest-pri
 | Coleta CLI/worker + Redis real | contagens lidos/mapeados/gravados/descartados, ownership/lock BullMQ, autorização e cancelamento | Fases 5 e 6 |
 
 Não há métricas de produção nem cutover. Execução somente loopback; nunca direcionar teste/migration a produção nem iniciar túnel/publicação. Nest nativo registra `/api/brands` no controller de catálogo; não montar `pilotBrandsModule` em paralelo. Fase 5 aguarda guarda/cancelamento, executor compartilhado e realocação de imports core; fase 6 aguarda browser smoke, cutover e rollback.
+
+Recorte concluído sem fechar a fase: descoberta foi separada em domínio puro, adapter HTTP/repositório Prisma e `DiscoveryService` Nest; worker headless e CLIs usam o serviço, com shim `core/descoberta.ts` para compatibilidade. Testes unitários/fakes e fixture PostgreSQL real passaram; isso não conclui M5.1/M5.2 nem a etapa 1 do plano de migração.

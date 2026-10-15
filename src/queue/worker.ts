@@ -7,7 +7,6 @@ import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
 import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
-import { rodarDescoberta } from '../core/descoberta.js';
 import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
 import { consultaFreio } from '../core/freio.js';
 import { observerForCollection } from '../application/services/collection/collection-observer.js';
@@ -35,7 +34,7 @@ import {
 let publisher: ReturnType<typeof makeRedis> | undefined;
 const getPublisher = () => publisher ??= makeRedis();
 let collectionContext: Promise<CollectionContext> | undefined;
-const getCollectionContext = () => collectionContext ??= createCollectionContext({ overrides: createWorkerDeps() });
+const getCollectionContext = () => collectionContext ??= createCollectionContext({ overrides: createWorkerDeps(), discovery: DEPLOY.discover });
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
 for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
@@ -633,7 +632,8 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
         ...(DEPLOY.discover ? [new Worker<DiscoverJob>(
           QUEUE_DISCOVER,
           deps.discover ?? (async (job) => {
-            const r = await rodarDescoberta(job.data.qual, Math.min(job.data.limite ?? DEPLOY.discoveryLimit, DEPLOY.discoveryLimit), DEPLOY.discoveryConcurrency);
+            const discovery = (await getCollectionContext()).discovery!;
+            const r = await discovery.rodarDescoberta(job.data.qual, Math.min(job.data.limite ?? DEPLOY.discoveryLimit, DEPLOY.discoveryLimit), DEPLOY.discoveryConcurrency);
             console.log(`[discover] ${job.data.qual}:`, r);
             return r;
           }),

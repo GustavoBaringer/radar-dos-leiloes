@@ -4,19 +4,26 @@ import { avaliarAlertas } from '../../../infra/database/repositories/alerts.repo
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { POST_COLLECTION_EVALUATE, PostCollectionService } from '../../services/collection/post-collection.js';
 import { COLLECTION_DEPENDENCIES, CollectionService, type CollectionExecutionDependencies } from '../../services/collection/collection.service.js';
+import { DiscoveryModule, type DiscoveryModuleOptions } from '../discovery/discovery.module.js';
 
 export interface CollectionModuleOptions {
   /** Complete I/O substitute for isolated tests; does not initialize a database. */
   dependencies?: CollectionExecutionDependencies;
   overrides?: Partial<CollectionExecutionDependencies>;
+  discovery?: boolean;
+  discoveryDependencies?: DiscoveryModuleOptions['dependencies'];
 }
 
 @Module({})
 export class CollectionModule {
   static forRoot(options: CollectionModuleOptions = {}): DynamicModule {
+    const includeDiscovery = Boolean(options.discoveryDependencies || (options.discovery && !options.dependencies));
     return {
       module: CollectionModule,
-      imports: options.dependencies ? [] : [DatabaseModule, NotificationsModule.forRoot()],
+      imports: [
+        ...(options.dependencies ? [] : [DatabaseModule, NotificationsModule.forRoot()]),
+        ...(includeDiscovery ? [DiscoveryModule.forRoot({ database: false, dependencies: options.discoveryDependencies })] : []),
+      ],
       providers: [
         ...(options.dependencies ? [] : [
           { provide: POST_COLLECTION_EVALUATE, useValue: avaliarAlertas },
@@ -43,7 +50,7 @@ export class CollectionModule {
         },
         CollectionService,
       ],
-      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService])],
+      exports: [CollectionService, ...(options.dependencies ? [] : [PostCollectionService]), ...(includeDiscovery ? [DiscoveryModule] : [])],
     };
   }
 }

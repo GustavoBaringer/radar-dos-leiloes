@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { pool } from '../src/core/db.js';
-import { acumulaSiteFenaju, requirePersistedFenaju, UPSERT_AUCTIONEER_FENAJU_SQL } from '../src/core/descoberta.js';
+import { acumulaSiteFenaju, requirePersistedFenaju } from '../src/domain/discovery/discovery.js';
+import { UPSERT_AUCTIONEER_FENAJU_SQL } from '../src/infra/discovery/discovery.repository.js';
 import { generateConditionalRollbackSql, TARGETS } from './reconciliar-dominios-fenaju.js';
 
 const fixture = `

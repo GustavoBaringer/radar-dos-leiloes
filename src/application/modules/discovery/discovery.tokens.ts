@@ -1,0 +1,2 @@
+export const DISCOVERY_REPOSITORY = Symbol('DISCOVERY_REPOSITORY');
+export const DISCOVERY_HTTP = Symbol('DISCOVERY_HTTP');
