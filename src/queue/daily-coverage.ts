@@ -857,7 +857,22 @@ export const DAILY_SITES: readonly DailySite[] = [
   { "domain": "ricardocorrealeiloes.com.br", "sourceId": "msis", "required120": false },
   { "domain": "sergiorepresasleiloes.com.br", "sourceId": "msis", "required120": false },
   { "domain": "tostesleiloeiro.com.br", "sourceId": "msis", "required120": false },
-  { "domain": "viannaleiloes.com.br", "sourceId": "msis", "required120": false }
+  { "domain": "viannaleiloes.com.br", "sourceId": "msis", "required120": false },
+  { "domain": "alfaleiloes.com", "sourceId": "alfaleiloes", "required120": false },
+  { "domain": "centraldosleiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "clicleiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "cravoleiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "danielgarcialeiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "eustacio.com.br", "sourceId": "htmlagenda", "required120": false },
+  { "domain": "falleirosleiloes.com.br", "sourceId": "suaplataforma", "required120": false },
+  { "domain": "fernandoleiloeiro.com.br", "sourceId": "vlance", "required120": false },
+  { "domain": "franciscofreitasleiloes.com.br", "sourceId": "vlance", "required120": false },
+  { "domain": "guariglialeiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "hastaleiloes.com.br", "sourceId": "soleon", "required120": false },
+  { "domain": "hatoryleiloes.com.br", "sourceId": "leiloar", "required120": false },
+  { "domain": "jussiaraleiloes.com", "sourceId": "leiloar", "required120": false },
+  { "domain": "leiloesjudiciaisbahia.com.br", "sourceId": "vlance", "required120": false },
+  { "domain": "lucasleiloeiro.com.br", "sourceId": "vlance", "required120": false }
 ];
 
 export function dailySite(domain: string): DailySite {
