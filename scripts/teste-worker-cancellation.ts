@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { createWorkerDeps, executeWorkerCollect, runRefreshSources, type WorkerCollectOptions } from '../src/queue/worker.js';
 import { collectQueue, refreshQueue, discoverQueue } from '../src/queue/queues.js';
-import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
+import { CollectionCancellationError, throwIfAborted } from '../src/infra/collection/collection-cancellation.js';
 import type {
   CollectionExecutionDependencies,
   CollectionRunData,
@@ -77,10 +77,15 @@ function montarDeps(opcoes: {
         return 7;
       },
       finishRun: async (_runId, data) => { cenario.finishChamadas.push(data); },
-      upsertLots: async (lots) => {
+      upsertLots: async (lots, control) => {
+        throwIfAborted(control?.signal);
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
         cenario.upsertChamadas++;
-        if (opcoes.upsert) return opcoes.upsert(lots);
-        return { upserted: lots.length, novos: [], bidChanges: [] };
+        const outcome = opcoes.upsert ? await opcoes.upsert(lots) : { upserted: lots.length, novos: [], bidChanges: [] };
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
+        return outcome;
       },
       observerForCollection: () => undefined,
       processarAposColeta: async () => {
@@ -185,7 +190,7 @@ test('lock perdido (lockRenewalFailed) aborta coleta nova: conector nem é chama
   assert.deepEqual(eventos, []);
 });
 
-test('job BullMQ sem token de lock: persistência barrada antes do upsert', async () => {
+test('job BullMQ sem token de lock: persistência barrada antes de escrever', async () => {
   const { eventos, publish } = gravador();
   const cenario = montarDeps({
     connector: fonte(async () => ({ lots: [lote], fetched: 1, skipped: 0 })),
@@ -224,7 +229,7 @@ test('job com token: persiste, fecha finish ok=true e publica bids/collect', asy
   assert.deepEqual(eventos, ['bids', 'collect'], 'ordem dos eventos do worker');
 });
 
-test('shutdown durante a persistência: upsert protegido termina ok e o evento sai', async () => {
+test('shutdown antes do commit: upsert falha e não publica evento', async () => {
   const { eventos, publish } = gravador();
   const upsertComecou = esperar();
   const liberarUpsert = esperar();
@@ -241,11 +246,12 @@ test('shutdown durante a persistência: upsert protegido termina ok e o evento s
   await upsertComecou.promise;
   controller.abort(new CollectionCancellationError('shutdown'));
   liberarUpsert.resolve();
-  const r = await execucao;
-  assert.equal(r.upserted, 1, 'resultado do upsert aproveitado');
+  await assert.rejects(execucao, (error) => error instanceof CollectionCancellationError && error.kind === 'shutdown');
   assert.equal(cenario.finishChamadas.length, 1);
-  assert.equal(cenario.finishChamadas[0].ok, true, 'persistência protegida conclui ok');
-  assert.deepEqual(eventos, ['collect'], 'evento publicado mesmo com cancelamento tardio');
+  assert.equal(cenario.finishChamadas[0].ok, false);
+  assert.equal(cenario.finishChamadas[0].upserted, 0);
+  assert.equal(cenario.posColetaChamadas, 0);
+  assert.deepEqual(eventos, []);
 });
 
 test('refresh continua após falha comum, conta circuito freado e propaga cancelamento', async () => {

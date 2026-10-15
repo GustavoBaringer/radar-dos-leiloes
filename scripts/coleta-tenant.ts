@@ -55,7 +55,7 @@ try {
         lookupConnector: getConnector,
         startRun: async (...args: Parameters<typeof startRun>) => { runId = await startRun(...args); return runId; },
         finishRun,
-        upsertLots: async lots => {
+        upsertLots: async (lots, control) => {
           const guarded = guardTenantLots(lots, domain, limit);
           rejectedHostCount = guarded.rejected.length;
           overLimitCount = guarded.overLimit;
@@ -64,7 +64,7 @@ try {
             const textoEscopo = [lot.titleRaw, lot.sourceCategory, raw?.descricao, raw?.description, raw?.leilao, raw?.categoria].filter(Boolean).join(' ');
             return looksLikeCollectible(textoEscopo) || (lot.assetType ?? classifyAsset(lot.titleRaw, lot.sourceCategory, lot.sourceGroup).assetType) === 'outro';
           }).length;
-          const outcome = await upsertLots(guarded.accepted);
+          const outcome = await upsertLots(guarded.accepted, control);
           newInsertIds = outcome.novos;
           return outcome;
         },

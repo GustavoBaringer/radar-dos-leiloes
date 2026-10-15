@@ -21,7 +21,10 @@ export async function guaranteedTenantObserver(observer: TenantObserver, domain:
     async finish(result?: { fetched: number; skipped: number; lots: unknown[]; httpStatus?: number; note?: string }, error?: unknown) {
       closed = true;
       if (responses === 0 && result?.httpStatus && result.httpStatus >= 100) root.response(result.httpStatus);
-      if (error) root.failure((error as { kind?: string })?.kind === 'deadline' ? 'budget' : 'parser');
+      if (error) {
+        const kind = (error as { kind?: string })?.kind;
+        root.failure(kind === 'deadline' ? 'budget' : kind === 'shutdown' || kind === 'lock_lost' ? 'network' : 'parser');
+      }
       await root.finish({
         fetched: result?.fetched ?? summary?.fetched ?? 0,
         skipped: result?.skipped ?? summary?.skipped ?? 0,

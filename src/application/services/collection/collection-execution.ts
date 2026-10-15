@@ -3,6 +3,7 @@ import type { UpsertOutcome } from '../../../core/repo.js';
 import type { TenantObserverContext } from '../../../core/tenant-attempts.js';
 import type { TenantObserver } from '../../../core/tenant-attempts.js';
 import { guaranteedTenantObserver } from './guaranteed-tenant-observer.js';
+import type { PersistenceControl } from '../../../domain/collection/persistence-control.js';
 import {
   collectionSignal,
   erroDeCancelamento,
@@ -35,7 +36,7 @@ export interface CollectionExecutionDependencies {
   lookupConnector: (sourceId: string) => Connector | undefined;
   startRun: (sourceId: string, job: string, limit: number) => Promise<number>;
   finishRun: (runId: number, data: CollectionRunData) => Promise<unknown>;
-  upsertLots: (lots: CollectResult['lots']) => Promise<UpsertOutcome>;
+  upsertLots: (lots: CollectResult['lots'], control?: PersistenceControl) => Promise<UpsertOutcome>;
   observerForCollection: (context: { runId: number; sourceId: string } & CollectionMetadata, forceEnabled?: boolean) => unknown;
   processarAposColeta: (novos: number[], publish?: (payload: unknown) => Promise<unknown>) => Promise<CollectionNotifications>;
   publishNotification?: (payload: unknown) => Promise<unknown>;
@@ -81,7 +82,7 @@ function comPrazo<T>(sinal: AbortSignal | undefined, promessa: Promise<T>): Prom
   });
 }
 
-/** Shared collection flow. Once persistence starts, cancellation cannot interrupt bookkeeping. */
+/** Cancellation is checked until commit; post-commit bookkeeping must complete. */
 export async function executeCollection(
   options: CollectionExecutionOptions,
   deps: CollectionExecutionDependencies,
@@ -120,11 +121,12 @@ export async function executeCollection(
       error.httpStatus = result.httpStatus;
       throw error;
     }
-    await options.authorizePersistence?.();
-    throwIfAborted(options.signal);
-
-    // Persistence begins here: finish all post-write bookkeeping even if a signal arrives.
-    const upsert = await deps.upsertLots(result.lots);
+    // Use the external signal: the connector-only deadline context has already closed.
+    const upsert = await deps.upsertLots(result.lots, {
+      signal: options.signal,
+      authorizePersistence: options.authorizePersistence,
+    });
+    // Commit completed: do not interrupt post-write bookkeeping on a late signal.
     upserted = upsert.upserted;
     bidChanges = upsert.bidChanges;
     notifications = await deps.processarAposColeta(upsert.novos, deps.publishNotification);
@@ -144,13 +146,20 @@ export async function executeCollection(
     }
     return { runId, result, upserted, bidChanges, notifications, publishErrors };
   } catch (error) {
-    if (tenantTracker) { const tracker = tenantTracker; tenantTracker = undefined; await tracker.finish(result, error); }
+    const logCleanupError = (message: string, failure: unknown) => {
+      try { deps.logError?.(message, safeError(failure).slice(0, 500)); } catch { /* Preserve the original collection failure. */ }
+    };
+    if (tenantTracker) {
+      const tracker = tenantTracker;
+      tenantTracker = undefined;
+      try { await tracker.finish(result, error); }
+      catch (trackerError) { logCleanupError('collection tenant tracker finish failed', trackerError); }
+    }
     const httpStatus = Number((error as { httpStatus?: unknown } | null)?.httpStatus) || undefined;
     try {
       await finish({ ok: false, fetched: result?.fetched, upserted, skipped: result?.skipped, httpStatus, error: safeError(error) });
     } catch (finishError) {
-      deps.logError?.('collection finishRun failed', finishError);
-      throw finishError;
+      logCleanupError('collection finishRun failed', finishError);
     }
     throw error;
   }

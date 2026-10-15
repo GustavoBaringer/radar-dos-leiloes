@@ -10,6 +10,8 @@ import type { CanonicalLot } from '../../../domain/lots/types.js';
 import { connectors } from '../../../connectors/index.js';
 import { normalizeSearchParams, parsePagination } from '../../../domain/search/request-bounds.js';
 import { toPublicLot } from '../../../domain/lots/public-dto.js';
+import type { PersistenceControl } from '../../../domain/collection/persistence-control.js';
+import { throwIfAborted } from '../../collection/collection-cancellation.js';
 
 export type { SearchParams } from '../../../domain/search/search-params.js';
 type Multi = SearchParams['uf'];
@@ -45,15 +47,16 @@ export interface UpsertOutcome {
  * Upsert por (source_id, external_id). Quando o lance muda, grava histórico
  * e devolve a mudança: é isso que o websocket publica como "lance ao vivo".
  */
-export async function upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
-  return new LotsRepository(PrismaService.getInstance()).upsertLots(lots);
+export async function upsertLots(lots: CanonicalLot[], control?: PersistenceControl): Promise<UpsertOutcome> {
+  return new LotsRepository(PrismaService.getInstance()).upsertLots(lots, control);
 }
 
-async function upsertLotsInTransaction(lots: CanonicalLot[], execute: QueryFunction): Promise<UpsertOutcome> {
+async function upsertLotsInTransaction(lots: CanonicalLot[], execute: QueryFunction, control?: PersistenceControl): Promise<UpsertOutcome> {
   const bidChanges: UpsertOutcome['bidChanges'] = [];
   const novos: number[] = [];
   let upserted = 0;
     for (const l of lots) {
+      throwIfAborted(control?.signal);
       const prepared = prepareLotForPersistence(l);
       if (prepared.kind === 'out-of-scope') {
         await execute(
@@ -160,9 +163,18 @@ async function upsertLotsInTransaction(lots: CanonicalLot[], execute: QueryFunct
 export class LotsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  upsertLots(lots: CanonicalLot[]): Promise<UpsertOutcome> {
+  upsertLots(lots: CanonicalLot[], control?: PersistenceControl): Promise<UpsertOutcome> {
     return this.prisma.$transaction(
-      (tx) => upsertLotsInTransaction(lots, (sql, params = []) => queryWithClient(tx, sql, params)),
+      async (tx) => {
+        throwIfAborted(control?.signal);
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
+        const outcome = await upsertLotsInTransaction(lots, (sql, params = []) => queryWithClient(tx, sql, params), control);
+        // Observed authority loss rolls back the whole batch. Redis/PG commit is not fenced.
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
+        return outcome;
+      },
       // Sequential look-before-upsert plus optional bid history is 3 round
       // trips/lot. A 1,200-lot fixture took ~5s; 300s budgets ~4x the linear
       // 15k estimate for DB contention while preserving one atomic batch.
