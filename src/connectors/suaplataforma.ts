@@ -42,7 +42,7 @@ function leiloeiroDoHost(host: string): string {
  * como encerrado esconderia catálogo que está à venda.
  */
 const STATUS: Array<[RegExp, LotStatus]> = [
-  [/aberto para lance|venda direta/i, 'aberto'],
+  [/aberto para (?:lance|proposta)|venda direta/i, 'aberto'],
   [/aguardando in[ií]cio/i, 'agendado'],
   [/aguardando data/i, 'sem_data'],
   [/arrematad/i, 'vendido'],
@@ -119,7 +119,18 @@ function tituloImprestavel(t: string): boolean {
 
 function mapLot(l: any, host: string): CanonicalLot | null {
   const id = l?.ID_Leiloes_Lote;
-  const titulo = String(l?.Lote ?? '').trim();
+  let titulo = String(l?.Lote ?? '').trim();
+  if (tituloImprestavel(titulo)) {
+    const slug = (() => {
+      try {
+        const m = l.URLlote?.match(/\/lote\/([^/]+)/);
+        if (m) return decodeURIComponent(m[1]).replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+      } catch {}
+      return '';
+    })();
+    const leilao = String(l?.Leilao ?? '').trim();
+    titulo = !tituloImprestavel(leilao) ? leilao : (!tituloImprestavel(slug) ? slug : titulo);
+  }
   if (!id || !titulo || tituloImprestavel(titulo)) return null;
   const local = localDoTitulo(titulo);
   // Reserva para quando o formato "…, Cidade/UF" do título não aparece.

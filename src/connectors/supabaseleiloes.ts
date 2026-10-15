@@ -52,3 +52,13 @@ function conector(cfg: { id: string; name: string; host: string; key: string; si
 
 export const rocketleiloes = conector({ id: 'rocketleiloes', name: 'Rocket Leilões', host: 'api.rocketleiloes.com.br', key: 'sb_publishable_FIAmv6wqk3yAGFuBYcHJxA_wBzd2vbh', siteUrl: 'https://www.rocketleiloes.com.br' });
 export const savoyleiloes = conector({ id: 'savoyleiloes', name: 'Savoy Leilões', host: 'api.savoyleiloes.com.br', key: 'sb_publishable__NGN6fHZ_XB-PWeVqYDgjA_nHEmpnNB', siteUrl: 'https://www.savoyleiloes.com.br' });
+export const dbmleiloes = conector({ id: 'dbmleiloes', name: 'DBM Leilões', host: 'api.dbmleiloes.com.br', key: 'sb_publishable__kPSBsRDYdYrao568cNSJw_A5Az8-gE', siteUrl: 'https://www.dbmleiloes.com.br' });
+export const zaccarino = conector({ id: 'zaccarino', name: 'Zaccarino Leilões', host: 'api.zaccarino.com.br', key: 'sb_publishable_yk1zTg31VCifVk4AHuZIbQ_9G_N8qiH', siteUrl: 'https://www.zaccarino.com.br' });
+export const coimbraleiloes = conector({ id: 'coimbraleiloes', name: 'Coimbra Leilões', host: 'api.coimbraleiloes.com.br', key: 'sb_publishable_r_53uE6aXgXQ1K_qnVmUOg_nUuKxKps', siteUrl: 'https://www.coimbraleiloes.com.br' });
+export const shiokawaleiloes = conector({ id: 'shiokawaleiloes', name: 'Shiokawa Leilões', host: 'api.shiokawaleiloes.com.br', key: 'sb_publishable_eBr5iSp_7jKGIj_8XO-lpw_68HjspXC', siteUrl: 'https://www.shiokawaleiloes.com.br' });
+export const faroonline = conector({ id: 'faroonline', name: 'Faro Online', host: 'api.faroonline.com.br', key: 'sb_publishable_9sg1Z7wZjcVjrdmMuYdJGg_d9c1G65_', siteUrl: 'https://www.faroonline.com.br' });
+
+export const supabaseTenants: Connector[] = [
+  rocketleiloes, savoyleiloes, dbmleiloes, zaccarino, coimbraleiloes, shiokawaleiloes, faroonline
+];
+
