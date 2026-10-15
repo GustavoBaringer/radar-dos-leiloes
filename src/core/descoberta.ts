@@ -169,6 +169,7 @@ const agente = new Agent({ connect: { rejectUnauthorized: false } }).compose(
 );
 
 export const PLATAFORMAS: Array<[string, RegExp]> = [
+  ['msis', /Principal\.asp|abrirDetalhesLeilao|msis\.com\.br/i],
   ['mega', /megaleiloes\.com\.br|Mega Leilões/i],
   ['grupolance', /grupolance\.com\.br|Grupo Lance/i],
   // `\bZuk\b`, não `Zuk`: sem fronteira a alternativa casava "SUZUKI" no card de
@@ -252,6 +253,7 @@ const CONECTOR_POR_PLATAFORMA: Record<string, string | null> = {
   'docx-html': 'docxhtml',
   leilovia: 'leilovia',
   goadopt: null,
+  msis: 'msis',
 };
 
 export function conectorDaPlataforma(

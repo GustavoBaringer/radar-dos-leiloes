@@ -45,6 +45,7 @@ import { portalPublic, ghvmPublic } from './reviewed-public.js';
 import { leiloesbrasilPublic } from './leiloesbrasil-public.js';
 import { celsocunha } from './celsocunha.js';
 import { coliseumPublic } from './coliseum-public.js';
+import { msis } from './msis.js';
 
 export const connectors: Connector[] = [
   coliseumPublic,
@@ -54,6 +55,7 @@ export const connectors: Connector[] = [
   hastapublica, flexleiloes, alfaleiloes, casadeleiloes, grupocarvalho, simonleiloes, globoleiloes, leiloesfreire, rochaleiloes,
   docxhtml, maycosantos, htmlagenda, rocketleiloes, savoyleiloes, mcleilao, vipleiloes, portalPublic, ghvmPublic, leiloesbrasilPublic,
   celsocunha, ...supraTenants,
+  msis,
 ];
 
 export function getConnector(id: string): Connector | undefined {

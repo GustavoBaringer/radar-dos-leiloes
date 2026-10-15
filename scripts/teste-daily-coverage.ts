@@ -5,6 +5,8 @@ import { dailyConnector } from '../src/queue/daily-worker.js';
 import { isBlockedPage } from '../src/connectors/htmlagenda.js';
 import { lerCards, judicialAssetTitle } from '../src/connectors/soleon.js';
 import { coliseumEvents, mapColiseumLot } from '../src/connectors/coliseum-public.js';
+import { parseMsisPrincipal } from '../src/connectors/msis.js';
+import { readFileSync } from 'node:fs';
 import * as cheerio from 'cheerio';
 
 const schedules = dailyScheduleItems();
@@ -21,6 +23,9 @@ assert.throws(() => dailySite('arbitrary.example'), /Unreviewed/);
 assert.equal(dailySite('venda-imoveis.caixa.gov.br').required120, true);
 assert.equal(dailySite('comprei.pgfn.gov.br').monitorOnly, true);
 assert.equal(dailySite('vlleiloes.com.br').sourceId, 'suporteleiloes');
+assert.equal(dailySite('depaulaonline.com.br').sourceId, 'suporteleiloes');
+assert.equal(dailySite('willianmachadoleiloeiro.com.br').sourceId, 'leiloesbr');
+assert.equal(dailySite('vincoleiloes.com.br').sourceId, 'sishp');
 assert.equal(dailySite('celsocunhaleiloes.com.br').sourceId, 'celsocunha');
 assert.equal(dailySite('ghvmleiloes.com.br').sourceId, 'ghvmpublic');
 assert.equal(dailySite('portaldosleiloes.com.br').sourceId, 'portalpublic');
@@ -54,9 +59,11 @@ for (const mode of ['selection-error','empty','persistence-error','success'] as 
   if (mode==='empty') assert.ok(order.includes('http:200'));
 }
 
-const native:any = { def:{id:'soleon'}, collect:async()=>({lots:[{lotUrl:'https://cassianoleiloes.com.br/item/1'},{lotUrl:'https://other.example/item/2'}],fetched:2,skipped:0}) };
+let nativeOptions:any;
+const native:any = { def:{id:'soleon'}, collect:async(options:any)=>{ nativeOptions=options; return {lots:[{lotUrl:'https://cassianoleiloes.com.br/item/1'},{lotUrl:'https://other.example/item/2'}],fetched:2,skipped:0}; } };
 const adapter = dailyConnector('cassianoleiloes.com.br',()=>native,async()=>true);
 const filtered = await adapter.collect({limit:100});assert.equal(filtered.lots.length,1);assert.equal(filtered.skipped,1);
+assert.equal(nativeOptions.tenant,'cassianoleiloes.com.br');
 const disabled = dailyConnector('cassianoleiloes.com.br',()=>native,async()=>false);
 await assert.rejects(disabled.collect({limit:1}), /disabled/);
 
@@ -71,6 +78,9 @@ assert.deepEqual(coliseumEvents('<a href="listar-lotes.php?codLeilao=1209">Ver l
 const lot=mapColiseumLot({id:'264460',marcaModelo:'HONDA/Pop 100',ano:'2007/2007',foto:'../imgTmp/photo.jpg'},'1209')!;
 assert.equal(lot.sourceId,'coliseumpublic');assert.equal(lot.yearModel,2007);assert.match(lot.lotUrl!,/codLote=264460/);assert.equal(lot.photos?.[0],'https://www.coliseumleiloes.com.br/imgTmp/photo.jpg');
 assert.equal(mapColiseumLot({id:'0',marcaModelo:''},'1209'),null);
+const msis = parseMsisPrincipal(readFileSync(new URL('../fixtures/msis-principal.html', import.meta.url), 'utf8'), 'analucialeiloeira.com.br');
+assert.ok(msis.some(l => l.titleRaw === 'APARTAMENTO DE 62M2 - GLORIA' && l.status === 'aberto'));
+assert.ok(msis.every(l => l.lotUrl?.startsWith('https://www.analucialeiloeira.com.br/Leilao.asp?zz=')));
 for (const lance of [1234.56,'1234.56','1.234,56']) {
   assert.equal(mapColiseumLot({id:'264460',marcaModelo:'HONDA/Pop 100',lance},'1209')?.currentBid,1234.56);
 }
