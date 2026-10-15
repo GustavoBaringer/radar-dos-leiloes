@@ -3,9 +3,10 @@ import { Worker, type Job, type Processor } from 'bullmq';
 import { getConnector } from '../connectors/index.js';
 import { finishRun, startRun, upsertLots } from '../core/repo.js';
 import { processarAposColeta } from '../application/services/collection/post-collection.js';
-import { query, pool } from '../core/db.js';
+import { query } from '../core/db.js';
 import { collectionJobContext, observerForCollection } from '../application/services/collection/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies, type CollectionExecutionOptions } from '../application/services/collection/collection-execution.js';
+import { CollectionService, type CollectionExecutionDependencies, type CollectionExecutionOptions } from '../application/services/collection/collection-execution.js';
+import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
 import { CollectionCancellationError } from '../infra/collection/collection-cancellation.js';
 import { workerDeployment, boundedCollection } from './deployment.js';
 import {
@@ -29,6 +30,7 @@ export interface TenantProcessorDependencies {
   isSourceEnabled: (sourceId: string) => Promise<boolean>;
   settings: ReturnType<typeof workerDeployment>;
   publish?: CollectionExecutionOptions['publish'];
+  service?: CollectionService;
 }
 
 export interface TenantProcessor {
@@ -38,6 +40,7 @@ export interface TenantProcessor {
 }
 
 export function createTenantProcessor(deps: TenantProcessorDependencies): TenantProcessor {
+  const service = deps.service ?? new CollectionService(deps.execution);
   const controllers = new Map<string, AbortController>();
   const cancel = (jobIds: string[], kind: 'shutdown' | 'lock_lost' = 'lock_lost') => {
     for (const id of jobIds) controllers.get(id)?.abort(new CollectionCancellationError(kind));
@@ -70,7 +73,7 @@ export function createTenantProcessor(deps: TenantProcessorDependencies): Tenant
 
     try {
       const options = tenantExecutionOptions(sourceId, tenant);
-      const result = await executeCollection({
+      const result = await service.execute({
         sourceId,
         ...options,
         limit: finalLimit,
@@ -82,7 +85,7 @@ export function createTenantProcessor(deps: TenantProcessorDependencies): Tenant
           if (!token) throw new CollectionCancellationError('lock_lost', `job ${id} has no lock token`);
         },
         publish: deps.publish,
-      }, deps.execution);
+      });
       return { runId: result.runId, fetched: result.result.fetched, upserted: result.upserted, skipped: result.result.skipped };
     } finally {
       bullSignal?.removeEventListener('abort', onBullAbort);
@@ -105,6 +108,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
   let stopped = false;
   const settings = workerDeployment();
   let processor: TenantProcessor | undefined;
+  let context: CollectionContext | undefined;
 
   const publish = async (payload: unknown) => {
     publisher ??= makeRedis();
@@ -125,6 +129,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
     async start() {
       if (stopped) throw new Error('tenant worker runtime already stopped');
       if (started) return;
+      context = await createCollectionContext({ overrides: execution });
       const readiness = coverageReadiness();
       console.log(`[tenant-worker] cobertura configurada=${readiness.configured}/${readiness.union}; pendentes=${readiness.pending.length}`);
       if (readiness.pending.length) console.warn(`[tenant-worker] pendentes: ${readiness.pending.map((item) => item.domain).join(', ')}`);
@@ -151,6 +156,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
 
       processor = createTenantProcessor({
         execution,
+        service: context.service,
         isSourceEnabled: async (sourceId) => {
           const rows = await query<{ enabled: boolean }>('SELECT enabled FROM sources WHERE id = $1', [sourceId]);
           return rows[0]?.enabled === true;
@@ -179,7 +185,7 @@ export function createTenantWorkerRuntime(): TenantWorkerRuntime {
       const cleanup = await Promise.allSettled([
         ...(workerConnection ? [workerConnection.quit()] : []),
         ...(publisher ? [publisher.quit()] : []),
-        pool.end(),
+        ...(context ? [context.close()] : []),
       ]);
       workerConnection = undefined;
       publisher = undefined;

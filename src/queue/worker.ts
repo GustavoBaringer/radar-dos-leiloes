@@ -17,12 +17,13 @@ import { createDailyWorkerRuntime } from './daily-worker.js';
 import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
 import { CollectionCancellationError, throwIfAborted } from '../infra/collection/collection-cancellation.js';
 import {
-  executeCollection,
+  CollectionService,
   type CollectionExecutionDependencies,
   type CollectionExecutionOptions,
   type CollectionExecutionResult,
   type CollectionMetadata,
 } from '../application/services/collection/collection-execution.js';
+import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -30,6 +31,8 @@ import {
 
 let publisher: ReturnType<typeof makeRedis> | undefined;
 const getPublisher = () => publisher ??= makeRedis();
+let collectionContext: Promise<CollectionContext> | undefined;
+const getCollectionContext = () => collectionContext ??= createCollectionContext({ overrides: createWorkerDeps() });
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
 for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
@@ -94,7 +97,7 @@ export async function assertTenantSourceEnabled(
  */
 export async function executeWorkerCollect(
   options: WorkerCollectOptions,
-  deps: CollectionExecutionDependencies = createWorkerDeps(),
+  deps?: CollectionExecutionDependencies,
 ): Promise<CollectionExecutionResult> {
   const { queueJob, publish, authorizePersistence, tenant, ...resto } = options;
   if (tenant !== undefined) assertTenantCoveragePair(options.sourceId, tenant);
@@ -104,7 +107,8 @@ export async function executeWorkerCollect(
     }
     await authorizePersistence?.();
   };
-  return executeCollection(
+  const service = deps ? new CollectionService(deps) : (await getCollectionContext()).service;
+  return service.execute(
     {
       ...resto,
       ...(tenant !== undefined ? tenantExecutionOptions(options.sourceId, tenant) : { job: 'collect' }),
@@ -112,7 +116,6 @@ export async function executeWorkerCollect(
       ...(queueJob || authorizePersistence ? { authorizePersistence: autorizar } : {}),
       publish: publish ?? ((evento) => getPublisher().publish(CHANNEL_UPDATES, JSON.stringify(evento))),
     },
-    deps,
   );
 }
 
@@ -579,10 +582,16 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
   let daily: ReturnType<typeof createDailyWorkerRuntime> | undefined;
   const workers: Worker[] = [];
   const timers: Array<ReturnType<typeof setInterval>> = [];
+  const cycles = new Set<Promise<void>>();
   let ligado = false;
 
-  const periodico = (fn: () => void, ms: number) => {
-    const t = setInterval(fn, ms);
+  const runCycle = (fn: () => Promise<void>) => {
+    const running = fn();
+    cycles.add(running);
+    void running.finally(() => cycles.delete(running));
+  };
+  const periodico = (fn: () => Promise<void>, ms: number) => {
+    const t = setInterval(() => runCycle(fn), ms);
     t.unref();
     timers.push(t);
   };
@@ -596,13 +605,14 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
     async start() {
       if (ligado) return;
       ligado = true;
+      const context = await getCollectionContext();
       if (AO_VIVO) periodico(cicloAoVivo, 15_000);
       if (DEPLOY.close) periodico(cicloDeEncerramento, 60_000);
       if (DEPLOY.verify) periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
       // Roda na subida também: reiniciar o worker não deve deixar lote vencido
       // esperando o primeiro minuto.
-      if (DEPLOY.verify) void cicloDeVerificacao();
-      if (DEPLOY.close) void cicloDeEncerramento();
+      if (DEPLOY.verify) runCycle(cicloDeVerificacao);
+      if (DEPLOY.close) runCycle(cicloDeEncerramento);
 
       // ensureSources primeiro: banco fora do ar aborta aqui, antes de qualquer
       // comando em Redis (limparAgendamentosOrfaos varre a fila).
@@ -635,7 +645,7 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       );
 
       await agendarTudo();
-      if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect);
+      if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect, context.service);
       await daily?.start();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
@@ -648,9 +658,15 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       if (!ligado) return;
       ligado = false;
       cancelarEmAndamento('shutdown', undefined, 'worker encerrando');
-      await daily?.stop();
       for (const t of timers.splice(0)) clearInterval(t);
-      await Promise.all(workers.splice(0).map((w) => w.close()));
+      const stopped = await Promise.allSettled([daily?.stop(), ...workers.splice(0).map((w) => w.close())]);
+      await Promise.allSettled(cycles);
+      if (collectionContext) {
+        try { await (await collectionContext).close(); }
+        finally { collectionContext = undefined; }
+      }
+      const failure = stopped.find(result => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
     },
   };
 }
@@ -671,5 +687,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   process.once('SIGINT', () => encerrar(130));
   process.once('SIGTERM', () => encerrar(143));
-  await hub.start();
+  try { await hub.start(); }
+  catch (error) { await hub.stop().catch(closeError => console.error('[worker] shutdown after startup failure:', closeError)); throw error; }
 }

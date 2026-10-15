@@ -36,20 +36,22 @@ if (runAt < 0 && !schedule) {
   console.log(JSON.stringify({ configured: TENANT_COVERAGE, requested: REQUESTED_COVERAGE_DOMAINS20,
     readiness, scheduleCommand: '--schedule' }, null, 2));
 } else {
-  const { pool, query } = await import('../src/core/db.js');
+  const { query } = await import('../src/core/db.js');
   const { getConnector } = await import('../src/connectors/index.js');
   const { startRun, finishRun, upsertLots } = await import('../src/core/repo.js');
   const { processarAposColeta } = await import('../src/application/services/collection/post-collection.js');
   const { observerForCollection } = await import('../src/application/services/collection/collection-observer.js');
-  const { executeCollection } = await import('../src/application/services/collection/collection-execution.js');
+  const { createCollectionContext } = await import('../src/bootstrap/collection-context.js');
   const { tenantExecutionOptions } = await import('../src/queue/tenant-coverage.js');
   const deployment = workerDeployment();
   let pub: ReturnType<typeof makeRedis> | undefined;
   const opened: Array<{ queue: any; connection: ReturnType<typeof makeRedis> }> = [];
   let failed = false;
   let currentRunId: number | undefined;
+  let context: Awaited<ReturnType<typeof createCollectionContext>> | undefined;
   try {
     if (schedule) {
+      context = await createCollectionContext();
       const { createTenantCollectQueue, createCollectQueue } = await import('../src/queue/runtime.js');
       const enabled = await query<{ id: string; enabled: boolean }>(
         'SELECT id, enabled FROM sources WHERE id = ANY($1::text[])',
@@ -82,6 +84,19 @@ if (runAt < 0 && !schedule) {
     if (runAt >= 0) {
       pub = makeRedis();
       const publish = (payload: unknown) => pub!.publish(CHANNEL_UPDATES, JSON.stringify(payload));
+      const overrides = {
+            lookupConnector: getConnector,
+            startRun: async (...startArgs: Parameters<typeof startRun>) => {
+              currentRunId = await startRun(...startArgs);
+              return currentRunId;
+            },
+            finishRun,
+            upsertLots,
+            observerForCollection,
+            processarAposColeta,
+            publishNotification: publish,
+      };
+      context ??= await createCollectionContext({ overrides });
       const ids = target === 'all' ? [...TENANT_COVERAGE] : TENANT_COVERAGE.filter((item) => item.domain === domain);
       for (const item of ids) {
         currentRunId = undefined;
@@ -93,25 +108,14 @@ if (runAt < 0 && !schedule) {
           const sources = await query<{ enabled: boolean }>('SELECT enabled FROM sources WHERE id = $1', [item.sourceId]);
           if (sources[0]?.enabled !== true) throw new Error(`Source is disabled or unregistered: ${item.sourceId}`);
           const bounded = boundedCollection(deployment, item.sourceId, connector.def.method, limit);
-          const result = await executeCollection({
+          const result = await context.service.execute({
             sourceId: item.sourceId,
             ...tenantExecutionOptions(item.sourceId, item.domain),
             limit: Math.min(1200, bounded.limit),
             timeoutMs: budgetMs,
             metadata: { origin: 'manual' },
             publish,
-          }, {
-            lookupConnector: getConnector,
-            startRun: async (...startArgs: Parameters<typeof startRun>) => {
-              currentRunId = await startRun(...startArgs);
-              return currentRunId;
-            },
-            finishRun,
-            upsertLots,
-            observerForCollection,
-            processarAposColeta,
-            publishNotification: publish,
-          });
+          }, overrides);
           console.log(JSON.stringify({ domain: item.domain, source: item.sourceId, runId: result.runId,
             lidos: result.result.fetched, mapeados: result.result.lots.length, gravados: result.upserted,
             descartados: result.result.skipped, httpStatus: result.result.httpStatus,
@@ -129,7 +133,7 @@ if (runAt < 0 && !schedule) {
     await Promise.allSettled([
       ...opened.map(async ({ queue, connection }) => { await queue.close(); await connection.quit(); }),
       ...(pub ? [pub.quit()] : []),
-      pool.end(),
+      ...(context ? [context.close()] : []),
     ]);
   }
   if (failed) process.exitCode = 1;
