@@ -6,13 +6,13 @@ export async function createNativeHttpDependencies(
 ): Promise<RadarHttpDependencies> {
   if (!oidc.oidcLigado()) throw new Error('FATAL: OIDC desligado. Configure OIDC_ISSUER no ambiente.');
   const [repo, db, identity, alerts, connectors, queues, connectorHttp] = await Promise.all([
-    import('../core/repo.js'), import('../core/db.js'), import('../core/identidade.js'),
+    import('../core/repo.js'), import('../core/db.js'), import('./identity-composition.js'),
     import('../core/alerts.js'), import('../connectors/index.js'), import('../queue/runtime.js'),
     import('../connectors/http.js'),
   ]);
   return {
     data: { ...repo, ...db, ...alerts },
-    identity,
+    identity: identity.defaultIdentityService,
     oidc,
     jobs: { connectors: connectors.connectors, createCollectQueue: queues.createCollectQueue },
     runtime: {

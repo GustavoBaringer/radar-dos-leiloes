@@ -4,6 +4,8 @@ import { idDoSlug } from '../../../domain/lots/slug.js';
 import { RADAR_HTTP_CONTEXT } from '../../modules/http-platform/http-platform.module.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 import { PAGINA_LOGIN } from '../../../infra/web/login-template.js';
+import { IdentityService } from '../identity/identity.service.js';
+import type { RadarHttpDependencies } from '../../../infra/http/http-contracts.js';
 
 const DESTINO_PADRAO = '/busca';
 const APP_ROTAS = ['/busca', '/alertas', '/favoritos', '/cobertura'];
@@ -16,7 +18,10 @@ export interface CallbackInput { query: { code?: string; state?: string; error?:
 
 @Injectable()
 export class AuthService {
-  constructor(@Inject(RADAR_HTTP_CONTEXT) private readonly context: RadarHttpContext) {}
+  constructor(
+    @Inject(RADAR_HTTP_CONTEXT) private readonly context: RadarHttpContext,
+    @Inject(IdentityService) private readonly identity: RadarHttpDependencies['identity'],
+  ) {}
 
   private destination(raw: unknown): string {
     const value = String(raw ?? '');
@@ -65,7 +70,7 @@ export class AuthService {
       await this.failedAttempt(ip);
       return { status: 401, contentType: 'text/html; charset=utf-8', body: this.loginHtml(body.de, '<div class="erro">Usuário ou senha incorretos.</div>') };
     }
-    const user = await this.context.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
+    const user = await this.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
     const token = criarToken(user.papel, user.sub);
     try { await (await this.redis()).del(`login:falha:${ip}`); } catch { /* Counter cleanup is best effort. */ }
     return { status: 302, location: this.destination(body.de), cookies: [this.sessionCookie(origin, token)] };
@@ -94,7 +99,7 @@ export class AuthService {
         code: String(query.code ?? ''), state: String(query.state ?? ''), cookiePkce: input.cookie,
         redirectUri: this.callbackUri(input.origin),
       });
-      const user = await this.context.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
+      const user = await this.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
       return {
         status: 302, location: this.destination(identity.destino),
         cookies: [this.sessionCookie(input.origin, criarToken(user.papel, user.sub)),

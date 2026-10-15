@@ -7,7 +7,7 @@ import { loadChallengeConfig, createChallengeService } from '../../core/antibot/
 import { createOperationsTelemetry } from '../../core/antibot/telemetry.js';
 import { createImageTelemetry } from '../../core/antibot/image-telemetry.js';
 import { loadProxyTrustConfig } from '../../core/antibot/proxy.js';
-import type { Identidade } from '../../core/identidade.js';
+import type { Identidade } from '../../domain/identity/identidade.js';
 import type { FastifyRequest } from 'fastify';
 import type { RadarHttpOptions } from './http-contracts.js';
 

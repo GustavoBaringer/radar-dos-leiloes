@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createAccountContext, buildMePayload } from '../../../core/account-context.js';
-import type { Identidade } from '../../../core/identidade.js';
+import type { Identidade } from '../../../domain/identity/identidade.js';
 import type { Alerta } from '../../../domain/alerts/alert-types.js';
 import { toPublicAlert, toPublicFavorite, toPublicHit } from '../../../domain/lots/public-dto.js';
 import { celularValido, documento, emailValido } from '../../../domain/identity/cadastro.js';

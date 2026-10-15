@@ -35,7 +35,7 @@ import { canaisDisponiveis } from './core/notificar.js';
 import { ROUTE_POLICIES, registerChallengeHttp, registerOperationsMetricsRoute } from './core/antibot/routes.js';
 import { PAGINA_LOGIN } from './web/login-template.js';
 import type { query as DbQuery } from './core/db.js';
-import type { Identidade } from './core/identidade.js';
+import type { Identidade } from './domain/identity/identidade.js';
 import type { CollectJob } from './queue/runtime.js';
 
 export interface LegacyHostDependencies {
@@ -50,10 +50,10 @@ export interface LegacyHostDependencies {
     avaliarAlertas: typeof import('./core/alerts.js').avaliarAlertas;
   };
   identity: {
-    garantirUsuario: typeof import('./core/identidade.js').garantirUsuario;
-    identidadePorSub: typeof import('./core/identidade.js').identidadePorSub;
-    usuarioDoPortao: typeof import('./core/identidade.js').usuarioDoPortao;
-    ANONIMO: typeof import('./core/identidade.js').ANONIMO;
+    garantirUsuario: import('./application/services/identity/identity.service.js').IdentityService['garantirUsuario'];
+    identidadePorSub: import('./application/services/identity/identity.service.js').IdentityService['identidadePorSub'];
+    usuarioDoPortao: import('./application/services/identity/identity.service.js').IdentityService['usuarioDoPortao'];
+    ANONIMO: typeof import('./domain/identity/identidade.js').ANONIMO;
   };
   oidc: {
     oidcLigado: () => boolean;

@@ -1,5 +1,5 @@
 import type { query as DbQuery } from '../../core/db.js';
-import type { Identidade } from '../../core/identidade.js';
+import type { Identidade } from '../../domain/identity/identidade.js';
 
 export interface RadarHttpDependencies {
   data: {
@@ -13,9 +13,9 @@ export interface RadarHttpDependencies {
     avaliarAlertas: typeof import('../../core/alerts.js').avaliarAlertas;
   };
   identity: {
-    garantirUsuario: typeof import('../../core/identidade.js').garantirUsuario;
-    identidadePorSub: typeof import('../../core/identidade.js').identidadePorSub;
-    usuarioDoPortao: typeof import('../../core/identidade.js').usuarioDoPortao;
+    garantirUsuario: import('../../application/services/identity/identity.service.js').IdentityService['garantirUsuario'];
+    identidadePorSub: import('../../application/services/identity/identity.service.js').IdentityService['identidadePorSub'];
+    usuarioDoPortao: import('../../application/services/identity/identity.service.js').IdentityService['usuarioDoPortao'];
     ANONIMO: Identidade;
   };
   oidc: {

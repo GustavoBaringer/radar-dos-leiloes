@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Identidade } from '../../../core/identidade.js';
+import type { Identidade } from '../../../domain/identity/identidade.js';
 import { createAccountContext } from '../../../core/account-context.js';
 import type { PublicLot } from '../../../domain/lots/public-dto.js';
 import { toPublicLot } from '../../../domain/lots/public-dto.js';

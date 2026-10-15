@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
 import { idDoSlug, slugDoLote } from '../../../domain/lots/slug.js';
 import { toPublicLot } from '../../../domain/lots/public-dto.js';
-import type { Identidade } from '../../../core/identidade.js';
+import type { Identidade } from '../../../domain/identity/identidade.js';
 import { RADAR_HTTP_CONTEXT } from '../../modules/http-platform/http-platform.module.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 import { formatMoney, loadLotRenderer, escapeHtml } from '../../../infra/web/page-renderer.js';
