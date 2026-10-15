@@ -4,11 +4,11 @@ import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { COOKIE, lerToken, precisaRenovar, criarToken } from '../../infra/auth/session.js';
 import { loadProxyTrustConfig } from '../../core/antibot/proxy.js';
-import { loadAntibotConfig } from '../../core/antibot/config.js';
+import { loadAntibotConfig } from '../config/antibot-config.js';
 import { loadChallengeConfig } from '../../core/antibot/challenge.js';
 import { registerAntibot } from '../../core/antibot/fastify.js';
 import { createChallengeHook } from '../../core/antibot/challenge.js';
-import { normalizeClientIp } from '../../core/antibot/ip.js';
+import { normalizeClientIp } from '../../domain/security/client-ip.js';
 import type { RadarHttpOptions } from './http-contracts.js';
 import { RadarHttpContext, type RadarHttpRequest } from './radar-http-context.js';
 

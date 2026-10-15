@@ -37,7 +37,7 @@ export interface RadarHttpDependencies {
     createWsRedis: (url: string) => ReturnType<typeof import('../../queue/runtime.js').makeRedis>;
     CHANNEL_UPDATES: typeof import('../../queue/runtime.js').CHANNEL_UPDATES;
     hostsTlsIncomplete: Set<string>;
-    createAntibotDriver?: (config: import('../../core/antibot/types.js').AntibotConfig) => import('../../core/antibot/types.js').RateLimitDriver;
+    createAntibotDriver?: (config: import('../../domain/security/antibot.types.js').AntibotConfig) => import('../../domain/security/antibot.types.js').RateLimitDriver;
     initialize: () => Promise<void>;
     close: () => Promise<void>;
   };

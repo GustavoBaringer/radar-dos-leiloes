@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import * as oldTelemetry from '../src/core/antibot/telemetry.js';
+import * as newTelemetry from '../src/application/security/antibot-telemetry.js';
+import * as oldResources from '../src/core/antibot/resources.js';
+import * as newResources from '../src/application/security/resource-limits.js';
+import * as oldGuard from '../src/core/antibot/http-resources.js';
+import * as newGuard from '../src/infra/http/antibot-resources.js';
+for (const name of ['createOperationsTelemetry', 'composeOperationsObserver']) assert.equal(oldTelemetry[name], newTelemetry[name]);
+for (const name of ['createResourcePool', 'tryAcquireResource', 'tryAcquireImageJob']) assert.equal(oldResources[name], newResources[name]);
+for (const name of ['createHttpResourceGuard', 'sendRateLimit', 'sendUnauthenticated']) assert.equal(oldGuard[name], newGuard[name]);
+console.log('OK: telemetry/resource singleton exports/HTTP guard shims preserve function references');

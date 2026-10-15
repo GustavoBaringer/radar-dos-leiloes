@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Papel } from '../../infra/auth/session.js';
-import { createResourcePool } from '../../core/antibot/resources.js';
-import { loadAntibotConfig } from '../../core/antibot/config.js';
+import { createResourcePool } from '../../application/security/resource-limits.js';
+import { loadAntibotConfig } from '../config/antibot-config.js';
 import { loadChallengeConfig, createChallengeService } from '../../core/antibot/challenge.js';
-import { createOperationsTelemetry } from '../../core/antibot/telemetry.js';
+import { createOperationsTelemetry } from '../../application/security/antibot-telemetry.js';
 import { createImageTelemetry } from '../../core/antibot/image-telemetry.js';
 import { loadProxyTrustConfig } from '../../core/antibot/proxy.js';
 import type { Identidade } from '../../domain/identity/identidade.js';
@@ -37,7 +37,7 @@ export class RadarHttpContext {
   private readonly resources = createResourcePool();
   private initialization?: Promise<void>;
   private closing?: Promise<void>;
-  private readAdmission?: () => import('../../core/antibot/resources.js').ResourceLease | null;
+  private readAdmission?: () => import('../../application/security/resource-limits.js').ResourceLease | null;
   private readonly redisClients = new Map<string, Promise<ReturnType<RadarHttpOptions['dependencies']['runtime']['makeRedis']>>>();
   private collectQueueHandle?: Promise<ReturnType<RadarHttpOptions['dependencies']['jobs']['createCollectQueue']>>;
 
@@ -82,7 +82,7 @@ export class RadarHttpContext {
   async runRead<T>(work: () => T | Promise<T>): Promise<T> {
     const lease = this.resources.tryAcquireResource();
     if (!lease) throw Object.assign(new Error('overloaded'), { statusCode: 503 });
-    let degraded: import('../../core/antibot/resources.js').ResourceLease | null = null;
+    let degraded: import('../../application/security/resource-limits.js').ResourceLease | null = null;
     try {
       if (this.readAdmission) degraded = this.readAdmission();
       if (this.readAdmission && !degraded) throw Object.assign(new Error('overloaded'), { statusCode: 503 });
@@ -90,7 +90,7 @@ export class RadarHttpContext {
     try { return await work(); } finally { degraded?.release(); lease.release(); }
   }
 
-  setReadAdmission(admit: () => import('../../core/antibot/resources.js').ResourceLease | null): void { this.readAdmission = admit; }
+  setReadAdmission(admit: () => import('../../application/security/resource-limits.js').ResourceLease | null): void { this.readAdmission = admit; }
 
   async redisResource(kind: 'login' | 'signup' | 'subscriber' | 'ws'): Promise<ReturnType<RadarHttpOptions['dependencies']['runtime']['makeRedis']>> {
     if (this.closing) throw new Error('HTTP resources are closed.');

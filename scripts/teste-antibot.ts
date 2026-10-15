@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import Fastify from 'fastify';
 import type { FastifyRequest } from 'fastify';
-import { loadAntibotConfig } from '../src/core/antibot/config.js';
-import { createAntibot } from '../src/core/antibot/engine.js';
-import { normalizeClientIp } from '../src/core/antibot/ip.js';
+import { loadAntibotConfig } from '../src/infra/config/antibot-config.js';
+import { createAntibot } from '../src/application/security/antibot-engine.js';
+import { normalizeClientIp } from '../src/domain/security/client-ip.js';
 import { registerAntibot } from '../src/core/antibot/fastify.js';
-import type { AntibotConfig, AntibotEvent, Policy, PolicyId, RateLimitDriver } from '../src/core/antibot/types.js';
+import type { AntibotConfig, AntibotEvent, Policy, PolicyId, RateLimitDriver } from '../src/domain/security/antibot.types.js';
 
 const config = (mode: 'off' | 'shadow' | 'enforce' = 'enforce', patch: Partial<Record<PolicyId, Partial<Policy>>> = {}): AntibotConfig => {
   const loaded = loadAntibotConfig({ NODE_ENV: 'test', ANTIBOT_MODE: mode, ANTIBOT_REDIS_URL: 'redis://127.0.0.1:6380' });

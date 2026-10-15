@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Agent } from 'undici';
 import { createImageService, type ImageOutcome, type ImageRequester } from '../../../core/antibot/images.js';
-import { tryAcquireImageJob } from '../../../core/antibot/resources.js';
+import { tryAcquireImageJob } from '../../security/resource-limits.js';
 import { createImageMetricsLog } from '../../../core/antibot/image-metrics-log.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 import { imageHostAllowed, loadImageHosts } from '../../../infra/media/image-hosts.repository.js';

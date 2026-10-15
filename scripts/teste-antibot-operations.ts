@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Fastify from 'fastify';
-import { loadAntibotConfig } from '../src/core/antibot/config.js';
-import { createAntibot, createDefaultObserver } from '../src/core/antibot/engine.js';
+import { loadAntibotConfig } from '../src/infra/config/antibot-config.js';
+import { createAntibot } from '../src/application/security/antibot-engine.js';
+import { createDefaultObserver } from '../src/infra/observability/antibot-observer.js';
 import { registerAntibot } from '../src/core/antibot/fastify.js';
 import { loadProxyTrustConfig } from '../src/core/antibot/proxy.js';
 import { composeOperationsObserver, createOperationsTelemetry } from '../src/core/antibot/telemetry.js';

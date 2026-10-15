@@ -5,7 +5,7 @@ import { loadAntibotConfig } from './config.js';
 import { createAntibot, type Antibot } from './engine.js';
 import { normalizeClientIp } from './ip.js';
 import { ROUTE_POLICIES } from './routes.js';
-import type { AntibotConfig, AntibotObserver, Policy, PolicyId, RateLimitDriver, Subject } from './types.js';
+import type { AntibotConfig, AntibotObserver, Policy, PolicyId, RateLimitDriver, Subject } from '../../domain/security/antibot.types.js';
 
 interface RateLimitResult {
   isAllowed: boolean;
