@@ -7,7 +7,7 @@ import { authDependencies } from './helpers/auth-fixture.mjs';
 import { AuthModule } from '../../../dist/src/application/modules/auth/auth.module.js';
 import { HttpPlatformModule, RADAR_HTTP_CONTEXT } from '../../../dist/src/application/modules/http-platform/http-platform.module.js';
 import { configureHttpPlatform, radarHttpAdapterOptions } from '../../../dist/src/infra/http/http-platform.js';
-import { lerToken } from '../../../dist/src/core/auth.js';
+import { lerToken } from '../../../dist/src/infra/auth/session.js';
 
 jest.setTimeout(30_000);
 

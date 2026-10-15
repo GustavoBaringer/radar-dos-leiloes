@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Papel } from '../../core/auth.js';
+import type { Papel } from '../../infra/auth/session.js';
 import { createResourcePool } from '../../core/antibot/resources.js';
 import { loadAntibotConfig } from '../../core/antibot/config.js';
 import { loadChallengeConfig, createChallengeService } from '../../core/antibot/challenge.js';

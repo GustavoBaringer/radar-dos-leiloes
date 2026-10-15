@@ -1,7 +1,7 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { loadAntibotConfig } from '../../../core/antibot/config.js';
 import { createWsProtection, type WsSocket } from '../../../core/antibot/ws.js';
-import type { Papel } from '../../../core/auth.js';
+import type { Papel } from '../../../infra/auth/session.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 
 export interface RealtimeActor { userId: number; papel: Papel }

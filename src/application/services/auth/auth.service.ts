@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { COOKIE, criarToken } from '../../../core/auth.js';
+import { COOKIE, criarToken } from '../../../infra/auth/session.js';
 import { idDoSlug } from '../../../domain/lots/slug.js';
 import { RADAR_HTTP_CONTEXT } from '../../modules/http-platform/http-platform.module.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';

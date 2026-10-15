@@ -1,5 +1,5 @@
 import { query } from '../query.js';
-import type { Papel } from '../../../core/auth.js';
+import type { Papel } from '../../../infra/auth/session.js';
 
 export class IdentityRepository {
   constructor(private readonly queryFn: typeof query = query) {}

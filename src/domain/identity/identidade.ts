@@ -1,4 +1,4 @@
-import type { Papel } from '../../core/auth.js';
+import type { Papel } from './session.js';
 
 export interface Identidade {
   userId: number;

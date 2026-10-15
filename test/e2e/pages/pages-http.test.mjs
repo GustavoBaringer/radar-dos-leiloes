@@ -9,7 +9,7 @@ import { HttpPlatformModule, RADAR_HTTP_CONTEXT } from '../../../dist/src/applic
 import { configureHttpPlatform, radarHttpAdapterOptions } from '../../../dist/src/infra/http/http-platform.js';
 import { configurePageAssets } from '../../../dist/src/infra/web/page-assets.js';
 import { PagesService } from '../../../dist/src/application/services/pages/pages.service.js';
-import { criarToken } from '../../../dist/src/core/auth.js';
+import { criarToken } from '../../../dist/src/infra/auth/session.js';
 
 jest.setTimeout(30_000);
 

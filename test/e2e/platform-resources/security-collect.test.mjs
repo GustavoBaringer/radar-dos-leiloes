@@ -7,7 +7,7 @@ import { dependencies } from '../../../scripts/fixtures/host-fixture.mjs';
 import { configureHttpPlatform, radarHttpAdapterOptions } from '../../../dist/src/infra/http/http-platform.js';
 import { HttpPlatformModule, RADAR_HTTP_CONTEXT } from '../../../dist/src/application/modules/http-platform/http-platform.module.js';
 import { PlatformModule } from '../../../dist/src/application/modules/platform/platform.module.js';
-import { criarToken } from '../../../dist/src/core/auth.js';
+import { criarToken } from '../../../dist/src/infra/auth/session.js';
 
 describe('native security and collection endpoints', () => {
   let app;

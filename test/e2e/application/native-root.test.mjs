@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { dependencies } from '../../../scripts/fixtures/host-fixture.mjs';
 import { createRadarApplication } from '../../../dist/src/bootstrap/native-application.js';
-import { criarToken } from '../../../dist/src/core/auth.js';
+import { criarToken } from '../../../dist/src/infra/auth/session.js';
 
 describe('full native Nest root composition', () => {
   let app;

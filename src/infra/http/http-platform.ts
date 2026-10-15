@@ -2,7 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { COOKIE, lerToken, precisaRenovar, criarToken } from '../../core/auth.js';
+import { COOKIE, lerToken, precisaRenovar, criarToken } from '../../infra/auth/session.js';
 import { loadProxyTrustConfig } from '../../core/antibot/proxy.js';
 import { loadAntibotConfig } from '../../core/antibot/config.js';
 import { loadChallengeConfig } from '../../core/antibot/challenge.js';

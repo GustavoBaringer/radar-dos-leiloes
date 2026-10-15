@@ -9,7 +9,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { idDoSlug, slugDoLote } from './core/slug.js';
 import { VENCIDO } from './core/encerramento.js';
-import { criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './core/auth.js';
+import { criarToken, lerToken, precisaRenovar, JANELAS, COOKIE, type Papel } from './infra/auth/session.js';
 import { documento, celularValido, emailValido } from './core/cadastro.js';
 import { BRAND_LIST, parseQuery } from './core/normalize.js';
 import { registerBrandsRoute } from './modules/catalogo/adapters/http/brands.legacy.js';
@@ -57,10 +57,10 @@ export interface LegacyHostDependencies {
   };
   oidc: {
     oidcLigado: () => boolean;
-    iniciarLogin: typeof import('./core/oidc.js').iniciarLogin;
-    concluirLogin: typeof import('./core/oidc.js').concluirLogin;
-    loginPorSenha: typeof import('./core/oidc.js').loginPorSenha;
-    urlDeLogout: typeof import('./core/oidc.js').urlDeLogout;
+    iniciarLogin: typeof import('./infra/auth/oidc.adapter.js').iniciarLogin;
+    concluirLogin: typeof import('./infra/auth/oidc.adapter.js').concluirLogin;
+    loginPorSenha: typeof import('./infra/auth/oidc.adapter.js').loginPorSenha;
+    urlDeLogout: typeof import('./infra/auth/oidc.adapter.js').urlDeLogout;
     COOKIE_OIDC: string;
     COOKIE_PKCE: string;
   };

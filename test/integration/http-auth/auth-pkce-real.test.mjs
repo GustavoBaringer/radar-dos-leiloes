@@ -77,10 +77,10 @@ class LoopbackCookieJar {
 
 // Import OIDC-sensitive server modules after fixture env is set.
 const [{ createHttpDependencies }, oidc, authModule, accountsModule, catalogModule, platform, contextModule, authCore] = await Promise.all([
-  import('../../../dist/src/bootstrap/http-dependencies.js'), import('../../../dist/src/core/oidc.js'),
+  import('../../../dist/src/bootstrap/http-dependencies.js'), import('../../../dist/src/infra/auth/oidc.adapter.js'),
   import('../../../dist/src/application/modules/auth/auth.module.js'), import('../../../dist/src/application/modules/accounts/accounts.module.js'),
   import('../../../dist/src/application/modules/catalog/catalog.module.js'), import('../../../dist/src/infra/http/http-platform.js'),
-  import('../../../dist/src/application/modules/http-platform/http-platform.module.js'), import('../../../dist/src/core/auth.js'),
+  import('../../../dist/src/application/modules/http-platform/http-platform.module.js'), import('../../../dist/src/infra/auth/session.js'),
 ]);
 
 describe('real Keycloak Authorization Code + PKCE HTTP flow', () => {

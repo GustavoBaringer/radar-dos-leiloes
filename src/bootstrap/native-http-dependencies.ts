@@ -2,7 +2,7 @@ import type { RadarHttpDependencies } from '../infra/http/http-contracts.js';
 
 /** Production composition for the native Nest host; no legacy-host dependency. */
 export async function createNativeHttpDependencies(
-  oidc: typeof import('../core/oidc.js'),
+  oidc: typeof import('../infra/auth/oidc.adapter.js'),
 ): Promise<RadarHttpDependencies> {
   if (!oidc.oidcLigado()) throw new Error('FATAL: OIDC desligado. Configure OIDC_ISSUER no ambiente.');
   const [repo, db, identity, alerts, connectors, queues, connectorHttp] = await Promise.all([

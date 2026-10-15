@@ -7,7 +7,7 @@
 import { chromium } from 'playwright-core';
 import pg from 'pg';
 import { mkdir } from 'node:fs/promises';
-import { criarToken } from '../src/core/auth.ts';
+import { criarToken } from '../src/infra/auth/session.ts';
 
 const { Pool } = pg;
 const BASE = (process.env.BASE ?? 'http://localhost:4500').replace(/\/$/, '');

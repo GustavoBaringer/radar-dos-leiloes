@@ -20,10 +20,10 @@ export interface RadarHttpDependencies {
   };
   oidc: {
     oidcLigado: () => boolean;
-    iniciarLogin: typeof import('../../core/oidc.js').iniciarLogin;
-    concluirLogin: typeof import('../../core/oidc.js').concluirLogin;
-    loginPorSenha: typeof import('../../core/oidc.js').loginPorSenha;
-    urlDeLogout: typeof import('../../core/oidc.js').urlDeLogout;
+    iniciarLogin: typeof import('../../infra/auth/oidc.adapter.js').iniciarLogin;
+    concluirLogin: typeof import('../../infra/auth/oidc.adapter.js').concluirLogin;
+    loginPorSenha: typeof import('../../infra/auth/oidc.adapter.js').loginPorSenha;
+    urlDeLogout: typeof import('../../infra/auth/oidc.adapter.js').urlDeLogout;
     COOKIE_OIDC: string;
     COOKIE_PKCE: string;
   };

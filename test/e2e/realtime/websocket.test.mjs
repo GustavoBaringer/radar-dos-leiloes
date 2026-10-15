@@ -9,7 +9,7 @@ import { HttpPlatformModule, RADAR_HTTP_CONTEXT } from '../../../dist/src/applic
 import { RealtimeModule } from '../../../dist/src/application/modules/realtime/realtime.module.js';
 import { RealtimeService } from '../../../dist/src/application/services/realtime/realtime.service.js';
 import { configureWebsocketTransport } from '../../../dist/src/infra/websocket/websocket-transport.adapter.js';
-import { criarToken } from '../../../dist/src/core/auth.js';
+import { criarToken } from '../../../dist/src/infra/auth/session.js';
 
 describe('native WebSocket realtime transport', () => {
   let app;

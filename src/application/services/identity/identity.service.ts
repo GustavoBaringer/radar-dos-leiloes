@@ -11,7 +11,7 @@
  * fora deste arquivo e do oidc.ts encosta nisso.
  */
 import { Inject, Injectable } from '@nestjs/common';
-import type { Papel } from '../../../core/auth.js';
+import type { Papel } from '../../../infra/auth/session.js';
 import { ANONIMO, type Identidade } from '../../../domain/identity/identidade.js';
 import { IdentityRepository } from '../../../infra/database/repositories/identity.repository.js';
 

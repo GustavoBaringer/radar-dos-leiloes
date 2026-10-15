@@ -33,7 +33,7 @@ async function start() {
     const { resolveHttpPaths } = await import('./bootstrap/paths.js');
     ensureStartupActive();
     const paths = resolveHttpPaths(import.meta.url);
-    const oidc = await import('./core/oidc.js');
+    const oidc = await import('./infra/auth/oidc.adapter.js');
     ensureStartupActive();
     if (!oidc.oidcLigado()) throw new Error('FATAL: OIDC desligado. Configure OIDC_ISSUER/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET no ambiente.');
 
