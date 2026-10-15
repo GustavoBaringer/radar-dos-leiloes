@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { POLICIES, POLICY_IDS } from '../src/core/antibot/config.js';
-import { ROUTE_POLICIES } from '../src/core/antibot/routes.js';
+import { ROUTE_POLICIES } from '../src/infra/http/antibot-routes.js';
 import { createResourcePool } from '../src/core/antibot/resources.js';
 
 test('new image/ws/write policies have contract limits and identities', () => {

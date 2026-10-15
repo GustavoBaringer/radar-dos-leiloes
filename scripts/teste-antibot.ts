@@ -5,7 +5,7 @@ import type { FastifyRequest } from 'fastify';
 import { loadAntibotConfig } from '../src/infra/config/antibot-config.js';
 import { createAntibot } from '../src/application/security/antibot-engine.js';
 import { normalizeClientIp } from '../src/domain/security/client-ip.js';
-import { registerAntibot } from '../src/core/antibot/fastify.js';
+import { registerAntibot } from '../src/infra/http/antibot-fastify.js';
 import type { AntibotConfig, AntibotEvent, Policy, PolicyId, RateLimitDriver } from '../src/domain/security/antibot.types.js';
 
 const config = (mode: 'off' | 'shadow' | 'enforce' = 'enforce', patch: Partial<Record<PolicyId, Partial<Policy>>> = {}): AntibotConfig => {

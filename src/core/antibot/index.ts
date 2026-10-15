@@ -1,20 +1,17 @@
-export { loadAntibotConfig, POLICIES, POLICY_IDS } from './config.js';
-export { createAntibot } from './engine.js';
-export type { Antibot, CreateAntibotOptions } from './engine.js';
-export { registerAntibot } from './fastify.js';
-export { normalizeClientIp } from './ip.js';
-export { ROUTE_POLICIES } from './routes.js';
-export { createImageService } from './images.js';
-export type {
-  ImageOutcome, ImagePlaceholderReason, ImageService, ImageServiceOptions,
-  ImageLimits, ImageRequester, ImageRequestOptions, ImageRequestContext, ImageTransportResponse,
-  ImageProcessor, ImageResponseBody,
-} from './images.js';
-export { createResourcePool, tryAcquireResource, tryAcquireImageJob } from './resources.js';
-export type { ResourceLease, ResourcePool, ResourcePoolOptions } from './resources.js';
-export type {
-  AntibotConfig, AntibotEvent, AntibotObserver,
-  Decision, DecisionReason, DecisionSource, Mode,
-  Policy, PolicyId, RateLimitDriver, Subject,
-} from './types.js';
-export type { AntibotRequest, AntibotRegistration, RegisterAntibotOptions } from './fastify.js';
+export * from '../../infra/config/antibot-config.js';
+export * from '../../application/security/antibot-engine.js';
+export * from '../../infra/http/antibot-fastify.js';
+export * from '../../domain/security/client-ip.js';
+export * from '../../infra/http/antibot-routes.js';
+export * from '../../infra/media/image-proxy.js';
+export * from '../../application/security/resource-limits.js';
+export * from '../../domain/security/antibot.types.js';
+export * from '../../application/security/antibot-telemetry.js';
+export * from '../../infra/http/trust-proxy.js';
+export * from '../../infra/http/antibot-resources.js';
+export * from '../../application/security/challenge.js';
+export { createChallengeHook } from '../../infra/http/challenge-hook.js';
+export * from '../../application/security/ws-protection.js';
+export * from '../../infra/websocket/ws-admission.js';
+export * from '../../application/security/image-telemetry.js';
+export * from '../../infra/observability/image-metrics-log.js';

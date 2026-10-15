@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { loadAntibotConfig } from '../../../infra/config/antibot-config.js';
-import { createWsProtection, type WsSocket } from '../../../core/antibot/ws.js';
+import { createWsProtection, type WsSocket } from '../../security/ws-protection.js';
 import type { Papel } from '../../../infra/auth/session.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 

@@ -6,8 +6,8 @@
 - [x] B. Engine/config/default observer: separar configuração e orquestração sem mudar estado, quotas ou degradação; preservar criação única. Verificar testes engine/config/Fastify e build. Dependência: A.
 - [x] C. Telemetria/resources/guard HTTP: mover implementações preservando singleton, cardinalidade e status; verificar testes resources/operations. Dependência: B.
 - [x] Checkpoint: comparar exportações e corpos dos recortes A–C; typecheck/build e testes direcionados aprovados. Revisão Oracle liberou o recorte sem P1/P2 introduzido; GO limitado a A–C.
-- [ ] D. WS/admission/challenge: mover implementações preservando ownership, timers e cleanup; verificar testes fake de WS e challenge/HTTP. Dependência: C.
-- [ ] E. Imagens/telemetria/log/routes/proxy: realocar sem mudar limites, cache ou persistência; verificar images/operations/proxy e regressões HTTP pertinentes. Dependência: D.
+- [x] D. WS/admission/challenge: mover implementações preservando ownership, timers e cleanup; verificar testes fake de WS e challenge/HTTP. Dependência: C.
+- [x] E. Imagens/telemetria/log/routes/proxy: realocar sem mudar limites, cache ou persistência; verificar images/operations/proxy e regressões HTTP pertinentes. Dependência: D.
 - [ ] F. Conferência final: nenhum corpo fora das camadas previstas, shims compatíveis, testes direcionados e revisão de segurança quando necessária. Dependência: E.
 
 ## Etapas posteriores — não iniciar antes do gate anterior

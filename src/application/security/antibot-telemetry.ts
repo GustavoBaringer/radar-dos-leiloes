@@ -1,5 +1,5 @@
 import type { AntibotEvent, AntibotObserver, Mode, PolicyId } from '../../domain/security/antibot.types.js';
-import type { ChallengeAction } from '../../core/antibot/challenge.js';
+import type { ChallengeAction } from './challenge.js';
 
 const MAX_SERIES = 512;
 const MAX_COUNT = Number.MAX_SAFE_INTEGER;

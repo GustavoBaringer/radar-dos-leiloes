@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Fastify from 'fastify';
 import {
-  createChallengeHook,
   createChallengeService,
   loadChallengeConfig,
   type ChallengeFetch,
-} from '../src/core/antibot/challenge.js';
+} from '../src/application/security/challenge.js';
+import { createChallengeHook } from '../src/infra/http/challenge-hook.js';
 
 const validEnv = (extra: NodeJS.ProcessEnv = {}) => ({
   NODE_ENV: 'test', ANTIBOT_CHALLENGE_MODE: 'enforce',

@@ -1,8 +1,8 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { admitWsUpgrade, attachWsUpgrade } from '../../core/antibot/ws-admission.js';
-import type { WsReservation, WsSocket } from '../../core/antibot/ws.js';
+import { admitWsUpgrade, attachWsUpgrade } from './ws-admission.js';
+import type { WsReservation, WsSocket } from '../../application/security/ws-protection.js';
 import type { RadarHttpContext, RadarHttpRequest } from '../http/radar-http-context.js';
 import type { RealtimeService } from '../../application/services/realtime/realtime.service.js';
 

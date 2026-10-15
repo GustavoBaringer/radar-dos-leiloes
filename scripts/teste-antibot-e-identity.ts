@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { createImageService as canonicalImage } from '../src/infra/media/image-proxy.js';
+import { createImageService as shimImage } from '../src/core/antibot/images.js';
+import { createImageTelemetry as canonicalTelemetry } from '../src/application/security/image-telemetry.js';
+import { createImageTelemetry as shimTelemetry } from '../src/core/antibot/image-telemetry.js';
+import { createImageMetricsLog as canonicalLog } from '../src/infra/observability/image-metrics-log.js';
+import { createImageMetricsLog as shimLog } from '../src/core/antibot/image-metrics-log.js';
+assert.equal(shimImage, canonicalImage);
+assert.equal(shimTelemetry, canonicalTelemetry);
+assert.equal(shimLog, canonicalLog);
+console.log('OK: image proxy, telemetry and metrics log shims preserve function references');

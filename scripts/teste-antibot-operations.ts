@@ -4,10 +4,10 @@ import Fastify from 'fastify';
 import { loadAntibotConfig } from '../src/infra/config/antibot-config.js';
 import { createAntibot } from '../src/application/security/antibot-engine.js';
 import { createDefaultObserver } from '../src/infra/observability/antibot-observer.js';
-import { registerAntibot } from '../src/core/antibot/fastify.js';
-import { loadProxyTrustConfig } from '../src/core/antibot/proxy.js';
+import { registerAntibot } from '../src/infra/http/antibot-fastify.js';
+import { loadProxyTrustConfig } from '../src/infra/http/trust-proxy.js';
 import { composeOperationsObserver, createOperationsTelemetry } from '../src/core/antibot/telemetry.js';
-import { registerOperationsMetricsRoute, ROUTE_POLICIES } from '../src/core/antibot/routes.js';
+import { registerOperationsMetricsRoute, ROUTE_POLICIES } from '../src/infra/http/antibot-routes.js';
 import type { AntibotEvent } from '../src/core/antibot/types.js';
 
 test('proxy config defaults disabled; rejects unsafe, malformed, oversized CIDRs and requires production acknowledgement', () => {
