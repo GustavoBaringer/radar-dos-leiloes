@@ -8,7 +8,7 @@
 - [x] Checkpoint: comparar exportações e corpos dos recortes A–C; typecheck/build e testes direcionados aprovados. Revisão Oracle liberou o recorte sem P1/P2 introduzido; GO limitado a A–C.
 - [x] D. WS/admission/challenge: mover implementações preservando ownership, timers e cleanup; verificar testes fake de WS e challenge/HTTP. Dependência: C.
 - [x] E. Imagens/telemetria/log/routes/proxy: realocar sem mudar limites, cache ou persistência; verificar images/operations/proxy e regressões HTTP pertinentes. Dependência: D.
-- [ ] F. Conferência final: nenhum corpo fora das camadas previstas, shims compatíveis, testes direcionados e revisão de segurança quando necessária. Dependência: E.
+- [x] F. Conferência final: inventário completo de core conferido; duplicação residual de freio substituída por métodos bound do serviço. Typecheck, sete testes puros e teste Nest do freio aprovados. Anti-bot A–E revisado sem P1/P2 introduzido. Core/db administrativo fica explicitamente na etapa 2; aposentadoria dos shims na etapa 4.
 
 ## Etapas posteriores — não iniciar antes do gate anterior
 
