@@ -834,7 +834,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // A ordem foi tirada do diff real, não do senso comum. Máquina agrícola vem
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
-  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitade(?:ir|ri|r)a|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trat(?:or|o)\b)\b/, 'maquina'],
+  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitade(?:ir|ri|r)a|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!(?:caminh[oa]|c|cam|cavalo)\s*)trat(?:or(?:es)?|o)\b)\b/, 'maquina'],
   // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
   // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
   // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
@@ -966,7 +966,7 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
  * Medido em 13/10 sobre os 19.264 veículos do índice: 14 lotes.
  */
 const CAMINHAO_INEQUIVOCO =
-  /\bhyundai ?\/? ?hr\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak)\s?[-/]?\s?\d{3,4}\b|\b(atron|a[cç]{1,2}ello)\b/;
+  /\bhyundai ?\/? ?hr\b|\b(?:caminh[oa]|c|cam|cavalo)\s+trator\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak)\s?[-/]?\s?\d{3,4}\b|\b(atron|a[cç]{1,2}ello)\b/;
 /**
  * Código de caminhão da Volkswagen colado à marca, nos dois sentidos
  * ("12140 H - VOLKSWAGEN" e "VOLKSWAGEN 12.140"): a regra do `vw \d{2} \d{3}`

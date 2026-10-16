@@ -248,4 +248,74 @@ test('classifica caminhões, ônibus, carros e SUVs da Volvo reportados em produ
   assert.deepEqual(classifyAsset('GERAL - 60 (SESSENTA) JOGOS DE LONA DE FREIO DIANTEIRO VOLVO DA MARCA THERMOIDE'), { assetType: 'outro', vehicleType: 'peca' });
 });
 
+test('classifica máquinas agrícolas e ferramentas/acoplagens sem afetar caminhões rodoviários', () => {
+  // Máquinas agrícolas e implementos
+  assert.deepEqual(
+    classifyAsset('COLHEITADERIA - MASSEY FERGUSON/MF 9695 TRIDENT'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('NEW HOLLAND/PLATAFORMA 7220'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('PLATAFORMA 11LX50', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('GRADE ARADORA CRI DE 16C/DSC REC 28', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('GRADE ARADORA PESADA / ANTONIASI /GRADE PESADA ATA 24GPATA', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('TRATO AGRICOLA, MODELO MF 6711, MARCA MASSEY FERGUSON ANO 20', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+
+  // Contra-testes com caminhões reais
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR MERCEDES-BENZ LS 1932 1985 ID: #36', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO MERCEDES-BENZ L-2213 1973 COM PLATAFORMA GUINDAUTO', 'Caminhões Guindauto'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('SUCATA DE CAMINHÃO PLATAFORMA MERCEDES-BENZ L 2013', 'Sucata de Caminhões'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('VOLKSWAGEN CONSTELLATION 13 180 ANO 2011 COM BAU E PLATAFORMA', 'Caminhões Baú'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR SCANIA P114 ID: #3701175', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR VOLVO FH12 380 6X2 ANO 1998/1998', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('C. TRATOR SCANIA P114', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ / LS 1935 / TRA / C. TRATOR', null),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAM. TRATOR VOLVO FH 460', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('Tratores agrícolas Massey Ferguson', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+});
+
 
