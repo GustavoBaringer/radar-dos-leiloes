@@ -9,25 +9,38 @@ import {
 import * as campos from '../src/core/campos.js';
 
 async function main() {
-  console.log('[migracao] Iniciando migração e saneamento de veículos Mercedes-Benz e pesados...');
+  const aplicar = process.argv.includes('--aplicar');
+  const dryRun = !aplicar || process.argv.includes('--dry-run');
+
+  console.log('='.repeat(80));
+  console.log(`[migracao] Saneamento de Mercedes-Benz, Ônibus, Utilitários e Pesados`);
+  console.log(`[migracao] Modo: ${dryRun ? 'DRY-RUN (Simulação - NENHUMA alteração será persistida)' : 'APLICAR (ALTERAÇÕES REAIS SERÃO GRAVADAS NO BANCO)'}`);
+  console.log('='.repeat(80));
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Busca todos os lotes que têm marca MERCEDES-BENZ ou menção a mercedes/mb no título
+    // Busca especificamente lotes com marca MERCEDES-BENZ ou menções a Mercedes/MB/ônibus/utilitários/peças no título
     const res = await client.query(`
-      SELECT id, title_raw, source_category, brand, model, version, vehicle_type, asset_type, city, state, seller_name, lot_url
+      SELECT id, title_raw, source_category, brand, model, version, vehicle_type, asset_type, city, state, seller_name, lot_url, year_make, year_model
       FROM lots
-      WHERE asset_type = 'veiculo' OR asset_type = 'outro'
+      WHERE (asset_type = 'veiculo' OR asset_type = 'outro')
+        AND (
+          brand = 'MERCEDES-BENZ'
+          OR title_raw ~* '\\b(mercedes|m[\\s./-]*benz|mb|induscar|vito|sprinter|marimar|eixo)\\b'
+        )
+      ORDER BY id ASC
     `);
 
-    let totalAtualizados = 0;
+    let totalModificados = 0;
     const contadores = {
       caminhao: 0,
       onibus: 0,
       utilitario: 0,
       peca: 0,
+      carro: 0,
+      outros: 0,
       vwCorrigido: 0,
       citroenCorrigido: 0,
     };
@@ -35,7 +48,7 @@ async function main() {
     for (const r of res.rows) {
       const cls = classifyAsset(r.title_raw, r.source_category);
       let assetType = cls.assetType;
-      let vehicleType = assetType === 'veiculo' ? cls.vehicleType : null;
+      let vehicleType = assetType === 'veiculo' ? cls.vehicleType : (cls.vehicleType === 'peca' ? 'peca' : null);
 
       // Especial para lote que menciona Sprinter na URL
       if (vehicleType === 'carro' && /sprinter/i.test(r.lot_url ?? '')) {
@@ -68,6 +81,9 @@ async function main() {
 
       const extra = completaVeiculo(r.title_raw, brand, vehicleType);
       const version = r.version || extra?.version || null;
+      model = model ?? extra?.model ?? null;
+      const yearMake = r.year_make ?? extra?.yearMake ?? null;
+      const yearModel = r.year_model ?? extra?.yearModel ?? null;
 
       // Se virou peça / outro
       if (assetType === 'outro' && cls.vehicleType === 'peca') {
@@ -75,65 +91,100 @@ async function main() {
       }
 
       // Verifica se houve alteração relevante
-      const mudou =
-        assetType !== r.asset_type ||
-        vehicleType !== r.vehicle_type ||
-        brand !== r.brand ||
-        model !== r.model;
+      const mudouAsset = assetType !== r.asset_type;
+      const mudouVehicle = vehicleType !== r.vehicle_type;
+      const mudouBrand = brand !== r.brand;
+      const mudouModel = model !== r.model;
 
-      if (!mudou) continue;
+      if (!mudouAsset && !mudouVehicle && !mudouBrand && !mudouModel) {
+        continue;
+      }
 
+      totalModificados++;
       if (vehicleType === 'caminhao') contadores.caminhao++;
       else if (vehicleType === 'onibus') contadores.onibus++;
       else if (vehicleType === 'utilitario') contadores.utilitario++;
       else if (vehicleType === 'peca') contadores.peca++;
+      else if (vehicleType === 'carro') contadores.carro++;
+      else contadores.outros++;
 
-      // Atualiza titleDisplay e searchText
-      const titleDisplay = campos.tituloVeiculo({
-        brand,
-        model: model ?? extra?.model ?? null,
-        version,
-        yearMake: null,
-        yearModel: null,
-        titleRaw: r.title_raw,
-      });
+      console.log(`[Lote #${r.id}] "${r.title_raw}" (cat: "${r.source_category}")`);
+      if (mudouAsset || mudouVehicle) {
+        console.log(`  Tipo:   ${r.asset_type}/${r.vehicle_type} -> ${assetType}/${vehicleType}`);
+      }
+      if (mudouBrand || mudouModel) {
+        console.log(`  Modelo: ${r.brand ?? 's/marca'} ${r.model ?? ''} -> ${brand ?? 's/marca'} ${model ?? ''}`);
+      }
 
-      const searchText = buildSearchText([
-        r.title_raw,
-        brand,
-        model,
-        version,
-        r.city,
-        r.state,
-        r.seller_name,
-      ]);
+      if (!dryRun) {
+        const titleDisplay = campos.tituloVeiculo({
+          brand,
+          model,
+          version,
+          yearMake,
+          yearModel,
+          titleRaw: r.title_raw,
+        });
 
-      await client.query(
-        `
-        UPDATE lots
-        SET asset_type = $1,
-            vehicle_type = $2,
-            brand = $3,
-            model = $4,
-            title_display = $5,
-            search_text = $6
-        WHERE id = $7
-      `,
-        [assetType, vehicleType, brand, model, titleDisplay, searchText, r.id],
-      );
+        const searchText = buildSearchText([
+          r.title_raw,
+          brand,
+          model,
+          version,
+          r.city,
+          r.state,
+          r.seller_name,
+        ]);
 
-      totalAtualizados++;
+        await client.query(
+          `
+          UPDATE lots
+          SET asset_type = $1,
+              vehicle_type = $2,
+              brand = $3,
+              model = $4,
+              year_make = COALESCE(lots.year_make, $5),
+              year_model = COALESCE(lots.year_model, $6),
+              title_display = $7,
+              search_text = $8
+          WHERE id = $9
+        `,
+          [assetType, vehicleType, brand, model, yearMake, yearModel, titleDisplay, searchText, r.id],
+        );
+      }
     }
 
-    await client.query('COMMIT');
-    console.log(`[migracao] Migração concluída com sucesso!`);
-    console.log(`  - Total de lotes atualizados: ${totalAtualizados}`);
-    console.log(`  - Caminhões corrigidos: ${contadores.caminhao}`);
-    console.log(`  - Ônibus corrigidos: ${contadores.onibus}`);
-    console.log(`  - Utilitários corrigidos: ${contadores.utilitario}`);
-    console.log(`  - Peças/pneus corrigidos: ${contadores.peca}`);
-    console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
-    console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
+    if (dryRun) {
+      await client.query('ROLLBACK');
+      console.log('\n' + '='.repeat(80));
+      console.log(`[migracao] SIMULAÇÃO CONCLUÍDA (ROLLBACK executado, nada foi alterado)`);
+      console.log(`  - Total de lotes que seriam corrigidos: ${totalModificados}`);
+      console.log(`  - Caminhões: ${contadores.caminhao}`);
+      console.log(`  - Ônibus: ${contadores.onibus}`);
+      console.log(`  - Utilitários: ${contadores.utilitario}`);
+      console.log(`  - Peças/eixos: ${contadores.peca}`);
+      console.log(`  - Carros: ${contadores.carro}`);
+      console.log(`  - Outros: ${contadores.outros}`);
+      console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
+      console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
+      console.log('='.repeat(80));
+      console.log(`Para gravar as alterações no banco de dados, execute:`);
+      console.log(`  node --env-file=.env --import tsx scripts/fix-mercedes-categories.ts --aplicar\n`);
+    } else {
+      await client.query('COMMIT');
+      console.log('\n' + '='.repeat(80));
+      console.log(`[migracao] SUCESSO: Migração persistida no banco com COMMIT!`);
+      console.log(`  - Total de lotes atualizados no banco: ${totalModificados}`);
+      console.log(`  - Caminhões: ${contadores.caminhao}`);
+      console.log(`  - Ônibus: ${contadores.onibus}`);
+      console.log(`  - Utilitários: ${contadores.utilitario}`);
+      console.log(`  - Peças/eixos: ${contadores.peca}`);
+      console.log(`  - Carros: ${contadores.carro}`);
+      console.log(`  - Outros: ${contadores.outros}`);
+      console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
+      console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
+      console.log('='.repeat(80) + '\n');
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[migracao] Erro na migração, efetuado ROLLBACK:', err);

@@ -335,6 +335,7 @@ const PART_MARKERS = [
   'jogo de', 'jogos de', 'kit de', 'kits de', 'par de', 'lote de pecas', 'pecas diversas',
   'cambio do', 'motor do', 'caixa de cambio', 'diferencial do', 'turbina do',
   'mobilete', 'bomba injetora', 'cabine de', 'eixo de', 'eixos de',
+  'eixo mercedes', 'eixos mercedes', 'caixa de direcao', 'bomba de direcao', 'setor de direcao',
   'motor avulso', 'pecas kawasaki', 'lona de freio', 'lonas de freio',
   'pastilha de freio', 'pastilhas de freio', 'disco de freio', 'discos de freio',
 ];
@@ -398,6 +399,8 @@ export function looksLikePart(title: string): boolean {
   return PART_MARKERS.some((m) => f.includes(fold(m))) ||
     (/\bkawasaki\b.{0,30}\bpecas?\b|\bpecas?\b.{0,30}\bkawasaki\b/.test(f)) ||
     (/\b(material pneus|jogo de pneus|pneus perfil|pneus para|pneus meia vida|\d+\s*pneus\b)/.test(f)) ||
+    (/\beixo\s+(?:dianteiro|traseiro|mercedes|scania|volvo|ford)\b/.test(f)) ||
+    (/^direcao\s+hidraulica\b/.test(f)) ||
     (/^cabine\b|\b(cabine|carcaca|dente de cacamba|ponta de cacamba)\b.{0,30}\b(volvo|scania|mercedes|mb|caminhao|escavadeira)\b/.test(f));
 }
 
@@ -834,7 +837,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // A ordem foi tirada do diff real, não do senso comum. Máquina agrícola vem
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
-  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitade(?:ir|ri|r)a|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!(?:caminh[oa]|c|cam|cavalo)\s*)trat(?:or(?:es)?|o)\b)\b/, 'maquina'],
+  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitade(?:ir|ri|r)a|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!(?:caminh[oa]o|caminhao|caminho|c|cam|cavalo)\s*)trat(?:or(?:es)?|o)\b)\b/, 'maquina'],
   // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
   // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
   // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
@@ -872,7 +875,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   [/\bdax ?110\b/, 'moto'],
   // Ônibus antes de caminhão: "ÔNIBUS SCANIA MODELO COMIL" tem as duas marcas.
   // "MPOLO" e "M.POLO" são como o vlance abrevia Marcopolo.
-  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|mascarello|masc\b|gran ?mini|caio|irizar|o 4\d{2} (rs|rse)|o[- ]?500|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4}|b58|b7r|b9r|b1[012][mr]?|b270f)\b/, 'onibus'],
+  [/\b(onibus|micro ?onibus|marcopolo|m ?\.? ?polo|mpolo|comil|neobus|busscar|paradiso|volksbus|ciferal|masca|mascarello|masc\b|gran ?mini|caio|irizar|induscar|o 4\d{2} (rs|rse)|o[- ]?500|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4}|b58|b7r|b9r|b1[012][mr]?|b270f)\b/, 'onibus'],
   // Família que no Brasil só existe em caminhão. "AX0R" com zero no lugar do O
   // aparece cru no vlance. "Titan" ficou de fora: é VW 19.320 Titan e Honda CG
   // 125 Titan ao mesmo tempo — o CG já é pego pela regra de moto.
@@ -927,6 +930,8 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   [/\b(hilux|s ?10|ranger|amarok|strada|saveiro|montana|l ?200|frontier|oroch|triton|hoggar|rampage|dakota|courier|f ?250|ram ?\d{4}|d ?20|c ?10|toro|caminhonete|pickup)\b/, 'picape'],
   [/\b(sw ?4|tucson|ix ?35|creta|tracker|renegade|compass|kicks|duster|captur|t ?cross|nivus|pulse|fastback|tiggo|hr ?v|wr ?v|cr ?v|rav ?4|ecosport|outlander|sportage|xc ?[4679]0|c ?40|ex ?[349]0|tiguan|taos|territory|commander|bronco|jimny|corolla cross|pajero|trailblazer|sorento|santa fe|grand cherokee|cherokee|land cruiser|discovery|evoque)\b/, 'suv'],
   [/\b(sprinter[a-z]?|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|expert|jumpy|scudo|mb ?180\s?d?)\b/, 'utilitario'],
+  [/\bvito\s*[-/]?\s*(?:111\s*cdi|111|119|cdi|tourer|furgao)\b|\bvito\s*(?:111|119)cdi\b|\b(?:m[\s./-]*benz|mercedes|mb)\b.{0,15}?\bvito\w*\b/, 'utilitario'],
+  [/\b415\s*(?:di\s*)?sprinter[a-z]*\b|\b(?:m[\s./-]*benz|mercedes|mb)\b.{0,15}?\bmarimar\b|\b415\s*marimar\b/, 'utilitario'],
   [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(31[0-5]|41[4-6]|51[5-7])\s?(cdi|spri|street|d\b)/, 'utilitario'],
 ];
 
@@ -966,7 +971,7 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
  * Medido em 13/10 sobre os 19.264 veículos do índice: 14 lotes.
  */
 const CAMINHAO_INEQUIVOCO =
-  /\bhyundai ?\/? ?hr\b|\b(?:caminh[oa]|c|cam|cavalo)\s+trator\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak)\s?[-/]?\s?\d{3,4}\b|\b(atron|a[cç]{1,2}ello)\b/;
+  /\bhyundai ?\/? ?hr\b|\b(?:caminh(?:ao|o|a)|c|cam|cavalo)\s+trator\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak|lp|lap)\s?[-/]?\s?\d{3,4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|2013|221[3579]|2220)\b|(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|2013|221[3579]|2220)\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b|^(?!.*\b(?:classe|cla|gla|glc|gle|glk|gls|slk|clk|clc|190 ?e|c ?\d{3}|e ?\d{3}|a ?\d{3}|b ?\d{3}|s ?\d{3}|\d{3}\s*(?:se?|d|ce?)|sl\b|sec\b|sel\b|slc\b)\b).*\b(?:mercedes|m[\s./-]*benz|mb)\b\s+(?:19[5-7]\d|198[0-5])\b|\b(atron|a[cç]{1,2}ello)\b/;
 /**
  * Código de caminhão da Volkswagen colado à marca, nos dois sentidos
  * ("12140 H - VOLKSWAGEN" e "VOLKSWAGEN 12.140"): a regra do `vw \d{2} \d{3}`
@@ -974,6 +979,12 @@ const CAMINHAO_INEQUIVOCO =
  */
 const CODIGO_VW_PESADO =
   /\bvolkswagen\b.{0,30}\b(1[24][ .]?[14]40|17[ .]?180)\b|\b(1[24][ .]?[14]40|17[ .]?180)\b.{0,30}\bvolkswagen\b/;
+
+/**
+ * Ônibus e chassis de ônibus inequívocos que vencem a categoria da fonte.
+ */
+const ONIBUS_INEQUIVOCO =
+  /\b(onibus|micro ?onibus|marcopolo|comil|neobus|busscar|ciferal|irizar|induscar|mascarello|o[- ]?500|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4})\b|\bcaio\b.{0,20}?\b(apache|millen|mondego|foz|vip|solar)\b|\b(apache|millen|mondego|foz|vip|solar)\b.{0,20}?\bcaio\b/;
 
 /**
  * Reboque com evidência no TÍTULO, que também vence a categoria.
@@ -1015,15 +1026,17 @@ export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | nu
   const titulo = fold(titleRaw);
   if (ACESSORIO_SEADOO.test(`${titulo} ${cat}`)) return null;
   if (MARCADORES_IMOVEL.test(titulo) || looksLikePart(titleRaw)) return null;
+  if (cat && /\b(pe[cç]as?|partes)\b/.test(cat)) return null;
   // Só no INÍCIO do título: "caminhão" solto no meio ("peças PARA caminhão",
   // "retirada DE caminhão", "APLI.: caminhão") descreve o que a peça serve,
   // não o que o lote é — dry-run pegou 7 peças virando veículo inteiro antes
   // desta amarra. No início é sempre o bem em si (achado em 23/09: Superbid
   // "Motos" e bomvalor "Carreta com 3 eixos" categorizando caminhão errado).
   if (/^caminhao\b/.test(titulo)) return 'caminhao';
-  // Antes da categoria: reboque e caminhão inequívoco são decididos pelo bem, não
+  // Antes da categoria: reboque, ônibus e caminhão inequívocos são decididos pelo bem, não
   // pelo rótulo que a fonte deu a ele.
   if (REBOQUE_INEQUIVOCO.test(titulo) && !REBOQUE_DE_UTENSILIO.test(titulo)) return 'reboque';
+  if (ONIBUS_INEQUIVOCO.test(titulo)) return 'onibus';
   if (CAMINHAO_INEQUIVOCO.test(titulo) || CODIGO_VW_PESADO.test(titulo)) return 'caminhao';
   let tipoCat: VehicleType | null = null;
   for (const [re, tipo] of CATEGORIA_FONTE) {

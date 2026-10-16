@@ -318,4 +318,77 @@ test('classifica máquinas agrícolas e ferramentas/acoplagens sem afetar caminh
   );
 });
 
+test('classifica modelos clássicos Mercedes, ônibus Induscar, vans e eixos', () => {
+  // Caminhões clássicos e anos antigos
+  assert.deepEqual(
+    classifyAsset('M.BENZ  1963 1963 AZUL', 'Hatches'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('Mercedes-Benz 1111 MB 1967', 'Sucata de Carros'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/LP 321 – 59/59'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/LAP 321 – 65/65'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES 608  1982/1982', 'Bomvalor Corporativo'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES 1519 6 X 6  1976/1976', 'Bomvalor Corporativo'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+
+  // Utilitários / Vans Mercedes
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENS FURGÃO MODELO: 415DISPRINTERF', 'Carros'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ MARIMAR - PLACA: O**-**19', 'Carros'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('I/M.BENZ VITO111CDI'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+
+  // Ônibus Induscar
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/INDUSCAR APACHE U'),
+    { assetType: 'veiculo', vehicleType: 'onibus' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ/INDUSCAR MILLEN U'),
+    { assetType: 'veiculo', vehicleType: 'onibus' },
+  );
+
+  // Peças / Eixos
+  assert.deepEqual(
+    classifyAsset('Eixo Mercedes', 'Telehandlers'),
+    { assetType: 'outro', vehicleType: 'peca' },
+  );
+
+  // Contra-testes com carros legítimos Mercedes
+  assert.deepEqual(
+    classifyAsset('M.BENZ A 160 2005 2005 PRATA', 'Hatches'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  assert.deepEqual(
+    classifyAsset('2018 MERCEDES BENZ CLASSE C', 'Automóveis'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  assert.deepEqual(
+    classifyAsset('AUTOMOVEL - IMP MERCEDES BENZ 190 E 2.6'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+});
+
+
 
