@@ -912,7 +912,7 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // Linha "L", "LS", "LK", "LA" da Mercedes-Benz (com ou sem a marca explícita no título)
   [/\b(ls|lk|la|lak|lb|lks)\s?[-/]?\s?(312|[12]\d{3})\b|\bl\s?(312|[12]\d{3})\b/, 'caminhao'],
   [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\bls\b|\bls\b.{0,15}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
-  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
   // "VW/8.140" e "VW/8.150E" (prefixo de 1 dígito, série 140/Delivery) saíam
   // do "vw ?\d{2} ?\d{3}\b" de cima: exigia 2 dígitos, e o "\b" final falhava
   // quando o sufixo vem colado a letra ("150E"). Achado em 24/09 no bomvalor,
@@ -969,9 +969,16 @@ const categoriaGenerica = (cat: string) => GENERICAS.test(cat) && !/\bpe[cç]a/.
  * nenhum desses nomes é de veículo leve.
  *
  * Medido em 13/10 sobre os 19.264 veículos do índice: 14 lotes.
+ *
+ * "2013" foi tirado da lista de códigos e a regra "marca + ano" foi removida em
+ * 16/10: os dois tratavam ANO DE MODELO como se fosse código de caminhão. Como a
+ * cláusula aceita qualquer número de 4 dígitos colado na marca, "2013 MERCEDES
+ * BENZ SPRINTER" (van) e "MERCEDES-BENZ C-180 TURBO 2013/2014" (sedã) viravam
+ * caminhão, e "M.BENZ 1963 1963 AZUL" — que só tem ano — também. Nenhum deles é
+ * Mercedes de carga: 1620, 915C e LS 1519 continuam casando.
  */
 const CAMINHAO_INEQUIVOCO =
-  /\bhyundai ?\/? ?hr\b|\b(?:caminh(?:ao|o|a)|c|cam|cavalo)\s+trator\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak|lp|lap)\s?[-/]?\s?\d{3,4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|2013|221[3579]|2220)\b|(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|2013|221[3579]|2220)\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b|^(?!.*\b(?:classe|cla|gla|glc|gle|glk|gls|slk|clk|clc|190 ?e|c ?\d{3}|e ?\d{3}|a ?\d{3}|b ?\d{3}|s ?\d{3}|\d{3}\s*(?:se?|d|ce?)|sl\b|sec\b|sel\b|slc\b)\b).*\b(?:mercedes|m[\s./-]*benz|mb)\b\s+(?:19[5-7]\d|198[0-5])\b|\b(atron|a[cç]{1,2}ello)\b/;
+  /\bhyundai ?\/? ?hr\b|\b(?:caminh(?:ao|o|a)|c|cam|cavalo)\s+trator\b|volvo.{0,20}?\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b|\b(vm|fh|fm|fmx|nh\s*12\s*\d{0,3}|nl\s*1[02]|n\s*1[02]|edc|globetrotter)\b.{0,20}?\bvolvo\b|\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b|stralis ?hd\b|mercedes ?mb ?\d{4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\b(ls|lk|la|lak|lp|lap)\s?[-/]?\s?\d{3,4}\b|\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|221[3579]|2220)\b|(?<!\b(?:of|oh|lo)\s*[-/]?\s*)\b(608\s?d?|709|710|712|912|914|915\s?c?|111[13458]|121[458]|131[358]|1418|151[389](?:\s*6\s*x\s*6)?|1618|1620|1634|1935|1938|1944|221[3579]|2220)\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b|\b(atron|a[cç]{1,2}ello)\b/;
 /**
  * Código de caminhão da Volkswagen colado à marca, nos dois sentidos
  * ("12140 H - VOLKSWAGEN" e "VOLKSWAGEN 12.140"): a regra do `vw \d{2} \d{3}`
@@ -1066,6 +1073,11 @@ export function tipoForteDoTitulo(titleRaw: string, sourceCategory?: string | nu
 
 /** Palavras do TÍTULO quando a fonte não classifica (Kuss e Freitas não classificam). */
 const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
+  // "moto bomba" é motobomba — conjunto de irrigação, equipamento — e não
+  // motocicleta. Sem esta linha o dicionário abaixo pega a palavra "moto" e
+  // "Conjunto de Irrigação Motor Mercedes Benz com Moto Bomba" entrava no filtro
+  // de moto. Medido em 16/10: 5 lotes, todos motobomba de verdade.
+  [/\bmoto\s?-?\s?bomba\b|\bmotobomba\b/, 'maquina'],
   [/\b(cg ?1[26]0|biz|pop ?110|fan|titan|bros|xre|factor|fazer|ybr|pcx|nmax|cb ?\d{3}|xj6|hornet|twister|burgman|dafra|haojue|shineray)\b/, 'moto'],
   [/\b(motocicleta|motoneta|scooter)\b/, 'moto'],
   // Scania, DAF, MAN e Agrale só fazem pesado no Brasil: a marca sozinha decide.
@@ -1076,7 +1088,7 @@ const TITULO_TIPO: Array<[RegExp, VehicleType]> = [
   [/\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b.{0,20}?\b([468]x[24]r?|cavalo|trator|truck|chassi|eixos?)\b|\b([468]x[24]r?|cavalo mecanico|caminhao trator)\b.{0,20}?\b(vm|fh|fm|fmx)\s*[-/]?\s*\d{2,3}\b/, 'caminhao'],
   [/\b(ls|lk|la|lak|lb|lks)\s?[-/]?\s?(312|[12]\d{3})\b|\bl\s?(312|[12]\d{3})\b/, 'caminhao'],
   [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,15}?\bls\b|\bls\b.{0,15}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
-  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|2013|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
+  [/\b(mercedes|m[\s./-]*benz|mb)\b.{0,20}?\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|221[37])\b|\b(710|915\s?c?|111[134]|121[48]|131[38]|1418|1518|1618|1620|1634|1935|1938|1944|221[37])\b.{0,20}?\b(mercedes|m[\s./-]*benz|mb)\b/, 'caminhao'],
   [/\b(onibus|micro ?onibus|marcopolo|comil|neobus|caio|mascarello|masc\b|gran ?mini|busscar|irizar|of[- /]?\d{3,4}|oh[- /]?\d{3,4}|lo[- /]?\d{3,4}|o[- ]?500|b58|b7r|b9r|b1[012][mr]?|b270f)\b/, 'onibus'],
   [/\b(hilux|s10|ranger|amarok|toro|strada|saveiro|montana|l200|frontier|oroch|maverick|f ?250|d20|courier|caminhonete|pickup)\b/, 'picape'],
   [/\b(sprinter[a-z]?|master|ducato|daily|jumper|boxer|kangoo|partner|doblo|fiorino|transit|kombi|ambulancia|mb ?180\s?d?)\b/, 'utilitario'],
@@ -1225,7 +1237,17 @@ export function classifyAsset(
   // Categoria de bem que não é veículo decide antes do título: "CAIXA DE SOM PULSE"
   // em Equipamentos virava Fiat Pulse, e monitor e Apple Watch viravam carro. Só
   // máquina pesada nomeada no título escapa. `\b` evita casar "automoveis".
-  if (cat && /\b(equipament|eletron|eletrodomest|informatic|moveis|mobili|utensil|diversos|ferrament|joia|vestuari)/.test(cat)) {
+  //
+  // 16/10: o título que DECLARA o bem também escapa. O Superbid e o grupolance
+  // guardam 23 veículos reais — "Automóvel Fiat/Siena", "Motocicleta Honda/CG
+  // 125", "Caminhão Mercedes Benz/L 1620" — em "Eletrônico"/"Bens diversos", e
+  // eles sumiam do índice inteiro. É o mesmo Escape que o bloco de imóvel acima
+  // já faz, e pela mesma razão: o bem nomeado no título vence o rótulo da fonte.
+  if (
+    cat &&
+    /\b(equipament|eletron|eletrodomest|informatic|moveis|mobili|utensil|diversos|ferrament|joia|vestuari)/.test(cat) &&
+    !tituloDeclaraVeiculo
+  ) {
     return /\b(trator|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora)\b/.test(titulo)
       ? { assetType: 'veiculo', vehicleType: 'maquina' }
       : { assetType: 'outro', vehicleType: null };

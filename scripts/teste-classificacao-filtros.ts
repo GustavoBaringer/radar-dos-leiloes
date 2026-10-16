@@ -319,10 +319,12 @@ test('classifica máquinas agrícolas e ferramentas/acoplagens sem afetar caminh
 });
 
 test('classifica modelos clássicos Mercedes, ônibus Induscar, vans e eixos', () => {
-  // Caminhões clássicos e anos antigos
+  // Caminhões clássicos e anos antigos. "M.BENZ 1963 1963 AZUL" NÃO entra aqui:
+  // ano de modelo não é código de caminhão, e o lote está em "Hatches" no
+  // índice. Era a regra "marca + ano" que o transformava em caminhão (16/10).
   assert.deepEqual(
     classifyAsset('M.BENZ  1963 1963 AZUL', 'Hatches'),
-    { assetType: 'veiculo', vehicleType: 'caminhao' },
+    { assetType: 'veiculo', vehicleType: 'carro' },
   );
   assert.deepEqual(
     classifyAsset('Mercedes-Benz 1111 MB 1967', 'Sucata de Carros'),
@@ -387,6 +389,51 @@ test('classifica modelos clássicos Mercedes, ônibus Induscar, vans e eixos', (
   assert.deepEqual(
     classifyAsset('AUTOMOVEL - IMP MERCEDES BENZ 190 E 2.6'),
     { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  // O ano de modelo colado na marca não pode virar código de caminhão: em
+  // 16/10 o "2013" estava na lista e estas três viravam `caminhao` — a van e o
+  // sedan perdiam o filtro de leve e o caminhão entrava com ano de carro.
+  assert.deepEqual(
+    classifyAsset('2013 MERCEDES BENZ SPRINTER', 'Utilitários Grandes'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES-BENZ C-180 TURBO 2013/2014 GASOLINA', null),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+});
+
+test('motobomba é equipamento, não motocicleta', () => {
+  assert.deepEqual(
+    classifyAsset('Conjunto de Irrigação Motor Mercedes Benz com Moto Bomba', 'Bombas'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('SCHNEIDER - MOTOBOMBA CENTRIFUGA SUBMERSIVEL', null),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  // A palavra "moto" sozinha continua sendo motocicleta.
+  assert.deepEqual(
+    classifyAsset('MOTO HONDA CG 125 FAN 2011', 'Motos'),
+    { assetType: 'veiculo', vehicleType: 'moto' },
+  );
+});
+
+test('título que declara o bem vence categoria de equipamento', () => {
+  // O Superbid e o grupolance guardam veículo em "Eletrônico": eles sumiam do
+  // índice inteiro (23 lotes medidos em 16/10).
+  assert.deepEqual(
+    classifyAsset('Caminhão Mercedes Benz/L 1620, ano/modelo 2010', 'Eletrônico'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('Motocicleta Honda/CG 125 Titan KS', 'Eletrônico'),
+    { assetType: 'veiculo', vehicleType: 'moto' },
+  );
+  // Equipamento que não é veículo continua fora do índice de veículos.
+  assert.deepEqual(
+    classifyAsset('CAIXA DE SOM PULSE', 'Equipamentos'),
+    { assetType: 'outro', vehicleType: null },
   );
 });
 
