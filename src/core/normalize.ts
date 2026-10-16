@@ -834,13 +834,32 @@ const TITULO_FORTE: Array<[RegExp, VehicleType]> = [
   // A ordem foi tirada do diff real, não do senso comum. Máquina agrícola vem
   // primeiro porque a marca dela colide com nome de picape: "Pulverizador
   // MONTANA RANGER", "Roçadeira TRITON", "Minicarregadeira NEW HOLLAND L200".
-  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitadeira|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trator)\b/, 'maquina'],
+  [/\b(retroescavadeira|escavadeira|motoniveladora|empilhadeira|colheitade(?:ir|ri|r)a|ensiladeiras?|plantadeira|semeadeira|adubadeira|pulverizador|ro[cç]adeira|carregadeira|minicarregadeira|rolo compactador|(?<!caminhao )trat(?:or|o)\b)\b/, 'maquina'],
   // Implemento agrícola e de obra. MEDIDO em 17/09: 76 lotes de leilo/"Pesados"
   // — plataforma de corte, semeadora, plaina, grade — caíam no padrão `carro` e
   // apareciam no filtro de veículo leve. "semeadora" não é erro de digitação de
   // "semeadeira": a fonte escreve das duas formas e só a segunda estava aqui.
   // Sigla solta ficou de fora: "magnum" e "hitech" são trator E outras coisas.
-  [/\b(plataforma (de )?(corte|milho|graos|cereais)|plataforma (draper|flexivel)|draper|terraflex|acabadora de asfalto|plaina|semeadora|escarificador|grade (aradoura|niveladora|nivelador)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira)\b/, 'maquina'],
+  [
+    new RegExp(
+      // Plataformas agrícolas de corte/acoplamento associadas a marcas, culturas/tipos ou modelo/dimensões (sem capturar caminhão ou guincho plataforma)
+      String.raw`(?<!\b(?:caminh[oa]|guincho)\b.{0,30})(?:` +
+      String.raw`\bplataforma\b.{0,30}?\b(?:new holland|massey ferguson|mf|case ih|case|john deere|jd|valtra|slc|gensert|tatu|marchesan|baldan|jan)\b|` +
+      String.raw`\b(?:new holland|massey ferguson|mf|case ih|case|john deere|jd|valtra|slc|gensert|tatu|marchesan|baldan|jan)\b.{0,30}?\bplataforma\b|` +
+      String.raw`\bplataforma\b.{0,20}?\b(?:corte|milho|soja|graos?|cereais|draper|flexivel|caracol|hydraflex|terraflex)\b|` +
+      String.raw`\bplataforma\s+(?:\d{3,5}|\d{1,2}lx\d{1,2})\b|` +
+      String.raw`\bplataforma\b.{0,20}?\b\d{1,2}\s*pes\b` +
+      String.raw`)` +
+      // Implementos, ferramentas agrícolas, tecnologias de corte e de obra
+      String.raw`|\b(` +
+      String.raw`draper|terraflex|hydraflex|acabadora de asfalto|plaina|semeadora|escarificador|` +
+      String.raw`grade (?:aradora|aradoura|niveladora|nivelador|pesada|disco)|arado|aplicador de bioinsumos|rolo tandem|valtra|plantedaeira|` +
+      String.raw`subsolador|adubadoras?|plantadoras?|colhedoras?|ceifadeiras?|enfardadeiras?|enfardadoras?|` +
+      String.raw`vagao forrageiro|concha para trator|(?:espalhador|distribuidor) de (?:calcario|adubo|fertilizante)|terracador` +
+      String.raw`)\b`,
+    ),
+    'maquina',
+  ],
   [/\b(lancha|jet ?(?:ski|sky)|sea ?doo|seadoo|embarcacao|iate|veleiro|balsa)\b/, 'nautico'],
   [/\byamaha\b.{0,20}\b(mt ?0?9|mt ?03|ttr ?230|neo ?(?:at ?)?115|neo ?125|xt ?600 ?e?)\b/, 'moto'],
   [/\bhonda\b.{0,20}\b(nrx ?160|elite ?125)\b/, 'moto'],
