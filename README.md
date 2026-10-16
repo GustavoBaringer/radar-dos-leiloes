@@ -14,6 +14,15 @@ para a página original do leiloeiro.
 # interface e API: http://localhost:4500
 ```
 
+For local Nest, `npm start` builds the backend and runs `dist/src/main.js`;
+`npm run dev` aliases it and does not watch for changes. `npm run start:compiled`
+reuses the current build. These commands load `.env` and use a local-only
+preload forcing `BIND_HOST=127.0.0.1`, `NEST_BOOTSTRAP=1`, and loopback `SITE_URL`.
+Use only after verifying `.env` targets a disposable local fixture. The old
+watch mode remains as `npm run dev:legacy`; `npm run start:legacy` and
+`npm run start:compiled:legacy` retain legacy entrypoints. Docker/production do
+not use the preload and retain `dist/src/server.js` as their entrypoint.
+
 ## Coletar sob demanda
 
 ```bash

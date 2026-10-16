@@ -1,15 +1,16 @@
 # Runbook operacional: migração NestJS/Prisma
 
-**Estado: ainda sem implantação e sem cutover autorizado.** O fallback local legado → Nest → legado e backup/restore da fixture foram ensaiados; não houve reversão de Prisma nem restore de produção. O servidor padrão segue legado. Este documento não autoriza publicação ou execução em produção; eventual template VPS futuro não muda essa condição.
+**Estado: cutover local autorizado, sem implantação/publicação.** `npm start` compila e executa Nest por `dist/src/main.js`; `npm run dev` é alias sem watch, e `start:compiled` reutiliza build existente. O preload fixa bind/URL em loopback; os comandos carregam `.env` e só podem ser usados após confirmar fixture descartável. `dev:legacy` preserva TSX watch legado; demais fallbacks estão em `*:legacy`. Docker/produção permanecem no entrypoint legado, sem preload. Não houve reversão Prisma nem restore de produção; nenhuma autorização para publicação ou execução em produção.
 
 ## O que está comprovado
 
-- `src/server.ts` inicia o host legado. `src/main.ts` inicia o nativo somente com `NEST_BOOTSTRAP=1`; ambos usam Fastify e, por padrão, loopback:4500. `package.json` start usa `--env-file=.env`; não o use para os ensaios isolados.
+- `src/server.ts` inicia o host legado. `src/main.ts` inicia o nativo somente com `NEST_BOOTSTRAP=1`; ambos usam Fastify e, por padrão, loopback:4500. `npm start` lê `.env`; use somente após confirmar que contém fixture descartável.
 - Build/typecheck/testes aprovados conforme [ADR](adr/ADR-001-nest-prisma.md); runtime compilado observado iniciando em cerca de 43 s. Configure margem de readiness de pelo menos 120 s, sem tratar demora como prova de falha nem como healthcheck.
 - Testes isolados aprovados para auth, senha/PKCE, WebSocket, assets e logout LOCAL. O fluxo federado foi dispensado pelo usuário; isso não demonstra que wildcard jamais funcione em produção.
 - Build Docker offline falhou por ausência de índices apt; tentativa posterior com rede normal e CA corporativa via BuildKit secret passou para HEAD `4174814e70242ba46318c1288af3314b0d111c70`, imagem `radar-nest-migration:ops-check`, ID `sha256:72809622fd63df84aabe48899191168cb4c87d6d6d6acb993794a0ae90ecdb07` (~2m20s). TLS não foi desabilitado. Runtime nativo na imagem passou internamente; acesso do host não passou. Detalhes e limites abaixo.
 - A prova comparativa browser green/green + controle negativo foi autorizada como alternativa explícita ao gate genérico; passou localmente conforme a matriz abaixo. Não equivale ao `auto-test-front` literal nem aprova produção. PKCE/WS prévios foram reutilizados, não repetidos nesta comparação; logout federado foi dispensado, não aprovado.
 - Fallback local em 16/10/2026: build backend aprovado; legado → Nest → legado em `127.0.0.1:45450`, com `/login` 200, `/api/me` 401 e `/busca` 302 nas três fases. Cada processo encerrou por SIGTERM com código 0 e liberou a porta; contagens sources/users/lots permaneceram 54/0/0. Evidência local: `/tmp/opencode/rollback4-execution.log`. O ensaio não cobre sessão persistida, revisão histórica, rollback de dados ou backup.
+- Cutover local pelo comando padrão em 16/10/2026: `npm start` completou `build:backend` e subiu `dist/src/main.js` em `127.0.0.1:45450` (~54 s após o comando compilado), confirmado por PID/cmdline/cwd. `/api/security-config` 200, `/login` 200 HTML, `/api/me` 401, `/busca` 302 para login e `/challenge.js`/`.css` 200. SIGTERM no PID próprio, `npm` exit 0, listener liberado; PG permaneceu 54/0/0. Log: `/tmp/opencode/local-cutover-logs/npm-start-compiled-default.jsonl`. Não deixou processo rodando.
 
 ## Evidência Docker (fixture, sem cutover)
 
@@ -47,7 +48,18 @@ Prova independente de notifications em 16/10/2026: `NotificationService`, `PostC
 
 ## Ensaio local (somente fixture)
 
-Use exclusivamente os serviços e valores descartáveis documentados em [validation-environment](validation-environment.md), nunca `.env` ou credenciais de produção. Verifique o Keycloak existente com `node scripts/test-environment.mjs check`, em `127.0.0.1:58081`; o script não gerencia PostgreSQL/Redis. Prepare estes serviços isolados conforme ambiente de validação antes de subir o backend. Não carregue `.env`.
+`npm start` recompila e executa Nest compilado; `npm run dev` é o mesmo comando,
+sem watch. `npm run start:compiled` usa o build existente. O preload local-only
+fixa loopback e valida `PORT` (inteiro de 1 a 65535). Esses comandos carregam
+`.env`, portanto confirme antes que DB/Redis/OIDC apontam somente a fixtures
+descartáveis. `dev:legacy` mantém o watch TSX legado; `start:legacy` e
+`start:compiled:legacy` são fallbacks legados. A tentativa de executar Nest
+diretamente via TSX terminou com exit 1 e stdout/stderr vazios; a causa não foi
+determinada. Não usar esse caminho como cutover. Docker/produção não usam o
+preload e mantêm `dist/src/server.js`. Teste unitário do preload:
+`npm run test:local-runtime`.
+
+Use exclusivamente os serviços descartáveis documentados em [validation-environment](validation-environment.md). Antes dos comandos abaixo, confira que `.env` aponta somente para essa fixture (sem imprimir seu conteúdo), confirme que a porta HTTP está livre e que os serviços isolados estão disponíveis. O Keycloak existente pode ser verificado com `node scripts/test-environment.mjs check`, em `127.0.0.1:58081`; o script não gerencia PostgreSQL/Redis. Os scripts npm leem `.env`; nunca os use com endpoints ou credenciais de produção.
 
 Antes de iniciar, confirme que a porta não pertence a terceiro/processo existente:
 
@@ -55,20 +67,15 @@ Antes de iniciar, confirme que a porta não pertence a terceiro/processo existen
 ss -ltnp '( sport = :45450 )'
 ```
 
-Se houver listener, pare: não o mate nem reutilize a porta. Para evitar importar `.env`, passe a allowlist explicitamente ao processo; em shell POSIX, defina cada variável conforme o fixture e rode:
+Se houver listener, pare: não o mate nem reutilize a porta. Com a fixture validada e a porta livre, o smoke do cutover local é:
 
 ```sh
-env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test BIND_HOST=127.0.0.1 PORT=45450 SITE_URL=http://127.0.0.1:45450 \
-  DATABASE_URL='postgresql://radar_test:radar_test_local@127.0.0.1:55433/radar_prisma' \
-  REDIS_URL='redis://127.0.0.1:56380' \
-  OIDC_ISSUER='http://127.0.0.1:58081/realms/radar-migration-test' \
-  OIDC_CLIENT_ID=radar-test-web OIDC_CLIENT_SECRET=radar-test-client-secret \
-  OIDC_ROLE_ADMIN=radar-admin APP_SESSAO_SEGREDO=radar-migration-fixture-cookie-secret-not-for-production \
-  ANTIBOT_MODE=off ANTIBOT_CHALLENGE_MODE=off \
-  node --import tsx src/server.ts
+npm start                         # build:backend + compiled Nest, loopback
+# pare o processo e confirme a porta livre antes do fallback:
+npm run start:compiled:legacy    # build já existente + entrypoint legado compilado
 ```
 
-Compare legado com o nativo encerrando o primeiro processo e confirmando a porta livre antes de iniciar o segundo; mantenha a mesma allowlist e acrescente `NEST_BOOTSTRAP=1`, substituindo o entrypoint por `src/main.ts`. Aguarde até 120 s; `/api/security-config` 200 sinaliza prontidão HTTP, não aceite operacional completo. `/health` exige autenticação administrativa. Encerre com SIGTERM e confirme saída e porta livre. Para voltar ao legado, troque o entrypoint para `src/server.ts`: retirar a flag de `main.ts` não inicia o legado. Para artefatos compilados, use respectivamente `node dist/src/main.js` e `node dist/src/server.js`, sem `--import tsx`. Não exponha serviços.
+Confirme o listener em `127.0.0.1` e aguarde até 120 s; `/api/security-config` 200 sinaliza prontidão HTTP, não aceite operacional completo. `/health` exige autenticação administrativa. Verifique `/login`, `/api/me` sem sessão e o redirect de `/busca`; encerre o processo próprio com SIGTERM e confirme saída/porta livre. `npm run dev` é alias de `npm start`, sem watch; `dev:legacy` preserva o watch legado. Source Nest via TSX falhou nos diagnósticos locais com exit 1 e sem stdout/stderr; causa indeterminada. Não use essa rota para cutover. Não exponha serviços.
 
 ## Cutover/rollback — template futuro, não executar
 
@@ -80,7 +87,7 @@ Rollback de aplicação: retornar à revisão/tag anterior e ao entrypoint legad
 
 ## Go/no-go e limites
 
-**No-go para cutover/entrega global.** M3.5 e M5.1 aprovados localmente nos limites registrados; M5.2 hub real/worker privado/schedulers/shutdown e teste lifecycle durável aprovados localmente; M5.3 matching/idempotência fake ports e registro daily aprovados localmente, sem SMTP/VAPID real nem cobertura integral de cron/auxiliares. M6.1/M6.2 provas locais aprovadas nos recortes executados; rollback histórico/PITR/DR produção/canário não aprovados. M4.5 cutover, M6.3 remoção do legado e M6.4 entrega global permanecem pendentes por decisão do usuário. Sem implantação. Ingress HTTPS/WebSocket e autorização operacional pendentes; runtime image é stale para worker-only e não se reivindica novo build de imagem worker. Manter legado/shims; avaliar TLS legado em `PORT+1` versus terminador efetivo.
+**No-go para cutover/entrega global; cutover local autorizado.** M3.5 e M5.1 aprovados localmente nos limites registrados; M5.2 hub real/worker privado/schedulers/shutdown e teste lifecycle durável aprovados localmente; M5.3 matching/idempotência fake ports e registro daily aprovados localmente, sem SMTP/VAPID real nem cobertura integral de cron/auxiliares. M6.1/M6.2 provas locais aprovadas nos recortes executados; rollback histórico/PITR/DR produção/canário não aprovados. M4.5 local usa somente Nest compilado; `npm start` build+runtime passou em loopback conforme evidência acima. Caminho Nest via TSX permanece com exit 1 sem stdout/stderr e causa indeterminada; não é usado. M6.3 remoção do legado e M6.4 entrega global permanecem pendentes. Sem implantação/publicação. Ingress HTTPS/WebSocket e autorização operacional pendentes; runtime image é stale para worker-only e não se reivindica novo build de imagem worker. Manter legado/shims; avaliar TLS legado em `PORT+1` versus terminador efetivo.
 
 Comparar p50/p95, taxa de erro, auth, sessões, conexões WebSocket, falhas de worker e contagens de coleta (`lidos/mapeados/gravados/descartados`); investigar antes de avançar. Locks Redis atuais têm limite TOCTOU/fencing: não presumir exclusão forte entre workers nem aumentar concorrência sem provar ownership/cancelamento compartilhados.
 

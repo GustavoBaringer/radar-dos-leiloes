@@ -5,10 +5,17 @@ ESM resolution and copies `src/web` to `dist/src/web`. The build is rooted at
 the repository location, not the caller's current directory. It does not copy
 `app-busca`, certificates, secrets, or dependencies.
 
-The compiled entrypoint is `dist/src/server.js`; after building, run it with
-`npm run start:compiled` (which loads the local `.env`). This command starts
-the application and is intentionally not run by build or CI. The root
-`dev`/`start` and frontend build remain unchanged.
+The compiled Nest entrypoint is `dist/src/main.js`. `npm start` builds the
+backend and then runs `npm run start:compiled`; the latter reuses the current
+build. Local `dev` aliases `npm start` and does not watch files. Use these local
+commands only after confirming `.env` targets a disposable fixture; the
+preload `scripts/local-runtime.mjs` forces loopback binding and Nest bootstrap.
+`dev:legacy` preserves the old TSX watch command; `start:legacy` and
+`start:compiled:legacy` preserve the old entrypoints with the local-only preload.
+Docker/production remain unchanged and do not use this preload; the production
+entrypoint remains `dist/src/server.js`. Source Nest via TSX exited 1 without
+stdout/stderr in local diagnostics; cause is undetermined and this path is not
+the supported local cutover.
 
 `npm run test:compiled` runs the host contract suite with
 `HOST_VARIANT=compiled`. CI requires this suite after building the backend.
