@@ -540,6 +540,7 @@ export interface WorkerHub {
 export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
   let daily: ReturnType<typeof createDailyWorkerRuntime> | undefined;
   const workers: Worker[] = [];
+  const workerConnections: ReturnType<typeof makeRedis>[] = [];
   const timers: Array<ReturnType<typeof setInterval>> = [];
   const cycles = new Set<Promise<void>>();
   let ligado = false;
@@ -553,6 +554,11 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
     const t = setInterval(() => runCycle(fn), ms);
     t.unref();
     timers.push(t);
+  };
+  const createWorkerConnection = () => {
+    const connection = makeRedis();
+    workerConnections.push(connection);
+    return connection;
   };
 
   return {
@@ -580,11 +586,11 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       await limparAgendamentosOrfaos();
 
       workers.push(
-        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: DEPLOY.concurrency })
+        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: createWorkerConnection(), concurrency: DEPLOY.concurrency })
           .on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message))
           .on('error', (err) => console.error('[collect] worker:', err.message)),
         ...(DEPLOY.refresh ? [new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? processarRefresh, {
-          connection: makeRedis(),
+          connection: createWorkerConnection(),
           concurrency: 1,
         })
           .on('failed', (_job, err) => console.error('[refresh] falhou:', err.message))
@@ -597,7 +603,7 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
             console.log(`[discover] ${job.data.qual}:`, r);
             return r;
           }),
-          { connection: makeRedis(), concurrency: 1 },
+          { connection: createWorkerConnection(), concurrency: 1 },
         )
           .on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message))
           .on('error', (err) => console.error('[discover] worker:', err.message))] : []),
@@ -623,15 +629,33 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       for (const t of timers.splice(0)) clearInterval(t);
       const stopped = await Promise.allSettled([daily?.stop(), ...workers.splice(0).map((w) => w.close())]);
       await Promise.allSettled(cycles);
+      let contextError: unknown;
       try {
         if (collectionContext) await (await collectionContext).close();
+      } catch (error) {
+        contextError = error;
       } finally {
         collectionContext = undefined;
         collectOwnership?.close(); refreshOwnership?.close();
         collectOwnership = undefined; refreshOwnership = undefined;
       }
-      const failure = stopped.find(result => result.status === 'rejected');
+      const connections = workerConnections.splice(0);
+      if (publisher) {
+        connections.push(publisher);
+        publisher = undefined;
+      }
+      const closed = await Promise.allSettled(connections.map(async (client) => {
+        try {
+          if (client.status === 'ready') await client.quit();
+          else client.disconnect();
+        } catch (error) {
+          client.disconnect();
+          throw error;
+        }
+      }));
+      const failure = [...stopped, ...closed].find(result => result.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
+      if (contextError) throw contextError;
     },
   };
 }
