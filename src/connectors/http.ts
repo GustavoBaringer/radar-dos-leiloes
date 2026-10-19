@@ -1,6 +1,6 @@
 import { request, Agent, interceptors, type Dispatcher } from 'undici';
 import { setTimeout as delay } from 'node:timers/promises';
-import { combinedSignal } from '../core/collection-cancellation.js';
+import { combinedSignal } from '../infra/collection/collection-cancellation.js';
 
 // Freitas entrega cadeia TLS incompleta (medido: UNABLE_TO_VERIFY_LEAF_SIGNATURE).
 // O undici v7 não aceita `connect` no request() direto; só via dispatcher Agent.

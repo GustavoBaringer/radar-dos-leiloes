@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createWsProtection, type WsRedisClient, type WsSocket } from '../src/core/antibot/ws.js';
+import { createWsProtection, type WsRedisClient, type WsSocket } from '../src/application/security/ws-protection.js';
 
 class FakeRedis extends EventEmitter implements WsRedisClient {
   status = 'ready';

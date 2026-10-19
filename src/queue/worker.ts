@@ -3,26 +3,27 @@ import { pathToFileURL } from 'node:url';
 import { Worker, type Job, type Processor, type Queue } from 'bullmq';
 import { getConnector, connectors } from '../connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources, registrarLeituraAoVivo } from '../core/repo.js';
-import { LEITORES, intervaloMs, lotesQuentes } from '../core/aoVivo.js';
-import { processarAposColeta } from '../core/pos-coleta.js';
+import { LEITORES, lotesQuentes } from '../core/aoVivo.js';
+import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { avisarCanaisIndisponiveis } from '../core/notificar.js';
 import { query } from '../core/db.js';
-import { rodarDescoberta } from '../core/descoberta.js';
-import { encerrarLotes, verificarCandidatos } from '../core/encerramento.js';
-import { consultaFreio } from '../core/freio.js';
-import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
+import { observerForCollection } from '../application/services/collection/collection-observer.js';
+import { collectionJobContext } from '../infra/queue/collection-job-context.js';
 import { workerDeployment, createCollectionGate, boundedCollection } from './deployment.js';
 import { refreshBatch } from './refresh-batch.js';
 import { createDailyWorkerRuntime } from './daily-worker.js';
 import { assertTenantCoveragePair, assertTenantSourceIsEnabled, isTenantSchedulerId, TENANT_DEFAULT_TIMEOUT_MS, tenantExecutionOptions } from './tenant-coverage.js';
-import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfAborted } from '../infra/collection/collection-cancellation.js';
 import {
-  executeCollection,
+  CollectionService,
   type CollectionExecutionDependencies,
   type CollectionExecutionOptions,
   type CollectionExecutionResult,
   type CollectionMetadata,
-} from '../core/collection-execution.js';
+} from '../application/services/collection/collection-execution.js';
+import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
+import { JobOwnership } from '../infra/queue/job-ownership.js';
+import { REDIS_URL } from './runtime.js';
 import {
   QUEUE_COLLECT, QUEUE_REFRESH, QUEUE_DISCOVER, CHANNEL_UPDATES, makeRedis,
   collectQueue, refreshQueue, discoverQueue, type CollectJob, type RefreshJob, type DiscoverJob,
@@ -30,6 +31,15 @@ import {
 
 let publisher: ReturnType<typeof makeRedis> | undefined;
 const getPublisher = () => publisher ??= makeRedis();
+let collectionContext: Promise<CollectionContext> | undefined;
+const getCollectionContext = () => collectionContext ??= createCollectionContext({
+  overrides: createWorkerDeps(), discovery: DEPLOY.discover, closure: DEPLOY.close || DEPLOY.verify, brake: true,
+  liveBidsDependencies: {
+    lotesQuentes, leitores: LEITORES, registrarLeituraAoVivo,
+    publicar: (payload) => getPublisher().publish(CHANNEL_UPDATES, payload),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  },
+});
 const DEPLOY = workerDeployment();
 const serialCollect = createCollectionGate();
 for (const source of new Set([...Object.keys(DEPLOY.sourceLimits), ...Object.keys(DEPLOY.sourceTimeouts)])) {
@@ -94,7 +104,7 @@ export async function assertTenantSourceEnabled(
  */
 export async function executeWorkerCollect(
   options: WorkerCollectOptions,
-  deps: CollectionExecutionDependencies = createWorkerDeps(),
+  deps?: CollectionExecutionDependencies,
 ): Promise<CollectionExecutionResult> {
   const { queueJob, publish, authorizePersistence, tenant, ...resto } = options;
   if (tenant !== undefined) assertTenantCoveragePair(options.sourceId, tenant);
@@ -104,7 +114,8 @@ export async function executeWorkerCollect(
     }
     await authorizePersistence?.();
   };
-  return executeCollection(
+  const service = deps ? new CollectionService(deps) : (await getCollectionContext()).service;
+  return service.execute(
     {
       ...resto,
       ...(tenant !== undefined ? tenantExecutionOptions(options.sourceId, tenant) : { job: 'collect' }),
@@ -112,17 +123,11 @@ export async function executeWorkerCollect(
       ...(queueJob || authorizePersistence ? { authorizePersistence: autorizar } : {}),
       publish: publish ?? ((evento) => getPublisher().publish(CHANNEL_UPDATES, JSON.stringify(evento))),
     },
-    deps,
   );
 }
 
-/** Coletas em andamento, por job: shutdown e perda de lock derrubam só o que está rodando. */
-const emAndamento = new Map<string, AbortController>();
-
-function cancelarEmAndamento(kind: 'shutdown' | 'lock_lost', jobIds?: string[], message?: string) {
-  const alvos = jobIds ? jobIds.filter((id) => emAndamento.has(id)) : [...emAndamento.keys()];
-  for (const id of alvos) emAndamento.get(id)!.abort(new CollectionCancellationError(kind, message));
-}
+let collectOwnership: JobOwnership | undefined;
+let refreshOwnership: JobOwnership | undefined;
 
 /** Freio ANTES da rede: sem isto, cada chamador teria que consultar por
  * conta própria e um deles esqueceria (ver [[freio]]). */
@@ -130,7 +135,7 @@ async function runCollect(
   sourceId: string,
   limit: number,
   metadata: CollectionMetadata = { origin: 'unknown' },
-  exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {},
+  exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob' | 'authorizePersistence'> = {},
   tenant?: string,
 ) {
   const operation = async () => {
@@ -143,7 +148,7 @@ async function runCollect(
     const connector = getConnector(sourceId);
     const bounded = boundedCollection(DEPLOY, sourceId, connector?.def.method ?? 'html', limit);
     limit = bounded.limit;
-    const freio = tenant === undefined ? await consultaFreio(sourceId) : { permite: true, seguidas: 0, motivo: 'normal' as const };
+    const freio = tenant === undefined ? await (await getCollectionContext()).brake!.consultaFreio(sourceId) : { permite: true, seguidas: 0, motivo: 'normal' as const };
     if (!freio.permite) {
       console.log(`[coletar] ${sourceId} freado (${freio.seguidas} falhas seguidas) — próxima sonda às ${freio.proxima?.toISOString()}`);
       return { fetched: 0, upserted: 0, skipped: 0, freado: true };
@@ -173,10 +178,10 @@ async function runCollect(
  * volta como `failed` para o BullMQ. Repetir de dentro daqui criaria um segundo
  * run sem ninguém olhar o motivo (e `maxStartedAttempts` não existe em BullMQ).
  */
-const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
+const processarCollect: Processor<CollectJob> = async (job, token, sinal) => {
   const id = job.id ?? job.name;
-  const controller = new AbortController();
-  emAndamento.set(id, controller);
+  const ownership = collectOwnership!;
+  const controller = ownership.track(id);
   // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
   const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
   if (sinal) {
@@ -187,20 +192,21 @@ const processarCollect: Processor<CollectJob> = async (job, _token, sinal) => {
     return await runCollect(job.data.sourceId, job.data.limit, collectionJobContext(job, 'cron'), {
       signal: controller.signal,
       queueJob: job,
+      authorizePersistence: () => ownership.authorize(job, token),
     }, job.data.tenant);
   } catch (err: any) {
     console.error(`[collect] ${job.data.sourceId} falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
   } finally {
     sinal?.removeEventListener('abort', fechando);
-    emAndamento.delete(id);
+    ownership.release(id, controller);
   }
 };
 
-const processarRefresh: Processor<RefreshJob> = async (job, _token, sinal) => {
+const processarRefresh: Processor<RefreshJob> = async (job, token, sinal) => {
   const id = job.id ?? job.name;
-  const controller = new AbortController();
-  emAndamento.set(id, controller);
+  const ownership = refreshOwnership!;
+  const controller = ownership.track(id);
   // Sinal nativo do BullMQ: abortado quando o próprio worker fecha.
   const fechando = () => controller.abort(new CollectionCancellationError('shutdown', 'worker fechando'));
   if (sinal) {
@@ -211,13 +217,14 @@ const processarRefresh: Processor<RefreshJob> = async (job, _token, sinal) => {
     return await runRefresh(collectionJobContext(job, 'refresh'), {
       signal: controller.signal,
       queueJob: job,
+      authorizePersistence: () => ownership.authorize(job, token),
     });
   } catch (err: any) {
     console.error(`[refresh] falhou (sem retry automático): ${err?.message ?? err}`);
     throw err;
   } finally {
     sinal?.removeEventListener('abort', fechando);
-    emAndamento.delete(id);
+    ownership.release(id, controller);
   }
 };
 
@@ -263,55 +270,9 @@ function descansoRecoletaMin(fim: Date): number {
 /* ------------------------------------------------------------------ */
 
 const AO_VIVO = process.env.AO_VIVO !== '0';
-const proximaLeitura = new Map<number, number>();
-/** Lote quente que o canal não conseguiu ler → fonte dele. Essas fontes voltam para o refresh. */
-const semCanalLotes = new Map<number, string>();
-const semCanal = { has: (fonte: string) => [...semCanalLotes.values()].includes(fonte) };
-let lendoAoVivo = false;
+async function cicloAoVivo() { await (await getCollectionContext()).liveBids!.ciclo(); }
 
-async function cicloAoVivo() {
-  if (lendoAoVivo) return;
-  lendoAoVivo = true;
-  try {
-    const agora = Date.now();
-    const lotes = await lotesQuentes(Object.keys(LEITORES));
-    const vivos = new Set(lotes.map((l) => l.id));
-    for (const id of proximaLeitura.keys()) if (!vivos.has(id)) proximaLeitura.delete(id);
-    for (const id of semCanalLotes.keys()) if (!vivos.has(id)) semCanalLotes.delete(id);
-
-    const mudancas = [];
-    let lidos = 0;
-    for (const lote of lotes) {
-      const intervalo = intervaloMs(lote.fim, agora);
-      if (intervalo == null || (proximaLeitura.get(lote.id) ?? 0) > agora) continue;
-      // Jitter de até 20%: leitura sempre no mesmo segundo é assinatura de robô.
-      proximaLeitura.set(lote.id, agora + intervalo * (1 + Math.random() * 0.2));
-      let leitura = null;
-      try {
-        leitura = await LEITORES[lote.sourceId](lote);
-      } catch (e: any) {
-        console.error(`[aovivo] ${lote.sourceId} ${lote.externalId}:`, e.message);
-      }
-      lidos++;
-      if (!leitura) {
-        semCanalLotes.set(lote.id, lote.sourceId);
-        continue;
-      }
-      semCanalLotes.delete(lote.id);
-      const m = await registrarLeituraAoVivo(lote.id, leitura.lance, leitura.fim);
-      if (m) mudancas.push(m);
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    if (mudancas.length) await getPublisher().publish(CHANNEL_UPDATES, JSON.stringify({ type: 'bids', changes: mudancas }));
-    if (lidos) console.log(`[aovivo] ${lidos} lidos · ${mudancas.length} lances novos · ${semCanalLotes.size} sem canal`);
-  } catch (e: any) {
-    console.error('[aovivo] falhou:', e.message);
-  } finally {
-    lendoAoVivo = false;
-  }
-}
-
-async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob'> = {}) {
+async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, exec: Pick<WorkerCollectOptions, 'signal' | 'timeoutMs' | 'queueJob' | 'authorizePersistence'> = {}) {
   const quentes = new Map<string, number>();
 
   // Timer por lote: limite pequeno basta, porque o conector dessas fontes
@@ -328,8 +289,9 @@ async function runRefresh(metadata: CollectionMetadata = { origin: 'refresh' }, 
      GROUP BY l.source_id`)) {
     if (!enabledSource(row.source_id) || FORA_DO_REFRESH.has(row.source_id)) continue;
     // Fonte com canal ao vivo só recoleta pelo lote que o canal não alcançou.
-    const aoVivo = AO_VIVO && row.source_id in LEITORES;
-    if (aoVivo && !semCanal.has(row.source_id)) continue;
+    const liveBids = (await getCollectionContext()).liveBids!;
+    const aoVivo = AO_VIVO && liveBids.temLeitor(row.source_id);
+    if (aoVivo && !liveBids.semCanal(row.source_id)) continue;
     const descansoMin = aoVivo ? 15 : descansoRecoletaMin(new Date(row.fim));
     if (row.ultima && Date.now() - new Date(row.ultima).getTime() < descansoMin * 60_000) continue;
     quentes.set(row.source_id, 120);
@@ -409,7 +371,7 @@ async function cicloDeEncerramento() {
   if (travado) return;
   travado = true;
   try {
-    const r = await encerrarLotes();
+    const r = await (await getCollectionContext()).closure!.encerrarLotes();
     const total = r.porPrazo + r.porAusencia;
     if (total) {
       console.log(`[encerrar] prazo: ${r.porPrazo} · ausente na fonte: ${r.porAusencia}`);
@@ -441,7 +403,7 @@ async function cicloDeVerificacao() {
   if (verificando) return;
   verificando = true;
   try {
-    const r = await verificarCandidatos(DEPLOY.verifyLimit);
+    const r = await (await getCollectionContext()).closure!.verificarCandidatos(DEPLOY.verifyLimit);
     if (r.verificados) {
       console.log(
         `[verificar] ${r.verificados} conferidos na origem: ${r.encerrados} encerrados, ` +
@@ -578,31 +540,45 @@ export interface WorkerHub {
 export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
   let daily: ReturnType<typeof createDailyWorkerRuntime> | undefined;
   const workers: Worker[] = [];
+  const workerConnections: ReturnType<typeof makeRedis>[] = [];
   const timers: Array<ReturnType<typeof setInterval>> = [];
+  const cycles = new Set<Promise<void>>();
   let ligado = false;
 
-  const periodico = (fn: () => void, ms: number) => {
-    const t = setInterval(fn, ms);
+  const runCycle = (fn: () => Promise<void>) => {
+    const running = fn();
+    cycles.add(running);
+    void running.finally(() => cycles.delete(running));
+  };
+  const periodico = (fn: () => Promise<void>, ms: number) => {
+    const t = setInterval(() => runCycle(fn), ms);
     t.unref();
     timers.push(t);
   };
-
-  const aoPerderLock = (jobIds: string[]) => {
-    console.error(`[collect] lock não renovado em ${jobIds.join(' ')} — cancelando a coleta antes do próximo passo`);
-    cancelarEmAndamento('lock_lost', jobIds, 'lockRenewalFailed');
+  const createWorkerConnection = () => {
+    const connection = makeRedis();
+    workerConnections.push(connection);
+    return connection;
   };
 
   return {
     async start() {
       if (ligado) return;
       ligado = true;
+      const context = await getCollectionContext();
+      collectOwnership = new JobOwnership(REDIS_URL);
+      await collectOwnership.start();
+      if (DEPLOY.refresh) {
+        refreshOwnership = new JobOwnership(REDIS_URL);
+        await refreshOwnership.start();
+      }
       if (AO_VIVO) periodico(cicloAoVivo, 15_000);
       if (DEPLOY.close) periodico(cicloDeEncerramento, 60_000);
       if (DEPLOY.verify) periodico(cicloDeVerificacao, Number(process.env.VERIFICAR_INTERVALO_MS ?? 300_000));
       // Roda na subida também: reiniciar o worker não deve deixar lote vencido
       // esperando o primeiro minuto.
-      if (DEPLOY.verify) void cicloDeVerificacao();
-      if (DEPLOY.close) void cicloDeEncerramento();
+      if (DEPLOY.verify) runCycle(cicloDeVerificacao);
+      if (DEPLOY.close) runCycle(cicloDeEncerramento);
 
       // ensureSources primeiro: banco fora do ar aborta aqui, antes de qualquer
       // comando em Redis (limparAgendamentosOrfaos varre a fila).
@@ -610,32 +586,33 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
       await limparAgendamentosOrfaos();
 
       workers.push(
-        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: makeRedis(), concurrency: DEPLOY.concurrency })
+        new Worker<CollectJob>(QUEUE_COLLECT, deps.collect ?? processarCollect, { connection: createWorkerConnection(), concurrency: DEPLOY.concurrency })
           .on('failed', (job, err) => console.error(`[collect] ${job?.data.sourceId} falhou:`, err.message))
-          .on('error', (err) => console.error('[collect] worker:', err.message))
-          .on('lockRenewalFailed', aoPerderLock),
+          .on('error', (err) => console.error('[collect] worker:', err.message)),
         ...(DEPLOY.refresh ? [new Worker<RefreshJob>(QUEUE_REFRESH, deps.refresh ?? processarRefresh, {
-          connection: makeRedis(),
+          connection: createWorkerConnection(),
           concurrency: 1,
         })
           .on('failed', (_job, err) => console.error('[refresh] falhou:', err.message))
-          .on('error', (err) => console.error('[refresh] worker:', err.message))
-          .on('lockRenewalFailed', aoPerderLock)] : []),
+          .on('error', (err) => console.error('[refresh] worker:', err.message))] : []),
         ...(DEPLOY.discover ? [new Worker<DiscoverJob>(
           QUEUE_DISCOVER,
           deps.discover ?? (async (job) => {
-            const r = await rodarDescoberta(job.data.qual, Math.min(job.data.limite ?? DEPLOY.discoveryLimit, DEPLOY.discoveryLimit), DEPLOY.discoveryConcurrency);
+            const discovery = (await getCollectionContext()).discovery!;
+            const r = await discovery.rodarDescoberta(job.data.qual, Math.min(job.data.limite ?? DEPLOY.discoveryLimit, DEPLOY.discoveryLimit), DEPLOY.discoveryConcurrency);
             console.log(`[discover] ${job.data.qual}:`, r);
             return r;
           }),
-          { connection: makeRedis(), concurrency: 1 },
+          { connection: createWorkerConnection(), concurrency: 1 },
         )
           .on('failed', (job, err) => console.error(`[discover] ${job?.data.qual} falhou:`, err.message))
           .on('error', (err) => console.error('[discover] worker:', err.message))] : []),
       );
+      collectOwnership.monitor(workers[0]);
+      if (refreshOwnership) refreshOwnership.monitor(workers[1]);
 
       await agendarTudo();
-      if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect);
+      if (process.env.DAILY_TENANTS_ENABLED === '1') daily = createDailyWorkerRuntime(serialCollect, context.service);
       await daily?.start();
       if (process.env.WORKER_READY_FILE) writeFileSync(process.env.WORKER_READY_FILE, String(process.pid));
       console.log('worker de coleta no ar (filas: collect, refresh, discover)');
@@ -647,10 +624,38 @@ export function createWorkerHub(deps: WorkerHubDeps = {}): WorkerHub {
     async stop() {
       if (!ligado) return;
       ligado = false;
-      cancelarEmAndamento('shutdown', undefined, 'worker encerrando');
-      await daily?.stop();
+      collectOwnership?.cancel(undefined, 'shutdown');
+      refreshOwnership?.cancel(undefined, 'shutdown');
       for (const t of timers.splice(0)) clearInterval(t);
-      await Promise.all(workers.splice(0).map((w) => w.close()));
+      const stopped = await Promise.allSettled([daily?.stop(), ...workers.splice(0).map((w) => w.close())]);
+      await Promise.allSettled(cycles);
+      let contextError: unknown;
+      try {
+        if (collectionContext) await (await collectionContext).close();
+      } catch (error) {
+        contextError = error;
+      } finally {
+        collectionContext = undefined;
+        collectOwnership?.close(); refreshOwnership?.close();
+        collectOwnership = undefined; refreshOwnership = undefined;
+      }
+      const connections = workerConnections.splice(0);
+      if (publisher) {
+        connections.push(publisher);
+        publisher = undefined;
+      }
+      const closed = await Promise.allSettled(connections.map(async (client) => {
+        try {
+          if (client.status === 'ready') await client.quit();
+          else client.disconnect();
+        } catch (error) {
+          client.disconnect();
+          throw error;
+        }
+      }));
+      const failure = [...stopped, ...closed].find(result => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+      if (contextError) throw contextError;
     },
   };
 }
@@ -671,5 +676,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   process.once('SIGINT', () => encerrar(130));
   process.once('SIGTERM', () => encerrar(143));
-  await hub.start();
+  try { await hub.start(); }
+  catch (error) { await hub.stop().catch(closeError => console.error('[worker] shutdown after startup failure:', closeError)); throw error; }
 }

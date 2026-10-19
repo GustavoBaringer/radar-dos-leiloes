@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Fastify from 'fastify';
 import { loadAntibotConfig } from '../src/core/antibot/config.js';
-import { registerAntibot } from '../src/core/antibot/fastify.js';
-import { createChallengeService, loadChallengeConfig, type ChallengeFetch } from '../src/core/antibot/challenge.js';
-import { registerChallengeHttp, ROUTE_POLICIES } from '../src/core/antibot/routes.js';
+import { registerAntibot } from '../src/infra/http/antibot-fastify.js';
+import { createChallengeService, loadChallengeConfig, type ChallengeFetch } from '../src/application/security/challenge.js';
+import { registerChallengeHttp, ROUTE_POLICIES } from '../src/infra/http/antibot-routes.js';
 
 const fetchJson = (result: unknown): Response => ({ ok: true, json: async () => result }) as Response;
 const challengeEnv = (mode: 'off' | 'enforce') => ({

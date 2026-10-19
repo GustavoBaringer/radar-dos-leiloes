@@ -7,7 +7,7 @@
  * MESMO lote, na MESMA URL, reabre com lance mínimo de 50%. Se este teste ficar
  * verde por acaso, o agregador some com a praça mais barata do país.
  */
-import { VERIFICADORES } from '../src/core/verificacao.ts';
+import { VERIFICADORES } from '../src/infra/verification/verifiers.ts';
 
 const CASOS = [
   { nome: 'condicional (praça única, edital sem reoferta)', fonte: 'soleon',

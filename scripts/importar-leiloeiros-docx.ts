@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pool, query } from '../src/core/db.js';
-import { sondarDominios } from '../src/core/descoberta.js';
+import { createDiscoveryContext } from '../src/bootstrap/discovery-context.js';
 import { ensureSources } from '../src/core/repo.js';
 
 type Row = Record<string, any>;
@@ -78,40 +78,43 @@ async function report(dominios: string[]) {
 }
 
 async function main() {
-  const dir = process.argv[2] ?? '/tmp/opencode/leiloeiros_txt';
-  const arquivos = readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.txt'))
-    .map((f) => join(dir, f))
-    .filter((p) => statSync(p).isFile());
+  const discovery = await createDiscoveryContext();
+  try {
+    const dir = process.argv[2] ?? '/tmp/opencode/leiloeiros_txt';
+    const arquivos = readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.txt'))
+      .map((f) => join(dir, f))
+      .filter((p) => statSync(p).isFile());
 
-  await ensureSources();
-  const porDominio = new Map<string, Set<string>>();
-  for (const arq of arquivos) {
-    const uf = ufDoArquivo(arq) ?? '??';
-    const texto = readFileSync(arq, 'utf8');
-    for (const d of extraiDominios(texto)) {
-      const ufs = porDominio.get(d) ?? new Set<string>();
-      ufs.add(uf);
-      porDominio.set(d, ufs);
+    await ensureSources();
+    const porDominio = new Map<string, Set<string>>();
+    for (const arq of arquivos) {
+      const uf = ufDoArquivo(arq) ?? '??';
+      const texto = readFileSync(arq, 'utf8');
+      for (const d of extraiDominios(texto)) {
+        const ufs = porDominio.get(d) ?? new Set<string>();
+        ufs.add(uf);
+        porDominio.set(d, ufs);
+      }
     }
-  }
 
-  const dominios = [...porDominio.keys()].sort();
-  for (const [domain, ufs] of porDominio) {
-    await query(
-      `INSERT INTO discovered_sites (domain, auctioneers, ufs, note)
-       VALUES ($1, $2, $3, 'importado de DOCX estaduais em ' || now()::date)
-       ON CONFLICT (domain) DO UPDATE SET
-         auctioneers = GREATEST(discovered_sites.auctioneers, EXCLUDED.auctioneers),
-         ufs = (SELECT array_agg(DISTINCT x ORDER BY x)
-                  FROM unnest(coalesce(discovered_sites.ufs, '{}'::text[]) || EXCLUDED.ufs) AS x),
-         note = coalesce(discovered_sites.note, EXCLUDED.note)`,
-      [domain, ufs.size, [...ufs]],
-    );
-  }
+    const dominios = [...porDominio.keys()].sort();
+    for (const [domain, ufs] of porDominio) {
+      await query(
+        `INSERT INTO discovered_sites (domain, auctioneers, ufs, note)
+         VALUES ($1, $2, $3, 'importado de DOCX estaduais em ' || now()::date)
+         ON CONFLICT (domain) DO UPDATE SET
+           auctioneers = GREATEST(discovered_sites.auctioneers, EXCLUDED.auctioneers),
+           ufs = (SELECT array_agg(DISTINCT x ORDER BY x)
+                    FROM unnest(coalesce(discovered_sites.ufs, '{}'::text[]) || EXCLUDED.ufs) AS x),
+           note = coalesce(discovered_sites.note, EXCLUDED.note)`,
+        [domain, ufs.size, [...ufs]],
+      );
+    }
 
-  const sonda = await sondarDominios(dominios, Number(process.argv[3] ?? 10));
-  console.log(JSON.stringify({ arquivos: arquivos.length, dominios: dominios.length, sonda, ...(await report(dominios)) }, null, 2));
+    const sonda = await discovery.service.sondarDominios(dominios, Number(process.argv[3] ?? 10));
+    console.log(JSON.stringify({ arquivos: arquivos.length, dominios: dominios.length, sonda, ...(await report(dominios)) }, null, 2));
+  } finally { await discovery.close(); }
 }
 
 try {

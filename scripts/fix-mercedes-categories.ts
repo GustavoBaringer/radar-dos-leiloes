@@ -1,4 +1,8 @@
-import { pool } from '../src/core/db.js';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { Prisma } from '../src/infra/database/generated/client.js';
+import { PrismaService } from '../src/infra/database/prisma.service.js';
+import { queryResultWithClient, queryWithClient } from '../src/infra/database/query.js';
 import {
   classifyAsset,
   marcaCanonica,
@@ -8,21 +12,10 @@ import {
 } from '../src/core/normalize.js';
 import * as campos from '../src/core/campos.js';
 
-async function main() {
-  const aplicar = process.argv.includes('--aplicar');
-  const dryRun = !aplicar || process.argv.includes('--dry-run');
-
-  console.log('='.repeat(80));
-  console.log(`[migracao] Saneamento de Mercedes-Benz, Ônibus, Utilitários e Pesados`);
-  console.log(`[migracao] Modo: ${dryRun ? 'DRY-RUN (Simulação - NENHUMA alteração será persistida)' : 'APLICAR (ALTERAÇÕES REAIS SERÃO GRAVADAS NO BANCO)'}`);
-  console.log('='.repeat(80));
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+export async function fixMercedesCategories(client: Prisma.TransactionClient, dryRun: boolean) {
 
     // Busca especificamente lotes com marca MERCEDES-BENZ ou menções a Mercedes/MB/ônibus/utilitários/peças no título
-    const res = await client.query(`
+    const rows = await queryWithClient<any>(client, `
       SELECT id, title_raw, source_category, brand, model, version, vehicle_type, asset_type, city, state, seller_name, lot_url, year_make, year_model
       FROM lots
       WHERE (asset_type = 'veiculo' OR asset_type = 'outro')
@@ -45,7 +38,7 @@ async function main() {
       citroenCorrigido: 0,
     };
 
-    for (const r of res.rows) {
+    for (const r of rows) {
       const cls = classifyAsset(r.title_raw, r.source_category);
       let assetType = cls.assetType;
       let vehicleType = assetType === 'veiculo' ? cls.vehicleType : (cls.vehicleType === 'peca' ? 'peca' : null);
@@ -136,7 +129,7 @@ async function main() {
           r.seller_name,
         ]);
 
-        await client.query(
+        await queryResultWithClient(client,
           `
           UPDATE lots
           SET asset_type = $1,
@@ -154,48 +147,36 @@ async function main() {
       }
     }
 
-    if (dryRun) {
-      await client.query('ROLLBACK');
-      console.log('\n' + '='.repeat(80));
-      console.log(`[migracao] SIMULAÇÃO CONCLUÍDA (ROLLBACK executado, nada foi alterado)`);
-      console.log(`  - Total de lotes que seriam corrigidos: ${totalModificados}`);
-      console.log(`  - Caminhões: ${contadores.caminhao}`);
-      console.log(`  - Ônibus: ${contadores.onibus}`);
-      console.log(`  - Utilitários: ${contadores.utilitario}`);
-      console.log(`  - Peças/eixos: ${contadores.peca}`);
-      console.log(`  - Carros: ${contadores.carro}`);
-      console.log(`  - Outros: ${contadores.outros}`);
-      console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
-      console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
-      console.log('='.repeat(80));
-      console.log(`Para gravar as alterações no banco de dados, execute:`);
-      console.log(`  node --env-file=.env --import tsx scripts/fix-mercedes-categories.ts --aplicar\n`);
-    } else {
-      await client.query('COMMIT');
-      console.log('\n' + '='.repeat(80));
-      console.log(`[migracao] SUCESSO: Migração persistida no banco com COMMIT!`);
-      console.log(`  - Total de lotes atualizados no banco: ${totalModificados}`);
-      console.log(`  - Caminhões: ${contadores.caminhao}`);
-      console.log(`  - Ônibus: ${contadores.onibus}`);
-      console.log(`  - Utilitários: ${contadores.utilitario}`);
-      console.log(`  - Peças/eixos: ${contadores.peca}`);
-      console.log(`  - Carros: ${contadores.carro}`);
-      console.log(`  - Outros: ${contadores.outros}`);
-      console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
-      console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
-      console.log('='.repeat(80) + '\n');
-    }
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('[migracao] Erro na migração, efetuado ROLLBACK:', err);
-    throw err;
+    return { totalModificados, contadores };
+}
+
+async function main() {
+  const aplicar = process.argv.includes('--aplicar');
+  const dryRun = !aplicar || process.argv.includes('--dry-run');
+  console.log('='.repeat(80));
+  console.log('[migracao] Saneamento de Mercedes-Benz, Ônibus, Utilitários e Pesados');
+  console.log(`[migracao] Modo: ${dryRun ? 'DRY-RUN (Simulação - NENHUMA alteração será persistida)' : 'APLICAR (ALTERAÇÕES REAIS SERÃO GRAVADAS NO BANCO)'}`);
+  console.log('='.repeat(80));
+  try {
+    const { totalModificados, contadores } = await PrismaService.getInstance().$transaction(tx => fixMercedesCategories(tx, dryRun), { maxWait: 5_000, timeout: 300_000 });
+    console.log('\n' + '='.repeat(80));
+    console.log(`[migracao] ${dryRun ? 'SIMULAÇÃO CONCLUÍDA (nenhuma alteração foi persistida)' : 'SUCESSO: Migração persistida com COMMIT!'}`);
+    console.log(`  - Total de lotes ${dryRun ? 'que seriam corrigidos' : 'atualizados no banco'}: ${totalModificados}`);
+    console.log(`  - Caminhões: ${contadores.caminhao}`);
+    console.log(`  - Ônibus: ${contadores.onibus}`);
+    console.log(`  - Utilitários: ${contadores.utilitario}`);
+    console.log(`  - Peças/eixos: ${contadores.peca}`);
+    console.log(`  - Carros: ${contadores.carro}`);
+    console.log(`  - Outros: ${contadores.outros}`);
+    console.log(`  - Falsos positivos VW corrigidos: ${contadores.vwCorrigido}`);
+    console.log(`  - Falsos positivos Citroën corrigidos: ${contadores.citroenCorrigido}`);
+    console.log('='.repeat(80) + '\n');
+    if (dryRun) console.log('Para gravar as alterações no banco de dados, execute:\n  node --env-file=.env --import tsx scripts/fix-mercedes-categories.ts --aplicar\n');
   } finally {
-    client.release();
-    await pool.end();
+    await PrismaService.disconnectInstance();
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch(err => { console.error('[migracao] Erro na migração, transação revertida:', err); process.exitCode = 1; });
+}

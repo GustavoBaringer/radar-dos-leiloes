@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { filterTenantPopulation } from '../src/connectors/tenant-scheduler.js';
-import { collectTenant } from '../src/core/single-tenant.js';
+import { collectTenant } from '../src/infra/collection/single-tenant.js';
 
 test('filterTenantPopulation: casa normalizado (www/caixa/ponto) e devolve o texto original da população', () => {
   const pop = ['WWW.Exemplo.com.br.', 'outro.com.br', 'exemplo.com.br'];

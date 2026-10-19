@@ -7,10 +7,10 @@ import {
   collectionSignal,
   throwIfCancelled,
   withCollectionCancellation,
-} from '../src/core/collection-cancellation.js';
+} from '../src/infra/collection/collection-cancellation.js';
 import { fetchText } from '../src/connectors/http.js';
 import { comNavegador, getJsonViaNavegador } from '../src/connectors/navegador.js';
-import { createTenantObserver } from '../src/core/tenant-attempts.js';
+import { createTenantObserver } from '../src/application/services/collection/tenant-observer.js';
 import { htmlagenda } from '../src/connectors/htmlagenda.js';
 
 function esperar() {

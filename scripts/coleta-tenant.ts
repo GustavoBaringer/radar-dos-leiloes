@@ -1,8 +1,9 @@
+import { createCollectionContext, type CollectionContext } from '../src/bootstrap/collection-context.js';
 import { pool, query } from '../src/core/db.js';
 import { getConnector } from '../src/connectors/index.js';
 import { startRun, finishRun, upsertLots } from '../src/core/repo.js';
-import { observerForCollection } from '../src/core/collection-observer.js';
-import { executeCollection, type CollectionExecutionResult } from '../src/core/collection-execution.js';
+import { observerForCollection } from '../src/application/services/collection/collection-observer.js';
+import { type CollectionExecutionResult } from '../src/application/services/collection/collection-execution.js';
 import { classifyAsset, looksLikeCollectible } from '../src/core/normalize.js';
 import { guardTenantLots, normalizeHost, normalizeLotUrl } from './coleta-tenant-audit.js';
 
@@ -18,6 +19,7 @@ const idRange = (ids: number[]) => ids.length
   : null;
 const sampleSize = 20;
 
+let context: CollectionContext | undefined;
 let runId: number | undefined;
 let startedAt: string | undefined;
 let rejectedHostCount = 0;
@@ -49,13 +51,12 @@ try {
   let newInsertIds: number[] = [];
   let result: CollectionExecutionResult;
   try {
-    result = await executeCollection(
-      { sourceId, tenant: domain, forceTenantObserver: true, limit, timeoutMs, job: 'collect:tenant', metadata: { origin: 'manual' } },
+    context = await createCollectionContext({ overrides:
       {
         lookupConnector: getConnector,
         startRun: async (...args: Parameters<typeof startRun>) => { runId = await startRun(...args); return runId; },
         finishRun,
-        upsertLots: async lots => {
+        upsertLots: async (lots, control) => {
           const guarded = guardTenantLots(lots, domain, limit);
           rejectedHostCount = guarded.rejected.length;
           overLimitCount = guarded.overLimit;
@@ -64,7 +65,7 @@ try {
             const textoEscopo = [lot.titleRaw, lot.sourceCategory, raw?.descricao, raw?.description, raw?.leilao, raw?.categoria].filter(Boolean).join(' ');
             return looksLikeCollectible(textoEscopo) || (lot.assetType ?? classifyAsset(lot.titleRaw, lot.sourceCategory, lot.sourceGroup).assetType) === 'outro';
           }).length;
-          const outcome = await upsertLots(guarded.accepted);
+          const outcome = await upsertLots(guarded.accepted, control);
           newInsertIds = outcome.novos;
           return outcome;
         },
@@ -72,7 +73,10 @@ try {
         // Manual audit must not send user-facing push/email notifications.
         processarAposColeta: async () => ({ disparos: 0, push: 0, emails: 0, pendentesEmail: 0 }),
         logError: (msg, error) => console.error(msg, error instanceof Error ? error.message : String(error)),
-      },
+      }
+    });
+    result = await context.service.execute(
+      { sourceId, tenant: domain, forceTenantObserver: true, limit, timeoutMs, job: 'collect:tenant', metadata: { origin: 'manual' } }
     );
   } catch (error) {
     const verification = await snapshot().then(rows => ({ rows, error: null as string | null }), error => ({ rows: null, error: error instanceof Error ? error.message : String(error) }));
@@ -105,5 +109,6 @@ try {
   if (!process.exitCode) process.exitCode = 1;
   console.error(error instanceof Error ? error.message : String(error));
 } finally {
-  await pool.end();
+  if (context) await context.close();
+  else await pool.end();
 }

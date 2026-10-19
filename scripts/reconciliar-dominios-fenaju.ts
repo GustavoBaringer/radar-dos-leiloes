@@ -1,7 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { pool } from '../src/core/db.js';
+import { query, queryResultWithClient } from '../src/infra/database/query.js';
+import { PrismaService } from '../src/infra/database/prisma.service.js';
+import type { Prisma } from '../src/infra/database/generated/client.js';
 
 const DIR = '/tmp/opencode/reconciliacao-oficiais/banco';
 const ORIGIN = 'reconciliado_site_fenaju';
@@ -66,25 +68,64 @@ function checkSiteMetadata(before: any, after: any) {
   }
 }
 
+export async function applyReconciliation(client: Prisma.TransactionClient, ready: any[], counts: any, siteBefore: any[]) {
+  const applied: any[] = [];
+  for (const entry of ready) {
+    const t = entry.target;
+    const updated = await queryResultWithClient(client,
+      `UPDATE auctioneers SET domain=$1, domain_origin=$2
+        WHERE id=$3 AND registry=$4 AND external_id=$5 AND name=$6 AND matricula=$7 AND junta=$8
+          AND uf=$9 AND uf_junta=$10 AND domain IS NOT DISTINCT FROM $11
+          AND domain_origin IS NOT DISTINCT FROM $12 AND blocked=FALSE AND situacao ILIKE 'regular'
+        RETURNING ${FIELDS}`,
+      [t.domain, ORIGIN, t.id, t.registry, t.external_id, t.name, t.matricula, t.junta, t.uf, t.uf_junta,
+        entry.row.domain, entry.row.domain_origin],
+    );
+    if (updated.rowCount !== 1) throw new Error(`compare-and-set falhou para id=${t.id}`);
+    applied.push(updated.rows[0]);
+  }
+  for (const t of TARGETS) {
+    await queryResultWithClient(client,
+      `INSERT INTO discovered_sites (domain, auctioneers, ufs) VALUES ($1,1,ARRAY[$2]::text[])
+       ON CONFLICT (domain) DO UPDATE SET auctioneers=EXCLUDED.auctioneers, ufs=EXCLUDED.ufs`,
+      [t.domain, t.uf],
+    );
+  }
+  const afterCounts = (await queryResultWithClient(client, `SELECT count(*)::int AS total,
+    count(*) FILTER (WHERE domain IS NOT NULL AND domain <> '')::int AS com_domain FROM auctioneers`)).rows[0];
+  if (afterCounts.total !== 1947 || afterCounts.com_domain !== 1195) throw new Error(`contagem pós-escrita inesperada: ${JSON.stringify(afterCounts)}`);
+  const afterSites = (await queryResultWithClient(client,
+    `SELECT domain, auctioneers, ufs, http_status, has_lots, platform, connector_id, title, checked_at, note
+       FROM discovered_sites WHERE domain = ANY($1::text[]) ORDER BY domain`, [TARGETS.map(t => t.domain)],
+  )).rows;
+  for (const t of TARGETS) {
+    const before = siteBefore.find(r => r.domain === t.domain) ?? null;
+    const after = afterSites.find(r => r.domain === t.domain) ?? null;
+    checkSiteMetadata(before, after);
+    if (after?.auctioneers !== 1 || !Array.isArray(after.ufs) || after.ufs.length !== 1 || after.ufs[0] !== t.uf) {
+      throw new Error(`metadados de domínio inesperados: ${t.domain}`);
+    }
+  }
+  return { counts, afterCounts, applied, siteBefore, afterSites };
+}
+
 async function main() {
   const apply = process.argv.includes('--apply');
-  const client = await pool.connect();
-  let transactionOpen = false;
   try {
-    const counts = (await client.query(`SELECT count(*)::int AS total,
-      count(*) FILTER (WHERE domain IS NOT NULL AND domain <> '')::int AS com_domain FROM auctioneers`)).rows[0];
+    const counts = (await query<{ total: number; com_domain: number }>(`SELECT count(*)::int AS total,
+      count(*) FILTER (WHERE domain IS NOT NULL AND domain <> '')::int AS com_domain FROM auctioneers`))[0];
     const beforeRows: any[] = [];
     for (const t of TARGETS) {
-      const result = await client.query(`SELECT ${FIELDS} FROM auctioneers WHERE id=$1`, [t.id]);
-      const row = result.rows[0];
+      const result = await query(`SELECT ${FIELDS} FROM auctioneers WHERE id=$1`, [t.id]);
+      const row = result[0];
       const state = targetState(row, t);
       beforeRows.push({ target: t, row: row ?? null, state });
     }
-    const siteBefore = (await client.query(
+    const siteBefore = await query(
       `SELECT domain, auctioneers, ufs, http_status, has_lots, platform, connector_id, title, checked_at, note
          FROM discovered_sites WHERE domain = ANY($1::text[]) ORDER BY domain`,
       [TARGETS.map(t => t.domain)],
-    )).rows;
+    );
     const baseValid = counts.total === 1947 &&
       ((counts.com_domain === 1193 && beforeRows.every(r => r.state === 'ready')) ||
        (counts.com_domain === 1195 && beforeRows.every(r => r.state === 'already-applied')));
@@ -108,58 +149,17 @@ async function main() {
       { mode: 0o600 },
     );
 
-    await client.query('BEGIN');
-    transactionOpen = true;
-    const applied: any[] = [];
-    for (const entry of ready) {
-      const t = entry.target;
-      const updated = await client.query(
-        `UPDATE auctioneers SET domain=$1, domain_origin=$2
-          WHERE id=$3 AND registry=$4 AND external_id=$5 AND name=$6 AND matricula=$7 AND junta=$8
-            AND uf=$9 AND uf_junta=$10 AND domain IS NOT DISTINCT FROM $11
-            AND domain_origin IS NOT DISTINCT FROM $12 AND blocked=FALSE AND situacao ILIKE 'regular'
-          RETURNING ${FIELDS}`,
-        [t.domain, ORIGIN, t.id, t.registry, t.external_id, t.name, t.matricula, t.junta, t.uf, t.uf_junta,
-          entry.row.domain, entry.row.domain_origin],
-      );
-      if (updated.rowCount !== 1) throw new Error(`compare-and-set falhou para id=${t.id}`);
-      applied.push(updated.rows[0]);
-    }
-    for (const t of TARGETS) {
-      await client.query(
-        `INSERT INTO discovered_sites (domain, auctioneers, ufs) VALUES ($1,1,ARRAY[$2]::text[])
-         ON CONFLICT (domain) DO UPDATE SET auctioneers=EXCLUDED.auctioneers, ufs=EXCLUDED.ufs`,
-        [t.domain, t.uf],
-      );
-    }
-    const afterCounts = (await client.query(`SELECT count(*)::int AS total,
-      count(*) FILTER (WHERE domain IS NOT NULL AND domain <> '')::int AS com_domain FROM auctioneers`)).rows[0];
-    if (afterCounts.total !== 1947 || afterCounts.com_domain !== 1195) throw new Error(`contagem pós-escrita inesperada: ${JSON.stringify(afterCounts)}`);
-    const afterSites = (await client.query(
-      `SELECT domain, auctioneers, ufs, http_status, has_lots, platform, connector_id, title, checked_at, note
-         FROM discovered_sites WHERE domain = ANY($1::text[]) ORDER BY domain`,
-      [TARGETS.map(t => t.domain)],
-    )).rows;
-    for (const t of TARGETS) {
-      const before = siteBefore.find(r => r.domain === t.domain) ?? null;
-      const after = afterSites.find(r => r.domain === t.domain) ?? null;
-      checkSiteMetadata(before, after);
-      if (after?.auctioneers !== 1 || !Array.isArray(after.ufs) || after.ufs.length !== 1 || after.ufs[0] !== t.uf) {
-        throw new Error(`metadados de domínio inesperados: ${t.domain}`);
-      }
-    }
-    await client.query('COMMIT');
-    transactionOpen = false;
+    const result = await PrismaService.getInstance().$transaction(
+      client => applyReconciliation(client, ready, counts, siteBefore), { maxWait: 5_000, timeout: 300_000 },
+    );
 
-    const evidence = { applied_at: new Date().toISOString(), before_counts: counts, after_counts: afterCounts,
-      applied, discovered_sites_before: siteBefore, discovered_sites_after: afterSites,
+    const evidence = { applied_at: new Date().toISOString(), before_counts: counts, after_counts: result.afterCounts,
+      applied: result.applied, discovered_sites_before: result.siteBefore, discovered_sites_after: result.afterSites,
       backup: backupPath, conditional_rollback: rollbackPath, repeat_apply_updates: 0 };
     writeFileSync(`${DIR}/apply-evidencia.json`, JSON.stringify(evidence, null, 2) + '\n', { mode: 0o600 });
-    console.log(JSON.stringify({ applied: applied.map(r => ({ id: r.id, domain: r.domain, domain_origin: r.domain_origin })), afterCounts, backupPath, rollbackPath }, null, 2));
+    console.log(JSON.stringify({ applied: result.applied.map(r => ({ id: r.id, domain: r.domain, domain_origin: r.domain_origin })), afterCounts: result.afterCounts, backupPath, rollbackPath }, null, 2));
   } finally {
-    if (transactionOpen) await client.query('ROLLBACK');
-    client.release();
-    await pool.end();
+    await PrismaService.disconnectInstance();
   }
 }
 

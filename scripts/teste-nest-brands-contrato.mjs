@@ -17,7 +17,7 @@ const [{ createLegacyNestHostBrands, LegacyOwnedFastifyAdapter }, { createLegacy
   await Promise.all([
     import(fromEntry('legacy-nest-host-brands')),
     import(fromEntry('legacy-host')),
-    import(fromEntry('core/auth')),
+    import(fromEntry('infra/auth/session')),
     import(fromEntry('bootstrap/paths')),
     import(fromEntry('core/normalize')),
   ]);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import type { CollectionExecutionDependencies } from '../src/core/collection-execution.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import type { CollectionExecutionDependencies } from '../src/application/services/collection/collection-execution.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 import { workerDeployment } from '../src/queue/deployment.js';
 import { createTenantProcessor } from '../src/queue/tenant-worker.js';
 

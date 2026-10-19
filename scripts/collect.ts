@@ -1,11 +1,11 @@
-import { pool } from '../src/core/db.js';
+import { createCollectionContext, type CollectionContext } from '../src/bootstrap/collection-context.js';
 import { connectors, getConnector } from '../src/connectors/index.js';
 import { upsertLots, startRun, finishRun, ensureSources } from '../src/core/repo.js';
-import { processarAposColeta } from '../src/core/pos-coleta.js';
+import { processarAposColeta } from '../src/application/services/collection/post-collection.js';
 import { makeRedis, CHANNEL_UPDATES } from '../src/queue/runtime.js';
-import { observerForCollection } from '../src/core/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies } from '../src/core/collection-execution.js';
-import { CollectionCancellationError } from '../src/core/collection-cancellation.js';
+import { observerForCollection } from '../src/application/services/collection/collection-observer.js';
+import { type CollectionExecutionDependencies } from '../src/application/services/collection/collection-execution.js';
+import { CollectionCancellationError } from '../src/infra/collection/collection-cancellation.js';
 
 const only = process.argv[2];
 const limit = Number(process.argv[3] ?? 400);
@@ -62,48 +62,53 @@ const deps: CollectionExecutionDependencies = {
   logError: (mensagem, erro) => console.error(mensagem, erro),
 };
 
-await ensureSources();
-const falhas: string[] = [];
-for (const c of targets) {
-  if (controller.signal.aborted) break;
-  const t0 = Date.now();
-  try {
-    const r = await executeCollection(
-      {
-        sourceId: c.def.id,
-        limit,
-        job: 'collect:cli',
-        metadata: { origin: 'manual' },
-        signal: controller.signal,
-        timeoutMs,
-        publish: publicar,
-      },
-      deps,
-    );
-    const aviso = r.notifications;
-    console.log(
-      `${c.def.id.padEnd(10)} http=${r.result.httpStatus} lidos=${r.result.fetched} mapeados=${r.result.lots.length} gravados=${r.upserted} descartados=${r.result.skipped} lances=${r.bidChanges.length}` +
-        (aviso.disparos ? ` alertas=${aviso.disparos} push=${aviso.push} email=${aviso.emails}/${aviso.pendentesEmail}pend` : '') +
-        ` ${(Date.now() - t0) / 1000}s`,
-    );
-    for (const erro of r.publishErrors) falhas.push(`${c.def.id}: publicação: ${erro}`);
-  } catch (err: any) {
-    // Sem httpStatus aqui, a tela de cobertura mostra "falhou" sem o código:
-    // rodar pela CLI (este script) escondia 302/403/429 que o worker grava.
-    const mensagem = String(err?.message ?? err);
-    falhas.push(`${c.def.id}: ${mensagem}`);
-    console.error(`${c.def.id.padEnd(10)} FALHOU: ${mensagem}`);
-    // Prazo estourou numa fonte: registra e segue para a próxima. Shutdown:
-    // já não pode iniciar coleta nova.
-    if (err instanceof CollectionCancellationError && err.kind === 'shutdown') break;
+let context: CollectionContext | undefined;
+try {
+  context = await createCollectionContext({ overrides: deps });
+  await ensureSources();
+  const falhas: string[] = [];
+  for (const c of targets) {
+    if (controller.signal.aborted) break;
+    const t0 = Date.now();
+    try {
+      const r = await context.service.execute(
+        {
+          sourceId: c.def.id,
+          limit,
+          job: 'collect:cli',
+          metadata: { origin: 'manual' },
+          signal: controller.signal,
+          timeoutMs,
+          publish: publicar,
+        },
+      );
+      const aviso = r.notifications;
+      console.log(
+        `${c.def.id.padEnd(10)} http=${r.result.httpStatus} lidos=${r.result.fetched} mapeados=${r.result.lots.length} gravados=${r.upserted} descartados=${r.result.skipped} lances=${r.bidChanges.length}` +
+          (aviso.disparos ? ` alertas=${aviso.disparos} push=${aviso.push} email=${aviso.emails}/${aviso.pendentesEmail}pend` : '') +
+          ` ${(Date.now() - t0) / 1000}s`,
+      );
+      for (const erro of r.publishErrors) falhas.push(`${c.def.id}: publicação: ${erro}`);
+    } catch (err: any) {
+      // Sem httpStatus aqui, a tela de cobertura mostra "falhou" sem o código:
+      // rodar pela CLI (este script) escondia 302/403/429 que o worker grava.
+      const mensagem = String(err?.message ?? err);
+      falhas.push(`${c.def.id}: ${mensagem}`);
+      console.error(`${c.def.id.padEnd(10)} FALHOU: ${mensagem}`);
+      // Prazo estourou numa fonte: registra e segue para a próxima. Shutdown:
+      // já não pode iniciar coleta nova.
+      if (err instanceof CollectionCancellationError && err.kind === 'shutdown') break;
+    }
   }
+  if (falhas.length) {
+    console.error(`[collect] ${falhas.length} falha(s):`);
+    for (const falha of falhas) console.error(`  - ${falha}`);
+  }
+} finally {
+  const closed = await Promise.allSettled([pub.quit(), ...(context ? [context.close()] : [])]);
+  const failure = closed.find(result => result.status === 'rejected');
+  if (failure?.status === 'rejected') throw failure.reason;
 }
-if (falhas.length) {
-  console.error(`[collect] ${falhas.length} falha(s):`);
-  for (const falha of falhas) console.error(`  - ${falha}`);
-}
-await pub.quit();
-await pool.end();
 // Saída explícita: fechar as conexões não bastava. Algum handle (socket do
 // undici, timer do ioredis) segurava o loop de eventos, e a coleta ficava
 // pendurada para sempre com Postgres e Redis abertos — dez processos assim

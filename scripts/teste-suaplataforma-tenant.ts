@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { collectSuaPlataforma } from '../src/connectors/suaplataforma.js';
-import { CollectionCancellationError, withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import { CollectionCancellationError, withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 const previousDomains = process.env.SUAPLATAFORMA_DOMAINS;
 process.env.SUAPLATAFORMA_DOMAINS = 'www.gracieleiloes.com.br';

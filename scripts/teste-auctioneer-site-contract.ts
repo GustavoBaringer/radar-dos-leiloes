@@ -27,7 +27,7 @@ test('nome do site só existe quando o domínio pertence a um único nome', () =
   assert.match(sql, /min\(a\.name\)/);
 
   // Nenhuma consulta pode voltar ao antigo: o ORDER BY LIMIT 1 sem contagem.
-  for (const arquivo of ['../src/core/repo.ts', '../src/legacy-host.ts']) {
+  for (const arquivo of ['../src/infra/database/repositories/lots.repository.ts', '../src/legacy-host.ts']) {
     const texto = readFileSync(new URL(arquivo, import.meta.url), 'utf8');
     assert.doesNotMatch(texto, /SELECT a\.name FROM auctioneers/,
       `${arquivo} ainda tem o subselect que escolhe um nome ao acaso`);

@@ -10,7 +10,7 @@ const compiled = process.env.HOST_VARIANT === 'compiled';
 const entry = compiled ? 'dist/src' : 'src';
 const [{ createLegacyHost }, auth, pathsModule] = await Promise.all([
   import(pathToFileURL(resolve(root, entry, `legacy-host.${compiled ? 'js' : 'ts'}`)).href),
-  import(pathToFileURL(resolve(root, entry, `core/auth.${compiled ? 'js' : 'ts'}`)).href),
+  import(pathToFileURL(resolve(root, entry, `infra/auth/session.${compiled ? 'js' : 'ts'}`)).href),
   import(pathToFileURL(resolve(root, entry, `bootstrap/paths.${compiled ? 'js' : 'ts'}`)).href),
 ]);
 const paths = pathsModule.resolveHttpPaths(pathToFileURL(resolve(root, entry, `server.${compiled ? 'js' : 'ts'}`)).href);

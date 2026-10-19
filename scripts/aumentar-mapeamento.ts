@@ -9,7 +9,7 @@
  *   all              executa official-missing, backlog e report
  */
 import { pool, query } from '../src/core/db.js';
-import { sondarDominios } from '../src/core/descoberta.js';
+import { createDiscoveryContext } from '../src/bootstrap/discovery-context.js';
 import { ensureSources } from '../src/core/repo.js';
 
 type Row = Record<string, any>;
@@ -118,29 +118,32 @@ async function report() {
 }
 
 async function main() {
-  const modo = process.argv[2] ?? 'report';
-  const limite = Number(process.argv[3] ?? 60);
+  const discovery = await createDiscoveryContext();
+  try {
+    const modo = process.argv[2] ?? 'report';
+    const limite = Number(process.argv[3] ?? 60);
 
-  await ensureSources();
+    await ensureSources();
 
-  if (modo === 'official-missing' || modo === 'all') {
-    const inseridos = await oficiaisFaltantes();
-    console.log(JSON.stringify({ etapa: 'official-missing', inseridos }, null, 2));
-    if (inseridos.length) {
-      const r = await sondarDominios(inseridos.map((r) => r.domain), 4);
-      console.log(JSON.stringify({ etapa: 'sonda-official-missing', resultado: r }, null, 2));
+    if (modo === 'official-missing' || modo === 'all') {
+      const inseridos = await oficiaisFaltantes();
+      console.log(JSON.stringify({ etapa: 'official-missing', inseridos }, null, 2));
+      if (inseridos.length) {
+        const r = await discovery.service.sondarDominios(inseridos.map((r) => r.domain), 4);
+        console.log(JSON.stringify({ etapa: 'sonda-official-missing', resultado: r }, null, 2));
+      }
     }
-  }
 
-  if (modo === 'backlog' || modo === 'all') {
-    const alvos = await alvosBacklog(limite);
-    const r = await sondarDominios(alvos.map((a) => a.domain), 6);
-    console.log(JSON.stringify({ etapa: 'backlog', alvos: alvos.length, resultado: r }, null, 2));
-  }
+    if (modo === 'backlog' || modo === 'all') {
+      const alvos = await alvosBacklog(limite);
+      const r = await discovery.service.sondarDominios(alvos.map((a) => a.domain), 6);
+      console.log(JSON.stringify({ etapa: 'backlog', alvos: alvos.length, resultado: r }, null, 2));
+    }
 
-  if (modo === 'report' || modo === 'all') {
-    console.log(JSON.stringify(await report(), null, 2));
-  }
+    if (modo === 'report' || modo === 'all') {
+      console.log(JSON.stringify(await report(), null, 2));
+    }
+  } finally { await discovery.close(); }
 }
 
 try {

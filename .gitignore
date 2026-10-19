@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/infra/database/generated/
 coverage/
 
 # Segredos. O .env tem VAPID_PRIVATE, APP_SENHA e a URL do banco — o

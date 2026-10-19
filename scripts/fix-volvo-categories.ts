@@ -1,4 +1,8 @@
-import { pool } from '../src/core/db.js';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { Prisma } from '../src/infra/database/generated/client.js';
+import { PrismaService } from '../src/infra/database/prisma.service.js';
+import { queryResultWithClient, queryWithClient } from '../src/infra/database/query.js';
 import {
   classifyAsset,
   marcaCanonica,
@@ -8,16 +12,10 @@ import {
 } from '../src/core/normalize.js';
 import * as campos from '../src/core/campos.js';
 
-async function main() {
-  const isDryRun = process.argv.includes('--dry-run');
-  console.log(`[migracao] Iniciando migração e saneamento de veículos Volvo e pesados (dry-run: ${isDryRun})...`);
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+export async function fixVolvoCategories(client: Prisma.TransactionClient, isDryRun: boolean) {
 
     // 1. Busca todos os lotes que têm marca VOLVO ou menção a volvo/modelos de caminhão/ônibus no título
-    const res = await client.query(`
+    const rows = await queryWithClient<any>(client, `
       SELECT id, title_raw, source_category, brand, model, version, vehicle_type, asset_type, city, state, seller_name, lot_url
       FROM lots
       WHERE (
@@ -36,7 +34,7 @@ async function main() {
       peca: 0,
     };
 
-    for (const r of res.rows) {
+    for (const r of rows) {
       // Reclassifica com as regras atualizadas
       const cls = classifyAsset(r.title_raw, r.source_category);
       let assetType = cls.assetType;
@@ -99,7 +97,7 @@ async function main() {
       ]);
 
       if (!isDryRun) {
-        await client.query(
+        await queryResultWithClient(client,
           `
           UPDATE lots
           SET
@@ -133,23 +131,21 @@ async function main() {
       }
     }
 
-    if (isDryRun) {
-      await client.query('ROLLBACK');
-      console.log(`\n[DRY RUN COMPLETO] ${totalAtualizados} lotes seriam alterados no banco.`);
-    } else {
-      await client.query('COMMIT');
-      console.log(`\n[MIGRAÇÃO CONCLUÍDA COM SUCESSO] ${totalAtualizados} lotes saneados e persistidos no Postgres.`);
-    }
+    return { totalAtualizados, contadores };
+}
 
+async function main() {
+  const isDryRun = process.argv.includes('--dry-run');
+  console.log(`[migracao] Iniciando migração e saneamento de veículos Volvo e pesados (dry-run: ${isDryRun})...`);
+  try {
+    const { totalAtualizados, contadores } = await PrismaService.getInstance().$transaction(tx => fixVolvoCategories(tx, isDryRun), { maxWait: 5_000, timeout: 300_000 });
+    console.log(`\n[${isDryRun ? 'DRY RUN COMPLETO' : 'MIGRAÇÃO CONCLUÍDA COM SUCESSO'}] ${totalAtualizados} lotes ${isDryRun ? 'seriam alterados no banco.' : 'saneados e persistidos no Postgres.'}`);
     console.log('Resumo das alterações:', contadores);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Erro na migração:', err);
-    process.exit(1);
   } finally {
-    client.release();
-    await pool.end();
+    await PrismaService.disconnectInstance();
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch(err => { console.error('Erro na migração, transação revertida:', err); process.exitCode = 1; });
+}

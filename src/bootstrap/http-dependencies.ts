@@ -1,7 +1,7 @@
 import type { LegacyHostDependencies } from '../legacy-host.js';
 
 /** Production-only composition boundary; never imported by host contract tests. */
-export async function createHttpDependencies(oidc: typeof import('../core/oidc.js')): Promise<LegacyHostDependencies> {
+export async function createHttpDependencies(oidc: typeof import('../infra/auth/oidc.adapter.js')): Promise<LegacyHostDependencies> {
   const [repo, db, identity, alerts, connectors, queues, http] = await Promise.all([
     import('../core/repo.js'), import('../core/db.js'), import('../core/identidade.js'),
     import('../core/alerts.js'), import('../connectors/index.js'), import('../queue/runtime.js'),

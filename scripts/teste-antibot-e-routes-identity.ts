@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { registerAntibot as oldFastify } from '../src/core/antibot/fastify.js';
+import { registerAntibot as newFastify } from '../src/infra/http/antibot-fastify.js';
+import { ROUTE_POLICIES as oldRoutes, registerOperationsMetricsRoute as oldRegister } from '../src/core/antibot/routes.js';
+import { ROUTE_POLICIES as newRoutes, registerOperationsMetricsRoute as newRegister } from '../src/infra/http/antibot-routes.js';
+import { loadProxyTrustConfig as oldProxy } from '../src/core/antibot/proxy.js';
+import { loadProxyTrustConfig as newProxy } from '../src/infra/http/trust-proxy.js';
+assert.equal(oldFastify, newFastify);
+assert.equal(oldRoutes, newRoutes);
+assert.equal(oldRegister, newRegister);
+assert.equal(oldProxy, newProxy);
+console.log('OK: Fastify, routes and proxy shim exports preserve references');

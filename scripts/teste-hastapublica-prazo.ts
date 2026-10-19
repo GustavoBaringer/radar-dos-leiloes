@@ -14,7 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cards, proximaData } from '../src/connectors/hastapublica.js';
-import { VERIFICADORES } from '../src/core/verificacao.js';
+import { VERIFICADORES } from '../src/infra/verification/verifiers.js';
 
 // Card COMPACTO de propósito: com o rótulo e o <dd> vizinhos, o regex guloso
 // passava por cima e lia o <dd> do Lance Inicial como se fosse a data.

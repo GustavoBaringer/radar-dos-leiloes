@@ -1,0 +1,734 @@
+import { Injectable } from '@nestjs/common';
+import { query, queryWithClient } from '../query.js';
+import { PrismaService } from '../prisma.service.js';
+import { parseQuery, termoComoRegex } from '../../../domain/lots/normalize.js';
+import { prepareLotForPersistence } from '../../../domain/lots/prepare-lot.js';
+import { isBidSuspect as prepareBidSuspect } from '../../../domain/lots/bid-rules.js';
+import type { SearchParams } from '../../../domain/search/search-params.js';
+import { VENCIDO, TERMINAL } from '../queries/lot-status.js';
+import type { CanonicalLot } from '../../../domain/lots/types.js';
+import { connectors } from '../../../connectors/index.js';
+import { normalizeSearchParams, parsePagination } from '../../../domain/search/request-bounds.js';
+import { toPublicLot } from '../../../domain/lots/public-dto.js';
+import type { PersistenceControl } from '../../../domain/collection/persistence-control.js';
+import { throwIfAborted } from '../../collection/collection-cancellation.js';
+
+export type { SearchParams } from '../../../domain/search/search-params.js';
+type Multi = SearchParams['uf'];
+
+export async function ensureSources() {
+  for (const c of connectors) {
+    await query(
+      `INSERT INTO sources (id, name, platform, method, tier, site_url, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, platform=EXCLUDED.platform,
+         method=EXCLUDED.method, tier=EXCLUDED.tier, site_url=EXCLUDED.site_url, notes=EXCLUDED.notes`,
+      [c.def.id, c.def.name, c.def.platform ?? null, c.def.method, c.def.tier, c.def.siteUrl, c.def.notes ?? null],
+    );
+  }
+}
+
+/**
+ * Lance implausível é da fonte, não do parser. Sem esta marca, um único
+ * erro de digitação no site do leiloeiro encabeça a ordenação "maior lance".
+ */
+export function isBidSuspect(bid?: number | null, appraisal?: number | null): boolean {
+  return prepareBidSuspect(bid, appraisal);
+}
+
+export interface UpsertOutcome {
+  upserted: number;
+  /** Ids dos lotes vistos pela PRIMEIRA vez: é o gatilho dos alertas. */
+  novos: number[];
+  bidChanges: Array<{ lotId: number; sourceId: string; externalId: string; title: string; oldBid: number | null; newBid: number }>;
+}
+
+/**
+ * Upsert por (source_id, external_id). Quando o lance muda, grava histórico
+ * e devolve a mudança: é isso que o websocket publica como "lance ao vivo".
+ */
+export async function upsertLots(lots: CanonicalLot[], control?: PersistenceControl): Promise<UpsertOutcome> {
+  return new LotsRepository(PrismaService.getInstance()).upsertLots(lots, control);
+}
+
+async function upsertLotsInTransaction(lots: CanonicalLot[], execute: QueryFunction, control?: PersistenceControl): Promise<UpsertOutcome> {
+  const bidChanges: UpsertOutcome['bidChanges'] = [];
+  const novos: number[] = [];
+  let upserted = 0;
+    for (const l of lots) {
+      throwIfAborted(control?.signal);
+      const prepared = prepareLotForPersistence(l);
+      if (prepared.kind === 'out-of-scope') {
+        await execute(
+          `UPDATE lots
+             SET status='encerrado', closed_reason='fora_escopo_asset_type_outro',
+                 closed_at=COALESCE(closed_at, now()), verified_at=now(),
+                 verify_result='coleta_outro_nao_imovel_veiculo'
+           WHERE source_id=$1 AND external_id=$2
+             AND status IN ('aberto','agendado')`,
+          [l.sourceId, l.externalId],
+        );
+        continue;
+      }
+      const {
+        titleRaw, plateMasked, bidSuspect, assetType, vehicleType, propertyType,
+        brand, model, version, searchText, titleDisplay, sourceCategory, cityKey,
+        fields: n,
+      } = prepared.lot;
+      const prev = await execute(
+        'SELECT id, current_bid FROM lots WHERE source_id=$1 AND external_id=$2',
+        [l.sourceId, l.externalId],
+      ) as { id: string; current_bid: number | null }[];
+      const res = await execute(
+        `INSERT INTO lots (
+           source_id, external_id, lot_url, title_raw, brand, model, version, year_make, year_model,
+           km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
+           source_tz, status, current_bid, min_bid, bid_increment, appraisal, fees_pct, fees_amount,
+           auctioneer_name, auctioneer_reg, seller_name, seller_type, yard, city, state, lat, lon,
+           photos, photo_count, financeable, has_report, raw, search_text, bid_suspect,
+           asset_type, vehicle_type, source_category, property_type, city_key, title_display, collected_at
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
+           $26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47, now()
+         )
+         ON CONFLICT (source_id, external_id) DO UPDATE SET
+           lot_url=EXCLUDED.lot_url, title_raw=EXCLUDED.title_raw, brand=EXCLUDED.brand, model=EXCLUDED.model,
+           version=EXCLUDED.version, year_make=EXCLUDED.year_make, year_model=EXCLUDED.year_model, km=EXCLUDED.km,
+           color=EXCLUDED.color, fuel=EXCLUDED.fuel, plate_masked=EXCLUDED.plate_masked, doc_type=EXCLUDED.doc_type,
+           closing_model=EXCLUDED.closing_model, auction_start_utc=EXCLUDED.auction_start_utc,
+          -- Fim NULO da fonte é "não sei agora", nunca "não tem prazo". O leilo
+          -- publica dataFim para todo lote e o ANULA enquanto o leilão está ao
+          -- vivo: 607 dos 639 lotes sem fim foram colhidos depois da abertura,
+          -- contra 505 dos 515 com fim colhidos antes. Gravar esse NULL por cima
+          -- apagava o prazo que já tínhamos, e o lote sumia da fonte logo em
+          -- seguida — 172 ficaram 'aberto' para sempre, invisíveis às duas regras
+          -- de encerramento (a do relógio não julga sem fim; a de ausência está
+          -- desligada).
+          -- O guard do início é o que separa isto de relistagem: mesmo leilão,
+          -- preserva o fim; leilão diferente (2ª praça reabre com o mesmo id),
+          -- descarta, senão o prazo velho encerraria a praça nova na hora.
+          auction_end_utc=COALESCE(
+            EXCLUDED.auction_end_utc,
+            CASE WHEN EXCLUDED.auction_start_utc IS NOT DISTINCT FROM lots.auction_start_utc
+                 THEN lots.auction_end_utc END),
+           source_tz=EXCLUDED.source_tz, status=EXCLUDED.status,
+          closed_reason=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_reason END,
+          closed_at=CASE WHEN EXCLUDED.status IN ('aberto','agendado') THEN NULL ELSE lots.closed_at END,
+           current_bid=EXCLUDED.current_bid, min_bid=EXCLUDED.min_bid, bid_increment=EXCLUDED.bid_increment,
+           appraisal=EXCLUDED.appraisal, fees_pct=EXCLUDED.fees_pct, fees_amount=EXCLUDED.fees_amount,
+           auctioneer_name=EXCLUDED.auctioneer_name, auctioneer_reg=EXCLUDED.auctioneer_reg,
+           seller_name=EXCLUDED.seller_name, seller_type=EXCLUDED.seller_type, yard=EXCLUDED.yard,
+           city=EXCLUDED.city, state=EXCLUDED.state, photos=EXCLUDED.photos, photo_count=EXCLUDED.photo_count,
+           financeable=EXCLUDED.financeable, has_report=EXCLUDED.has_report, raw=EXCLUDED.raw,
+           search_text=EXCLUDED.search_text, bid_suspect=EXCLUDED.bid_suspect,
+           asset_type=EXCLUDED.asset_type, vehicle_type=EXCLUDED.vehicle_type,
+           source_category=EXCLUDED.source_category, property_type=EXCLUDED.property_type,
+           city_key=EXCLUDED.city_key, title_display=EXCLUDED.title_display, collected_at=now()
+         RETURNING id`,
+        [
+          l.sourceId, l.externalId, n.lotUrl, titleRaw, brand, model,
+          version, n.yearMake, n.yearModel, n.km, n.color,
+          n.fuel, plateMasked, n.docType, l.closingModel,
+          l.auctionStartUtc ?? null, l.auctionEndUtc ?? null, l.sourceTz, l.status,
+          n.currentBid, n.minBid, n.bidIncrement, n.appraisal,
+          n.feesPct, l.feesAmount ?? null, n.auctioneerName, l.auctioneerReg ?? null,
+          n.sellerName, l.sellerType ?? null, n.yard, n.city, n.state,
+          l.lat ?? null, l.lon ?? null, JSON.stringify(n.photos), n.photos.length,
+          l.financeable ?? null, l.hasReport ?? null, JSON.stringify(l.raw ?? {}), searchText, bidSuspect,
+           assetType, vehicleType, sourceCategory, propertyType, cityKey, titleDisplay,
+        ],
+       ) as { id: string }[];
+      upserted++;
+      const lotId = Number(res[0].id);
+      if (!prev.length) novos.push(lotId);
+      const oldBid = prev[0]?.current_bid ?? null;
+      if (l.currentBid != null && Number(oldBid) !== Number(l.currentBid)) {
+        await execute('INSERT INTO bid_history (lot_id, bid) VALUES ($1,$2)', [lotId, l.currentBid]);
+        if (prev.length) {
+          bidChanges.push({
+            lotId,
+            sourceId: l.sourceId,
+            externalId: l.externalId,
+            title: titleRaw,
+            oldBid: oldBid == null ? null : Number(oldBid),
+            newBid: Number(l.currentBid),
+          });
+        }
+      }
+    }
+  return { upserted, bidChanges, novos };
+}
+
+@Injectable()
+export class LotsRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  upsertLots(lots: CanonicalLot[], control?: PersistenceControl): Promise<UpsertOutcome> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        throwIfAborted(control?.signal);
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
+        const outcome = await upsertLotsInTransaction(lots, (sql, params = []) => queryWithClient(tx, sql, params), control);
+        // Observed authority loss rolls back the whole batch. Redis/PG commit is not fenced.
+        await control?.authorizePersistence?.();
+        throwIfAborted(control?.signal);
+        return outcome;
+      },
+      // Sequential look-before-upsert plus optional bid history is 3 round
+      // trips/lot. A 1,200-lot fixture took ~5s; 300s budgets ~4x the linear
+      // 15k estimate for DB contention while preserving one atomic batch.
+      { maxWait: 5_000, timeout: 300_000 },
+    );
+  }
+}
+
+
+export interface SearchResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  interpreted: { brand: string | null; model: string | null; freeTerms: string[] };
+  items: ReturnType<typeof toPublicLot>[];
+  facets: { states: any[]; cities: any[]; sources: any[]; sites: any[]; sellerTypes: any[]; assetTypes: any[]; vehicleTypes: any[]; propertyTypes: any[]; auctioneers: any[]; sellers: any[]; statuses: any[]; docTypes: any[] };
+}
+
+// HTTP(S) only; split authority before path/query/fragment, remove www/port,
+// then expose only valid DNS domains. chr(63) avoids confusing SQL bind markers.
+export function lotSiteHostSql(urlColumn = 'lot_url'): string {
+  const SITE_AUTHORITY = `split_part(split_part(split_part(CASE
+  WHEN lower(${urlColumn}) LIKE 'https://%' THEN substring(${urlColumn} from 9)
+  WHEN lower(${urlColumn}) LIKE 'http://%' THEN substring(${urlColumn} from 8)
+END, '/', 1), chr(63), 1), chr(35), 1)`;
+  const SITE_HOST_CANDIDATE = `regexp_replace(regexp_replace(lower(${SITE_AUTHORITY}), '^www[.]', ''), ':[0-9]+$', '')`;
+  return `(CASE WHEN ${SITE_HOST_CANDIDATE} ~ '^([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})([.]([a-z0-9]([a-z0-9-]*[a-z0-9]){0,1})){1,}$' THEN ${SITE_HOST_CANDIDATE} END)`;
+}
+export const LOT_SITE_HOST_SQL = lotSiteHostSql();
+
+/**
+ * Nome do site do lote, para o cartão mostrar a origem em vez do host.
+ *
+ * Só vale quando o domínio pertence a UM único nome no catálogo. `leilo.com.br`
+ * tem 3 leiloeiros declarando aquele domínio e `casamartillo.com.br` tem 17: a
+ * escolha anterior (`ORDER BY name LIMIT 1`) pegava o primeiro em ordem
+ * alfabética e colocava o nome de uma pessoa — "EDUARDO VINICIUS FLEURY LÔBO" em
+ * todos os lotes do Leilo, "AHARO ESPÍRITO SANTO AQUINO" em todos os do
+ * Casamartillo — como se fosse a origem daquele leilão: 15.976 lotes do índice
+ * com atribuição a quem não leiloou, e sem nenhum aviso.
+ *
+ * Com mais de um nome o subselect devolve NULL e o cartão cai no host, que é o
+ * que a página realmente é. Quando a fonte publica o responsible verdadeiro
+ * (`lots.auctioneer_name`), ele tem precedência e continua aparecendo.
+ */
+export function auctioneerSiteNameSql(urlColumn = 'lot_url'): string {
+  return `(SELECT min(a.name) FROM auctioneers a
+            WHERE lower(regexp_replace(a.domain, '^www[.]', '')) = ${lotSiteHostSql(urlColumn)}
+              AND a.name IS NOT NULL AND a.name <> ''
+           HAVING count(DISTINCT a.name) = 1)`;
+}
+
+/**
+ * A busca roda no nosso índice, nunca é repassada à fonte.
+ * Quando marca e modelo são reconhecidos, o filtro é ESTRUTURAL (igualdade),
+ * e não trigram: é isso que impede "mercedes b 200" de trazer GLA 200.
+ */
+/** 'a,b' e ['a','b'] viram a mesma lista; string única vira lista de um. */
+const lista = (v: Multi): string[] =>
+  (Array.isArray(v) ? v : String(v ?? '').split(','))
+    .map((x) => String(x).trim())
+    .filter(Boolean);
+
+/**
+ * Motor de filtro da busca, isolado porque o MAPA precisa do mesmo WHERE.
+ * Duplicar a montagem faria mapa e lista divergirem no primeiro filtro novo.
+ */
+function montaFiltro(p: SearchParams) {
+  p = normalizeSearchParams(p);
+  const parsed = parseQuery(p.q ?? '');
+
+  // Cada filtro carrega a chave da faceta que ele representa. Isso permite
+  // montar, para CADA faceta, um WHERE que ignora o próprio filtro — sem isso
+  // a lista de opções encolhe para o valor já escolhido e o usuário não
+  // consegue trocar de "moto" para "caminhão" (a opção simplesmente some).
+  interface Pred {
+    sql: string;
+    value?: any;
+    /** Alternativa a `value` quando o predicado leva mais de um parâmetro. */
+    valores?: any[];
+    facet?: string;
+  }
+  const preds: Pred[] = [];
+  const P = (sql: string, value?: any, facet?: string) => preds.push({ sql, value, facet });
+
+  if (parsed.brand) P('brand = ?', parsed.brand);
+  if (parsed.model) P('model = ?', parsed.model);
+  // Termo livre casa por FRONTEIRA DE PALAVRA, não por substring: o search_text
+  // guarda as palavras coladas ("t cross" → "tcross") e o LIKE '%termo%' entrava
+  // dentro delas. Medido em 05/10/2026: `q=marea` trazia 511 imóveis porque
+  // "com área" colava em "comarea" e "388 m² - Área" em "marea".
+  for (const t of parsed.freeTerms) P('search_text ~ ?', termoComoRegex(t));
+  if (!parsed.brand && !parsed.model && parsed.freeTerms.length === 0 && parsed.compactTerm) {
+    P('search_text ~ ?', termoComoRegex(parsed.compactTerm));
+  }
+
+  // A regra de vencimento mora em encerramento.ts, que é quem a GRAVA uma vez
+  // por minuto. Manter uma cópia aqui faria a listagem (que filtra) divergir do
+  // status gravado (que a página do lote lê) — foi exatamente esse o defeito.
+  // O filtro continua aqui como rede: entre dois minutos do job há lote que
+  // acabou de vencer e ainda não foi gravado.
+
+  /**
+   * Um item vira igualdade, vários viram ANY. Igualdade contra a lista inteira
+   * ('carro,suv') nunca casa e é um filtro que falha em silêncio — foi assim
+   * que o alerta de Kardian ficou mudo.
+   */
+  const PLista = (col: string, v: Multi, facet?: string, mapa?: (x: string) => string) => {
+    const vals = lista(v).map((x) => (mapa ? mapa(x) : x));
+    if (vals.length === 1) P(`${col} = ?`, vals[0], facet);
+    else if (vals.length > 1) P(`${col} = ANY(?)`, vals, facet);
+    return vals;
+  };
+
+  PLista('state', p.uf, 'states', (x) => x.toUpperCase());
+
+  const statuses = lista(p.status);
+  if (statuses.length) {
+    // Pedir 'encerrado' tem de arrastar o que a faceta colapsa em encerrado:
+    // o que venceu pela hora (não está 'encerrado' na fonte) e o vendido.
+    const querEncerrado = statuses.includes('encerrado') || statuses.includes('vendido');
+    const alvo = statuses.length === 1 ? `status = ${'?'}` : `status = ANY(${'?'})`;
+    const valor: any = statuses.length === 1 ? statuses[0] : statuses;
+    if (querEncerrado) P(`(${alvo} OR ${TERMINAL})`, valor, 'statuses');
+    else {
+      P(alvo, valor, 'statuses');
+      P(`NOT ${TERMINAL}`, undefined, 'statuses');
+    }
+  } else if (!p.includeEnded) {
+    P(`NOT ${TERMINAL}`);
+  }
+
+  PLista('seller_type', p.sellerType, 'sellerTypes');
+  PLista('source_id', p.sourceId, 'sources');
+  const sites = lista(p.sourceSite).map((site) => site.toLowerCase().replace(/^www\./, ''));
+  if (sites.length === 1) P(`${LOT_SITE_HOST_SQL} = ?`, sites[0], 'sites');
+  else if (sites.length > 1) P(`${LOT_SITE_HOST_SQL} = ANY(?)`, sites, 'sites');
+  PLista('auctioneer_name', p.auctioneer, 'auctioneers');
+  PLista('seller_name', p.seller, 'sellers');
+  if (p.assetType) P('asset_type = ?', p.assetType, 'assetTypes');
+  const tiposVeiculo = PLista('vehicle_type', p.vehicleType, 'vehicleTypes');
+  PLista('property_type', p.propertyType, 'propertyTypes');
+  PLista('city_key', p.city, 'cities');
+  PLista('doc_type', p.docType, 'docTypes');
+  // Peça e lote misto não são o produto: só aparecem se pedidos de propósito.
+  if (!p.assetType && !tiposVeiculo.length) P(`asset_type <> 'outro'`);
+  if (p.priceMin != null) P('COALESCE(current_bid, min_bid) >= ?', p.priceMin);
+  if (p.priceMax != null) P('COALESCE(current_bid, min_bid) <= ?', p.priceMax);
+  if (p.yearMin != null) P('COALESCE(year_model, year_make) >= ?', p.yearMin);
+  if (p.yearMax != null) P('COALESCE(year_model, year_make) <= ?', p.yearMax);
+  if (p.onlyWithDate) P('(auction_start_utc IS NOT NULL OR auction_end_utc IS NOT NULL)');
+  if (p.onlyWithPhoto) P('photo_count > 0');
+  if (p.endsWithin === 'hoje' || p.endsWithin === '7d') {
+    // "Hoje" é o dia de Brasília: em UTC, um pregão às 22h já cairia em amanhã.
+    const limite = p.endsWithin === 'hoje'
+      ? `(date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '1 day') AT TIME ZONE 'America/Sao_Paulo'`
+      : `now() + interval '7 days'`;
+    P(`(CASE WHEN closing_model = 'timer_por_lote' THEN auction_end_utc ELSE auction_start_utc END) < ${limite}`);
+  }
+  if (p.belowAppraisal) P('appraisal > COALESCE(current_bid, min_bid) AND COALESCE(current_bid, min_bid) > 0 AND NOT bid_suspect');
+
+  // Sem faceta: bbox e ponto não são dropdown, não há o que recontar. E o
+  // predicado é decomposto (city_key/state, ou lat/lon arredondado) em vez de
+  // comparar a chave montada, que não usaria índice nenhum.
+  if (p.place) {
+    // Vários pontos separados por ';': cidade com um pátio só tem a âncora
+    // EXATAMENTE sobre ele, e nenhum zoom separa os dois. Quando isso acontece
+    // o clique escolhe o conjunto, e aqui ele vira um OR — não um lugar só,
+    // que esconderia os lotes do outro.
+    const partes: string[] = [];
+    const vals: any[] = [];
+    for (const chave of p.place.split(';').filter(Boolean)) {
+      const m = /^c:(.*)\/([A-Z]{2})$/.exec(chave);
+      if (m) {
+        partes.push(`(lat IS NULL AND city_key = ? AND state = ?)`);
+        vals.push(m[1], m[2]);
+      } else {
+        const [la, lo] = chave.split(',').map(Number);
+        if (Number.isFinite(la) && Number.isFinite(lo)) {
+          partes.push(`(round(lat::numeric, 4) = ? AND round(lon::numeric, 4) = ?)`);
+          vals.push(la, lo);
+        }
+      }
+    }
+    if (partes.length) preds.push({ sql: `(${partes.join(' OR ')})`, valores: vals });
+  }
+
+  /** Monta WHERE e parâmetros, opcionalmente pulando os filtros de uma faceta. */
+  function build(excluirFacet?: string): { sql: string; params: any[] } {
+    const parts: string[] = [];
+    const params: any[] = [];
+    for (const pred of preds) {
+      if (excluirFacet && pred.facet === excluirFacet) continue;
+      if (pred.valores) {
+        let sql = pred.sql;
+        for (const v of pred.valores) {
+          params.push(v);
+          sql = sql.replace('?', `$${params.length}`);
+        }
+        parts.push(sql);
+      } else if (pred.value === undefined) {
+        parts.push(pred.sql);
+      } else {
+        params.push(pred.value);
+        parts.push(pred.sql.replace('?', `$${params.length}`));
+      }
+    }
+    return { sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '', params };
+  }
+
+  return { parsed, build };
+}
+
+type QueryFunction = (sql: string, params?: any[]) => Promise<any[]>;
+
+async function awaitAllQueries<T>(pending: Promise<T>[]): Promise<T[]> {
+  const results = await Promise.allSettled(pending);
+  const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
+  return results.map((result) => (result as PromiseFulfilledResult<T>).value);
+}
+
+export async function searchLots(p: SearchParams, queryFn: QueryFunction = query): Promise<SearchResponse> {
+  const { parsed, build } = montaFiltro(p);
+  p = normalizeSearchParams(p);
+  const main = build();
+  const whereSql = main.sql;
+  const params = main.params;
+
+  // O `, id` no fim NÃO é decoração: 250 lotes compartilham a mesma data de
+  // encerramento e 500 o mesmo first_seen_at. Sem desempate estável, a
+  // paginação repetia 17 itens e sumia com outros 17.
+  const sortKey =
+    p.sort === 'price_asc'
+      // Lance de R$ 0,01 é marcador da fonte, não pechincha: abria a lista.
+      ? 'bid_suspect ASC, (COALESCE(current_bid, min_bid) <= 10) ASC, COALESCE(current_bid, min_bid) ASC NULLS LAST'
+      : p.sort === 'price_desc'
+        ? 'bid_suspect ASC, COALESCE(current_bid, min_bid) DESC NULLS LAST'
+        : p.sort === 'recent'
+          // Lotes recém-importados de fontes que publicam placeholder oficial
+          // (HC/Leilovia: /imagens/sem-imagem.jpg; Projud: SemFoto.jpg) não
+          // têm foto real para backfill. Se `recent` ordenar só por ingestão,
+          // uma coleta nova dessas fontes domina a primeira página com nopic.
+          // Mantemos os lotes no índice, mas priorizamos quem tem ao menos uma
+          // foto real quando a intenção da tela é vitrine de novidades.
+          ? '(photo_count > 0) DESC, first_seen_at DESC'
+          : p.sort === 'discount'
+            ? 'bid_suspect ASC, CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0 THEN COALESCE(current_bid,min_bid)/appraisal ELSE 9 END ASC'
+            // Pregão sem fim cuja abertura já passou tinha a menor data e abria "Encerra
+            // primeiro": data futura vem antes; passada há < 6 h (em andamento) depois.
+            : `CASE WHEN COALESCE(auction_end_utc, auction_start_utc) >= now() THEN 0
+                    WHEN COALESCE(auction_end_utc, auction_start_utc) >= now() - interval '6 hours' THEN 1
+                    ELSE 2 END,
+               COALESCE(auction_end_utc, auction_start_utc) ASC NULLS LAST`;
+  // O desempate acompanha o sentido da ordenação: em "mais recentes", lotes
+  // gravados no mesmo segundo têm de sair do último para o primeiro, senão a
+  // primeira página mostra o começo do lote em vez do fim.
+  const sort = `${sortKey}, id ${p.sort === 'recent' || p.sort === 'price_desc' ? 'DESC' : 'ASC'}`;
+
+  // page/pageSize são interpolados no LIMIT/OFFSET: `abc` virava NaN e ia cru para
+  // o SQL. inteiro válido, com piso/teto, antes de chegar perto da query.
+  const { page, pageSize, offset } = parsePagination(p.page, p.pageSize);
+
+  const [{ count }] = await queryFn(`SELECT COUNT(*)::int AS count FROM lots ${whereSql}`, params) as { count: number }[];
+  const items = await queryFn(
+    `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
+            ${auctioneerSiteNameSql()} AS auctioneer_site_name,
+            title_raw, title_display, brand, model, version, year_make, year_model,
+            km, doc_type, closing_model, auction_start_utc, auction_end_utc, source_tz, status,
+            current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect, asset_type, vehicle_type, property_type,
+            source_category, auctioneer_name, auctioneer_reg,
+            COALESCE((raw->>'areaPrivativa')::numeric, (raw->>'areaTotal')::numeric, (raw->>'areaTerreno')::numeric) AS area,
+            (raw->>'quartos')::int AS rooms,
+            seller_name, seller_type, yard, city, state, photos, photo_count, financeable, has_report,
+            collected_at, first_seen_at,
+            first_seen_at > now() - interval '24 hours' AS is_novo,
+            CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END AS effective_status,
+            CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0
+                 THEN ROUND((1 - COALESCE(current_bid,min_bid)/appraisal) * 100) ELSE NULL END AS discount_pct
+     FROM lots ${whereSql} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${offset}`,
+    params,
+  );
+
+  async function facet(col: string, key: string, limit = 20) {
+    const b = build(key);
+    const w = b.sql ? `${b.sql} AND` : 'WHERE';
+    return queryFn(
+      `SELECT ${col} AS value, COUNT(*)::int AS count FROM lots ${w} ${col} IS NOT NULL
+       GROUP BY 1 ORDER BY 2 DESC LIMIT ${limit}`,
+      b.params,
+    );
+  }
+
+  async function facetSites() {
+    const b = build('sites');
+    const w = b.sql ? `${b.sql} AND` : 'WHERE';
+    return queryFn(
+      `SELECT ${LOT_SITE_HOST_SQL} AS value, COUNT(*)::int AS count,
+              ${LOT_SITE_HOST_SQL} AS label
+         FROM lots ${w} ${LOT_SITE_HOST_SQL} IS NOT NULL
+        GROUP BY 1 ORDER BY 2 DESC, 1`,
+      b.params,
+    );
+  }
+
+  /**
+   * Cidade tem rótulo próprio: o agrupamento é pela chave sem acento, mas o que
+   * aparece na tela tem de ser a grafia correta. Entre "CUIABA", "CUIABÁ" e
+   * "Cuiabá", ganha a que não é toda maiúscula e tem mais acento.
+   */
+  async function facetCidade() {
+    // Só faz sentido com UF escolhida: são 1.552 cidades no índice, e uma lista
+    // desse tamanho não é filtro, é outro problema. O agrupamento também custa.
+    if (!lista(p.uf).length) return [];
+    const b = build('cities');
+    const w = b.sql ? `${b.sql} AND` : 'WHERE';
+    // `octet_length` e não `length`: translate troca um caractere por outro, então
+    // a contagem de CARACTERES não muda e a diferença dava sempre zero — a regra
+    // de "mais acento ganha" nunca funcionou, e o desempate caía na ordem
+    // alfabética, onde "Cuiaba" vence "Cuiabá". Em UTF-8 a letra acentuada ocupa
+    // 2 bytes e a simples 1, então a diferença em BYTES conta o acento.
+    const semAcento = `translate(city,'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç','AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')`;
+    return queryFn(
+      `SELECT city_key AS value, COUNT(*)::int AS count,
+              (array_agg(city ORDER BY (city = upper(city)), (octet_length(city) - octet_length(${semAcento})) DESC, city))[1] AS label
+         FROM lots ${w} city_key IS NOT NULL
+        GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 300`,
+      b.params,
+    );
+  }
+
+  const [states, cities, sources, sites, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statusesFacet, docTypes] = await awaitAllQueries([
+    facet('state', 'states', 30),
+    facetCidade(),
+    facet('source_id', 'sources'),
+    facetSites(),
+    facet('seller_type', 'sellerTypes'),
+    facet('asset_type', 'assetTypes'),
+    facet('vehicle_type', 'vehicleTypes'),
+    facet('property_type', 'propertyTypes'),
+    // 80 cobria os 87 nomes da época; com a 1.4 são 220+, e o corte deixava 140
+    // leiloeiros fora da faceta — buscar por eles no componente não achava nada.
+    facet('auctioneer_name', 'auctioneers', 300),
+    // Comitente: quem PÔS o bem em leilão (Caixa, Porto Seguro, um tribunal).
+    // É a pergunta que o comprador faz junto com "qual leiloeiro", e 87% dos
+    // lotes publicam. 80 cabe a cauda útil dos 525 distintos.
+    facet('seller_name', 'sellers', 80),
+    // Situação conta pelo status EFETIVO: lote de pregão cuja hora passou
+    // aparece como aberto na coluna e como encerrado na tela.
+    facet(`CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END`, 'statuses', 10),
+    facet('doc_type', 'docTypes'),
+  ]);
+
+  // Comitente pessoa física é mascarado no que aparece como texto (card).
+  const publicItems = (items as any[]).map((row) => toPublicLot(row));
+
+  return {
+    total: count,
+    page,
+    pageSize,
+    interpreted: { brand: parsed.brand, model: parsed.model, freeTerms: parsed.freeTerms },
+    items: publicItems,
+    facets: { states, cities, sources, sites, sellerTypes, assetTypes, vehicleTypes, propertyTypes, auctioneers, sellers, statuses: statusesFacet, docTypes },
+  };
+}
+
+export async function getLot(id: number, opcoes: { interno?: boolean } = {}, queryFn: QueryFunction = query) {
+  const [lot] = await queryFn(
+    `SELECT id, source_id, lot_url, ${LOT_SITE_HOST_SQL} AS auctioneer_domain,
+            ${auctioneerSiteNameSql()} AS auctioneer_site_name,
+            title_raw, title_display, brand, model, version, year_make, year_model,
+            km, color, fuel, plate_masked, doc_type, closing_model, auction_start_utc, auction_end_utc,
+            source_tz, status, current_bid, min_bid, bid_increment, appraisal, fees_pct, bid_suspect,
+            asset_type, vehicle_type, property_type, source_category, auctioneer_name, auctioneer_reg,
+            COALESCE((raw->>'areaPrivativa')::numeric, (raw->>'areaTotal')::numeric, (raw->>'areaTerreno')::numeric) AS area,
+            (raw->>'quartos')::int AS rooms,
+            seller_name, seller_type, yard, city, state, photos, photo_count, financeable, has_report,
+            collected_at, first_seen_at, first_seen_at > now() - interval '24 hours' AS is_novo,
+            CASE WHEN ${TERMINAL} THEN 'encerrado' ELSE status END AS effective_status,
+            CASE WHEN appraisal > 0 AND COALESCE(current_bid,min_bid) > 0
+                 THEN ROUND((1 - COALESCE(current_bid,min_bid)/appraisal) * 100) ELSE NULL END AS discount_pct
+       FROM lots WHERE id = $1`, [id],
+  );
+  if (!lot) return null;
+  const history = await queryFn('SELECT bid, observed_at FROM bid_history WHERE lot_id=$1 ORDER BY observed_at DESC LIMIT 30', [id]);
+  return toPublicLot({ ...lot, bid_history: history }, opcoes);
+}
+
+export async function getStats(queryFn: QueryFunction = query) {
+  const [totals] = await queryFn(`
+    SELECT COUNT(*)::int AS lots,
+           COUNT(*) FILTER (WHERE status='aberto')::int AS abertos,
+           COUNT(*) FILTER (WHERE status='agendado')::int AS agendados,
+           COUNT(*) FILTER (WHERE status='sem_data')::int AS sem_data,
+           COUNT(*) FILTER (WHERE auction_end_utc IS NOT NULL)::int AS com_fim,
+           COUNT(*) FILTER (WHERE km IS NOT NULL)::int AS com_km,
+           COUNT(*) FILTER (WHERE current_bid IS NOT NULL)::int AS com_lance,
+           COUNT(DISTINCT brand)::int AS marcas,
+           COUNT(*) FILTER (WHERE asset_type='veiculo')::int AS veiculos,
+           COUNT(*) FILTER (WHERE asset_type='imovel')::int AS imoveis,
+           COUNT(*) FILTER (WHERE asset_type='outro')::int AS outros
+    FROM lots`);
+  const bySource = await queryFn(`
+    SELECT l.source_id, s.name, s.site_url, COUNT(*)::int AS lots,
+           COUNT(*) FILTER (WHERE l.auction_end_utc IS NOT NULL)::int AS com_fim,
+           COUNT(*) FILTER (WHERE l.current_bid IS NOT NULL)::int AS com_lance,
+           COUNT(*) FILTER (WHERE l.km IS NOT NULL)::int AS com_km,
+           MAX(l.collected_at) AS ultima_coleta
+    FROM lots l JOIN sources s ON s.id = l.source_id GROUP BY 1,2,3 ORDER BY 4 DESC`);
+  const runs = await queryFn(`
+    SELECT source_id, job, started_at, finished_at, ok, fetched, upserted, skipped, error, http_status
+    FROM collection_runs ORDER BY started_at DESC LIMIT 20`);
+  return { totals, bySource, runs };
+}
+
+/** Lance lido ao vivo (ver aoVivo.ts). Devolve a mudança no formato do `bidChanges` da coleta, ou `null` se nada mudou. */
+export async function registrarLeituraAoVivo(
+  lotId: number,
+  lance: number | null,
+  fim: Date | null | undefined,
+): Promise<UpsertOutcome['bidChanges'][number] | null> {
+  // Fim só anda para a frente: é prorrogação por lance no fim. Recuar seria
+  // encerrar o lote antes da hora por causa de uma leitura velha.
+  if (fim) await query('UPDATE lots SET auction_end_utc = $2 WHERE id = $1 AND auction_end_utc < $2', [lotId, fim]);
+  if (lance == null) return null;
+  const rows = await query<any>(
+    `UPDATE lots l SET current_bid = $2
+       FROM (SELECT id, current_bid AS antigo FROM lots WHERE id = $1 FOR UPDATE) o
+      WHERE l.id = o.id AND o.antigo IS DISTINCT FROM $2::numeric
+      RETURNING o.antigo, l.source_id, l.external_id, l.title_raw`,
+    [lotId, lance],
+  );
+  if (!rows.length) return null;
+  await query('INSERT INTO bid_history (lot_id, bid) VALUES ($1,$2)', [lotId, lance]);
+  const r = rows[0];
+  return {
+    lotId,
+    sourceId: r.source_id,
+    externalId: r.external_id,
+    title: r.title_raw,
+    oldBid: r.antigo == null ? null : Number(r.antigo),
+    newBid: lance,
+  };
+}
+
+export async function startRun(sourceId: string, job: string, limite?: number): Promise<number> {
+  const [row] = await query<{ id: string }>(
+    'INSERT INTO collection_runs (source_id, job, limite) VALUES ($1,$2,$3) RETURNING id',
+    [sourceId, job, limite ?? null],
+  );
+  return Number(row.id);
+}
+
+export async function finishRun(
+  id: number,
+  data: { ok: boolean; fetched?: number; upserted?: number; skipped?: number; error?: string; httpStatus?: number },
+) {
+  await query(
+    `UPDATE collection_runs SET finished_at=now(), ok=$2, fetched=$3, upserted=$4, skipped=$5, error=$6, http_status=$7 WHERE id=$1`,
+    [id, data.ok, data.fetched ?? 0, data.upserted ?? 0, data.skipped ?? 0, data.error ?? null, data.httpStatus ?? null],
+  );
+}
+
+export interface PontoMapa {
+  /** Chave que volta como filtro `place`. */
+  k: string;
+  lat: number;
+  lon: number;
+  cidade: string | null;
+  uf: string | null;
+  /** 'patio' = coordenada da fonte; 'cidade' = posição aproximada pelo município. */
+  camada: 'patio' | 'cidade';
+  n: number;
+}
+
+export interface RespostaMapa {
+  pontos: PontoMapa[];
+  total: number;
+  /** Lotes do filtro sem localização; calculado no universo inteiro, mesmo se pontos forem truncados. */
+  semLocalizacao: number;
+  soCidade: number;
+  semNada: number;
+  truncated: boolean;
+  omittedPoints: number;
+  omittedLots: number;
+}
+
+/**
+ * Pontos agregados para o mapa, com o MESMO filtro da lista (montaFiltro).
+ *
+ * Devolve lugar, nunca lote cru: pontos mais frequentes primeiro, com teto de
+ * 1000. As contagens permanecem sobre o universo inteiro. A âncora da cidade sai da média das coordenadas conhecidas NAQUELA
+ * cidade e é calculada sobre a base toda, não sobre o filtro: mudar de filtro
+ * não pode mover o ponto de lugar.
+ */
+export async function searchLotsMapa(p: SearchParams, queryFn: QueryFunction = query): Promise<RespostaMapa> {
+  p = normalizeSearchParams(p);
+  const { build } = montaFiltro(p);
+  const b = build();
+  const w = b.sql;
+  const wAnd = w ? `${w} AND` : 'WHERE';
+
+  const CC = `cc AS (SELECT city_key AS ck, state AS cuf, avg(lat)::float AS la, avg(lon)::float AS lo
+                       FROM lots WHERE lat IS NOT NULL GROUP BY 1, 2)`;
+
+  const sql = `WITH ${CC},
+    geo_points AS (
+      SELECT round(lat::numeric,4)||','||round(lon::numeric,4) AS k,
+             round(lat::numeric,4)::float AS lat, round(lon::numeric,4)::float AS lon,
+             mode() WITHIN GROUP (ORDER BY city) AS cidade,
+             mode() WITHIN GROUP (ORDER BY state) AS uf,
+             'patio'::text AS camada, COUNT(*)::int AS n
+        FROM lots ${wAnd} lat IS NOT NULL
+       GROUP BY 1, 2, 3
+      UNION ALL
+      SELECT 'c:'||lots.city_key||'/'||lots.state,
+             round(cc.la::numeric,4)::float, round(cc.lo::numeric,4)::float,
+             mode() WITHIN GROUP (ORDER BY lots.city), lots.state,
+             'cidade'::text, COUNT(*)::int
+        FROM lots JOIN cc ON cc.ck = lots.city_key AND cc.cuf = lots.state
+       ${wAnd} lots.lat IS NULL
+       GROUP BY 1, 2, 3, lots.state
+    ), point_stats AS (
+      SELECT count(*)::int AS pontos_total, coalesce(sum(n),0)::int AS mapped_lots FROM geo_points
+    ), lot_stats AS (
+      SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE lat IS NULL AND city IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM cc WHERE cc.ck = lots.city_key AND cc.cuf = lots.state))::int AS so_cidade,
+             COUNT(*) FILTER (WHERE lat IS NULL AND city IS NULL)::int AS sem_nada
+        FROM lots ${w}
+    ), limited_points AS (
+      SELECT * FROM geo_points ORDER BY n DESC, k LIMIT 1000
+    )
+    SELECT lp.k, lp.lat, lp.lon, lp.cidade, lp.uf, lp.camada, lp.n,
+           ps.pontos_total, ps.mapped_lots, ls.total, ls.so_cidade, ls.sem_nada
+      FROM point_stats ps CROSS JOIN lot_stats ls
+      LEFT JOIN limited_points lp ON TRUE
+     ORDER BY lp.n DESC NULLS LAST, lp.k`;
+  const rows = await queryFn(sql, b.params);
+  const meta = rows[0] ?? { pontos_total: 0, mapped_lots: 0, total: 0, so_cidade: 0, sem_nada: 0 };
+  const pontos = rows.filter((r) => r.k != null).map((r) => ({
+    k: r.k, lat: Number(r.lat), lon: Number(r.lon), cidade: r.cidade, uf: r.uf,
+    camada: r.camada, n: Number(r.n),
+  } satisfies PontoMapa));
+  const omittedPoints = Math.max(0, Number(meta.pontos_total) - pontos.length);
+  const returnedLots = pontos.reduce((sum, point) => sum + point.n, 0);
+  return {
+    pontos,
+    total: Number(meta.total),
+    semLocalizacao: Number(meta.total) - Number(meta.mapped_lots),
+    soCidade: Number(meta.so_cidade),
+    semNada: Number(meta.sem_nada),
+    truncated: omittedPoints > 0,
+    omittedPoints,
+    omittedLots: Math.max(0, Number(meta.mapped_lots) - returnedLots),
+  };
+}

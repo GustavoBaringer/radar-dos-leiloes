@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { parseSuporteOferta, ofertaLinks, eventoLinks, eventosAtivos, ofertaStatus } from '../src/connectors/suporte-oferta.js';
 import { collectSuporteTenant } from '../src/connectors/suporteleiloes.js';
-import type { TenantAttempt } from '../src/core/tenant-attempts.js';
-import { CollectionCancellationError, withCollectionCancellation } from '../src/core/collection-cancellation.js';
+import type { TenantAttempt } from '../src/domain/collection/tenant-attempts.js';
+import { CollectionCancellationError, withCollectionCancellation } from '../src/infra/collection/collection-cancellation.js';
 
 const payload = (title = 'Lote 298 de terreno', tags = '[{"code":"imovel","name":"Imóvel"},{"code":"terreno","name":"Terreno"}]', itemStatus = '1', statusString = '') => `
 <script>

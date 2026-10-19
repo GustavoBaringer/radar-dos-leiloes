@@ -18,7 +18,7 @@ import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
 import type { Connector, CollectResult } from './types.js';
 import * as campos from '../core/campos.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 import type { CollectOptions } from './types.js';
 
 const PAGINA = 200;

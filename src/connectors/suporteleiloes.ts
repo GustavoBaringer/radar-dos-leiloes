@@ -19,8 +19,8 @@ import * as campos from '../core/campos.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller } from '../core/normalize.js';
 import { eventoEncerrado, eventosAtivos, eventNextPages, ofertaLinks, parseSuporteOferta, parseSuporteDetalhe } from './suporte-oferta.js';
-import type { TenantAttempt } from '../core/tenant-attempts.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import type { TenantAttempt } from '../domain/collection/tenant-attempts.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
 /** 1 = Veículos, 2 = Imóveis. Confirmado idêntico em 6 tenants. */
@@ -157,7 +157,7 @@ export async function collectOfertaTenant(host: string, limit: number, assetType
 }
 
 export async function collectSuporteTenant(host: string, limit: number, assetTypes: string[] | undefined,
-  observer: import('../core/tenant-attempts.js').TenantObserver | undefined, request: typeof fetchText = fetchText) {
+  observer: import('../domain/collection/tenant-attempts.js').TenantObserver | undefined, request: typeof fetchText = fetchText) {
   const attempt = await observer?.start(host);
   const before = { fetched: 0, skipped: 0, returned: 0, truncated: false };
   try {
@@ -177,7 +177,7 @@ export async function collectSuporteTenant(host: string, limit: number, assetTyp
 }
 
 /** Discover event and lot links from the tenant's public pages; IDs are always page-derived. */
-export async function collectDiscoveredTenant(host: string, limit: number, assetTypes?: string[], observer?: import('../core/tenant-attempts.js').TenantObserver,
+export async function collectDiscoveredTenant(host: string, limit: number, assetTypes?: string[], observer?: import('../domain/collection/tenant-attempts.js').TenantObserver,
   request: typeof fetchText = fetchText, lookupExisting?: (lotUrl: string, proposedId: string) => Promise<string | null | { collision: true }>) {
   const normalized = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
   const attempt = await observer?.start(normalized);
@@ -334,7 +334,7 @@ export function parseWebLote(html: string, pageUrl: string): CanonicalLot | null
   };
 }
 
-export async function collectWebLeiloes(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantObserver,
+export async function collectWebLeiloes(host: string, limit: number, observer?: import('../domain/collection/tenant-attempts.js').TenantObserver,
   request: typeof fetchTenantText = fetchTenantText, assetTypes?: string[]): Promise<CollectResult> {
   const normalized = normalizeHost(host);
   if (normalized !== WEB_HOST) throw new Error(`tenant WebLeilões inválido: ${host}`);

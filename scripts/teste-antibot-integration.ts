@@ -4,13 +4,13 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
-import { registerAntibot } from '../src/core/antibot/fastify.js';
+import { registerAntibot } from '../src/infra/http/antibot-fastify.js';
 import { loadAntibotConfig } from '../src/core/antibot/config.js';
-import { ROUTE_POLICIES } from '../src/core/antibot/routes.js';
+import { ROUTE_POLICIES } from '../src/infra/http/antibot-routes.js';
 import { createResourcePool } from '../src/core/antibot/resources.js';
 import { createHttpResourceGuard } from '../src/core/antibot/http-resources.js';
-import { createWsProtection } from '../src/core/antibot/ws.js';
-import { admitWsUpgrade, attachWsUpgrade } from '../src/core/antibot/ws-admission.js';
+import { createWsProtection } from '../src/application/security/ws-protection.js';
+import { admitWsUpgrade, attachWsUpgrade } from '../src/infra/websocket/ws-admission.js';
 import { parseSearchInput, safePositiveId, BoundedInputError } from '../src/core/request-bounds.js';
 import { toPublicAlert, toPublicFavorite, toPublicHit, toPublicLot } from '../src/core/public-dto.js';
 
@@ -102,7 +102,7 @@ test('bounds reject malformed scalar/id before query and serializers strip priva
     assert.equal('external_id' in dto, false);
   }
   assert.deepEqual(toPublicAlert({ id: 1, owner_id: 2, label: 'x', channels: ['push'], total: 0, nao_vistos: 0 }), {
-    id: 1, label: 'x', q: null, channels: ['push'], email: null, total: 0, nao_vistos: 0,
+    id: 1, label: 'x', q: null, channels: ['push'], email: null, total: 0, nao_vistos: 0, filters: {},
   });
 });
 

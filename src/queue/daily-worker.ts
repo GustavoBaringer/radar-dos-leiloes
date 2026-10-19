@@ -4,12 +4,15 @@ import { getConnector } from '../connectors/index.js';
 import { fetchText } from '../connectors/http.js';
 import { query } from '../core/db.js';
 import { finishRun, startRun, upsertLots } from '../core/repo.js';
-import { collectionJobContext, observerForCollection } from '../core/collection-observer.js';
-import { executeCollection, type CollectionExecutionDependencies } from '../core/collection-execution.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
-import { processarAposColeta } from '../core/pos-coleta.js';
+import { observerForCollection } from '../application/services/collection/collection-observer.js';
+import { collectionJobContext } from '../infra/queue/collection-job-context.js';
+import { CollectionService, type CollectionExecutionDependencies } from '../application/services/collection/collection-execution.js';
+import { createCollectionContext, type CollectionContext } from '../bootstrap/collection-context.js';
+import { JobOwnership } from '../infra/queue/job-ownership.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
+import { processarAposColeta } from '../application/services/collection/post-collection.js';
 import { DAILY_SITES, dailySite, dailyScheduleItems } from './daily-coverage.js';
-import { makeRedis, type CollectJob } from './runtime.js';
+import { makeRedis, REDIS_URL, type CollectJob } from './runtime.js';
 
 export const DAILY_QUEUE = 'collect-daily-sites';
 const browserSources = new Set(['caixa', 'vipleiloes', 'leiloesbrasilpublic']);
@@ -49,7 +52,8 @@ export function dailyConnector(domain: string, lookup = getConnector, enabled = 
 }
 
 export async function processDailyJob(job: Job<CollectJob>, execution: CollectionExecutionDependencies,
-  signal?: AbortSignal, browserGate?: <T>(operation: () => Promise<T>) => Promise<T>) {
+  signal?: AbortSignal, browserGate?: <T>(operation: () => Promise<T>) => Promise<T>, service?: CollectionService,
+  authorizeOwnership?: () => Promise<void>) {
   const site = dailySite(String(job.data.tenant));
   // A queued catch-up can outlive a reviewed source correction. The manifest,
   // never the queued source field, selects the adapter and persisted source ID.
@@ -64,22 +68,24 @@ export async function processDailyJob(job: Job<CollectJob>, execution: Collectio
       ? browserGate(() => { throwIfCancelled(); return adapter.collect(options); })
       : adapter.collect(options),
   };
-  return executeCollection({
+  return (service ?? new CollectionService(execution)).execute({
     sourceId: site.sourceId, tenant: site.domain, job: 'collect:daily', limit, timeoutMs, signal,
     forceTenantObserver: true, guaranteeTenantAttempt: true, checkEmptyHttpFailure: true,
-    authorizePersistence: () => {
+    authorizePersistence: async () => {
       if (!job.token) throw new CollectionCancellationError('lock_lost', 'Daily job has no lock token');
       if (signal?.aborted) throw signal.reason;
+      await authorizeOwnership?.();
     },
     metadata: { ...collectionJobContext(job, 'cron'), scheduledAt: new Date(job.timestamp) },
-  }, { ...execution, lookupConnector: () => wrapped });
+  }, { ...execution, lookupConnector: () => wrapped, publishNotification: execution.publishNotification });
 }
 
-export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Promise<T>) => Promise<T>) {
+export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Promise<T>) => Promise<T>, sharedService?: CollectionService) {
   const connection = makeRedis();
   const queue = new Queue<CollectJob>(DAILY_QUEUE, { connection });
   let worker: Worker<CollectJob> | undefined;
-  const controllers = new Map<string, AbortController>();
+  let context: CollectionContext | undefined;
+  const ownership = new JobOwnership(REDIS_URL);
   /**
    * A cobertura daily TEM aviso de alerta; o que ela não pode é despejar um por
    * site: são 158 domínios entre 00:00 e 10:28 e o mesmo modelo aparece em
@@ -100,26 +106,27 @@ export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Prom
   };
   return {
     async start() {
+      if (!sharedService) context ??= await createCollectionContext({ overrides: execution });
+      const service = sharedService ?? context!.service;
+      await ownership.start();
       for (const item of dailyScheduleItems()) await queue.upsertJobScheduler(item.id,
         { pattern: item.pattern, tz: 'America/Sao_Paulo' }, { name: item.name, data: item.data,
           opts: { attempts: 1, removeOnComplete: 1000, removeOnFail: 1000 } });
-      worker = new Worker<CollectJob>(DAILY_QUEUE, async job => {
-        const id = job.id!; const controller = new AbortController(); controllers.set(id, controller);
+      worker = new Worker<CollectJob>(DAILY_QUEUE, async (job, token) => {
+        const id = job.id!; const controller = ownership.track(id);
         try {
-          const result = await processDailyJob(job, execution, controller.signal, browserGate);
+          const result = await processDailyJob(job, execution, controller.signal, browserGate, service, () => ownership.authorize(job, token));
           const n = result.notifications;
           const avisos = n && n.disparos
             ? ` · alertas ${n.disparos} · push ${n.push} · e-mail ${n.emails}${n.adiados ? ` · adiados ${n.adiados}` : ''}`
             : '';
           console.log(`[daily] ${job.data.tenant}: run=${result.runId} fetched=${result.result.fetched} mapped=${result.result.lots.length} upserted=${result.upserted} skipped=${result.result.skipped}${avisos}`);
           return { runId: result.runId, fetched: result.result.fetched, upserted: result.upserted };
-        } finally { controllers.delete(id); }
+        } finally { ownership.release(id, controller); }
       }, { connection, concurrency: 1 });
       worker.on('failed', (job, error) => console.error(`[daily] ${job?.data.tenant}: ${error.message}`));
       worker.on('error', error => console.error('[daily] queue error:', error.message));
-      worker.on('lockRenewalFailed', ids => {
-        for (const id of ids) controllers.get(id)?.abort(new CollectionCancellationError('lock_lost'));
-      });
+      ownership.monitor(worker);
       // Recover missed days after restart, without repeating domains already attempted today.
       const attempted = await query<{ domain: string }>(`SELECT DISTINCT domain FROM tenant_collection_attempts
         WHERE started_at >= date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo'
@@ -133,8 +140,14 @@ export function createDailyWorkerRuntime(browserGate?: <T>(operation: () => Prom
       console.log(`[daily] scheduled=${DAILY_SITES.length}; required120=${DAILY_SITES.filter(s => s.required120).length}; catchup=${missing.length}`);
     },
     async stop() {
-      for (const controller of controllers.values()) controller.abort(new CollectionCancellationError('shutdown'));
-      await worker?.close(); await queue.close(); await connection.quit();
+      ownership.cancel(undefined, 'shutdown');
+      try { await worker?.close(); }
+      finally {
+        const closed = await Promise.allSettled([queue.close(), connection.quit(), ...(context ? [context.close()] : [])]);
+        ownership.close();
+        const failure = closed.find(result => result.status === 'rejected');
+        if (failure?.status === 'rejected') throw failure.reason;
+      }
     },
   };
 }

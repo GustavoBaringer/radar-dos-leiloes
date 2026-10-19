@@ -3,7 +3,7 @@ import { fetchText, fetchJson } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, maskPlate } from '../core/normalize.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const BASE = 'https://www.freitasleiloeiro.com.br';
 

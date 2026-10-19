@@ -7,6 +7,9 @@ import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { queryResultWithClient } from '../src/infra/database/query.js';
+import { PrismaService } from '../src/infra/database/prisma.service.js';
+import type { Prisma } from '../src/infra/database/generated/client.js';
 import { pool } from '../src/core/db.js';
 import { scrubPlates, tipoForteDoTitulo } from '../src/core/normalize.js';
 import { resolverCondicaoVlance } from '../src/core/campos.js';
@@ -205,17 +208,48 @@ async function secureJson(path: string, value: unknown) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   await chmod(path, 0o600);
 }
+export async function revertClassificationBackfill(tx: Prisma.TransactionClient, backup: any) {
+  let restored = 0, skipped = 0;
+  for (const x of backup.changes ?? []) {
+    if (!validateChange({ ...x, fingerprint: '0'.repeat(64) })) throw new Error('Backup contém alteração não permitida');
+    const result = await queryResultWithClient(tx, `UPDATE lots SET ${x.field}=$1 WHERE id=$2 AND source_id=$3 AND external_id IS NOT DISTINCT FROM $4 AND asset_type='veiculo' AND ${x.field} IS NOT DISTINCT FROM $5`, [x.before, x.id, x.source, x.externalId, x.after]);
+    if (result.rowCount) restored++; else skipped++;
+  }
+  return { restored, skipped };
+}
+
+export async function applyClassificationBackfill(tx: Prisma.TransactionClient, changes: Change[], backupPath: string) {
+  let changed = 0, skipped = 0;
+  const backupChanges: any[] = [];
+  for (const [id, group] of groupChanges(changes)) {
+    const first = group[0];
+    if (group.some((c) => c.source !== first.source || c.externalId !== first.externalId || c.fingerprint !== first.fingerprint) || new Set(group.map((c) => c.field)).size !== group.length) throw new Error(`Plano inválido para id ${id}`);
+    const selected = await queryResultWithClient<Row>(tx, `SELECT id, source_id, external_id, asset_type, vehicle_type, doc_type, title_raw, source_category, raw
+      FROM lots WHERE id=$1 FOR UPDATE`, [id]);
+    const row = selected.rows[0];
+    if (!row || row.source_id !== first.source || row.external_id !== first.externalId || row.asset_type !== 'veiculo' || fingerprint(row) !== first.fingerprint ||
+        group.some((c) => row[c.field] !== c.before)) { skipped += group.length; continue; }
+    const sets: string[] = []; const params: unknown[] = [];
+    for (const c of group) { if (!FIELD_SET.has(c.field)) throw new Error('Campo SQL não permitido'); params.push(c.after); sets.push(`${c.field}=$${params.length}`); }
+    params.push(id, first.source, first.externalId);
+    let where = `id=$${params.length - 2} AND source_id=$${params.length - 1} AND external_id IS NOT DISTINCT FROM $${params.length} AND asset_type='veiculo'`;
+    for (const c of group) { params.push(c.before); where += ` AND ${c.field} IS NOT DISTINCT FROM $${params.length}`; }
+    const result = await queryResultWithClient(tx, `UPDATE lots SET ${sets.join(', ')} WHERE ${where}`, params);
+    if (result.rowCount) {
+      changed += group.length;
+      for (const c of group) backupChanges.push({ id: c.id, source: c.source, externalId: c.externalId, field: c.field, before: c.before, after: c.after });
+    } else skipped += group.length;
+  }
+  await secureJson(backupPath, { schema: 1, createdAt: new Date().toISOString(), changes: backupChanges });
+  return { changed, skippedConcurrent: skipped, backup: backupPath };
+}
 async function main() {
   if (reverter && aplicar) throw new Error('Use --reverter ou --aplicar, não ambos');
   if (reverter) {
     const backup = JSON.parse(await readFile(reverter, 'utf8'));
-    let restored = 0, skipped = 0;
-    const client = await pool.connect();
-    try { await client.query('BEGIN'); for (const x of backup.changes ?? []) {
-      if (!validateChange({ ...x, fingerprint: '0'.repeat(64) })) throw new Error('Backup contém alteração não permitida');
-      const res = await client.query(`UPDATE lots SET ${x.field}=$1 WHERE id=$2 AND source_id=$3 AND external_id IS NOT DISTINCT FROM $4 AND asset_type='veiculo' AND ${x.field} IS NOT DISTINCT FROM $5`, [x.before, x.id, x.source, x.externalId, x.after]);
-      if (res.rowCount) restored++; else skipped++;
-    } await client.query('COMMIT'); } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+    const { restored, skipped } = await PrismaService.getInstance().$transaction(
+      tx => revertClassificationBackfill(tx, backup), { maxWait: 5_000, timeout: 300_000 },
+    );
     console.log(JSON.stringify({ restored, skipped }, null, 2)); return;
   }
   if (aplicar && !planoPath) throw new Error('--aplicar exige --plano=arquivo previamente gerado e revisado');
@@ -236,35 +270,11 @@ async function main() {
   if (planned.schema !== 2 || JSON.stringify(planned.scope) !== JSON.stringify(fresh.report.scope) || planned.confirmation !== fresh.report.confirmation || hash(planned.changes) !== hash(fresh.report.changes) || !Array.isArray(planned.changes) || planned.changes.some((c: any) => !validateChange(c))) {
     throw new Error('Plano não corresponde à leitura atual (escopo, confirmação, evidências ou valores mudaram); gere/revise novo relatório');
   }
-  const client = await pool.connect(); let changed = 0, skipped = 0;
-  try {
-    await client.query('BEGIN');
-    const backupChanges: any[] = [];
-    for (const [id, changes] of groupChanges(planned.changes as Change[])) {
-      const first = changes[0];
-      if (changes.some((c) => c.source !== first.source || c.externalId !== first.externalId || c.fingerprint !== first.fingerprint) || new Set(changes.map((c) => c.field)).size !== changes.length) throw new Error(`Plano inválido para id ${id}`);
-      const selected = await client.query<Row>(`SELECT id, source_id, external_id, asset_type, vehicle_type, doc_type, title_raw, source_category, raw
-        FROM lots WHERE id=$1 FOR UPDATE`, [id]);
-      const row = selected.rows[0];
-      if (!row || row.source_id !== first.source || row.external_id !== first.externalId || row.asset_type !== 'veiculo' || fingerprint(row) !== first.fingerprint ||
-          changes.some((c) => row[c.field] !== c.before)) { skipped += changes.length; continue; }
-      const sets: string[] = []; const params: unknown[] = [];
-      for (const c of changes) { if (!FIELD_SET.has(c.field)) throw new Error('Campo SQL não permitido'); params.push(c.after); sets.push(`${c.field}=$${params.length}`); }
-      params.push(id, first.source, first.externalId);
-      let where = `id=$${params.length - 2} AND source_id=$${params.length - 1} AND external_id IS NOT DISTINCT FROM $${params.length} AND asset_type='veiculo'`;
-      for (const c of changes) { params.push(c.before); where += ` AND ${c.field} IS NOT DISTINCT FROM $${params.length}`; }
-      const res = await client.query(`UPDATE lots SET ${sets.join(', ')} WHERE ${where}`, params);
-      if (res.rowCount) {
-        changed += changes.length;
-        for (const c of changes) backupChanges.push({ id: c.id, source: c.source, externalId: c.externalId, field: c.field, before: c.before, after: c.after });
-      } else skipped += changes.length;
-    }
-    const backupPath = `/tmp/opencode/backfill-classificacao-backup-${Date.now()}.json`;
-    // Backup is durably written with mode 0600 before transaction commit.
-    await secureJson(backupPath, { schema: 1, createdAt: new Date().toISOString(), changes: backupChanges });
-    await client.query('COMMIT');
-    console.log(JSON.stringify({ changed, skippedConcurrent: skipped, backup: backupPath }, null, 2));
-  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+  const backupPath = `/tmp/opencode/backfill-classificacao-backup-${Date.now()}.json`;
+  const result = await PrismaService.getInstance().$transaction(
+    tx => applyClassificationBackfill(tx, planned.changes as Change[], backupPath), { maxWait: 5_000, timeout: 300_000 },
+  );
+  console.log(JSON.stringify({ changed: result.changed, skippedConcurrent: result.skippedConcurrent, backup: result.backup }, null, 2));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try { await main(); } finally { await pool.end(); }

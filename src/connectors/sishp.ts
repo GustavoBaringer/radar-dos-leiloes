@@ -5,7 +5,7 @@ import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
-import type { TenantAttempt } from '../core/tenant-attempts.js';
+import type { TenantAttempt } from '../domain/collection/tenant-attempts.js';
 
 /**
  * SISHP — rede de 8 domínios (vinco, sfrazão, wleiloes...) que COMPARTILHA o

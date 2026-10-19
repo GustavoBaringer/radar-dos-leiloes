@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import type { CanonicalLot } from '../core/types.js';
 import { chromium, type Browser } from 'playwright-core';
 import { classifyAsset, classifyProperty, looksLikeCollectible, looksLikePart, parseTitle } from '../core/normalize.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 import { fetchText } from './http.js';
 import type { FetchResult } from './http.js';
 import type { CollectOptions, CollectResult, Connector } from './types.js';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { conectorDaPlataforma, PLATAFORMAS } from '../src/core/descoberta.js';
+import { conectorDaPlataforma, PLATAFORMAS } from '../src/domain/discovery/discovery.js';
 
 const detecta = (html: string) => PLATAFORMAS.find(([, re]) => re.test(html))?.[0] ?? null;
 

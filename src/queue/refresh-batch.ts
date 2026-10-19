@@ -1,4 +1,4 @@
-import { CollectionCancellationError, throwIfAborted } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfAborted } from '../infra/collection/collection-cancellation.js';
 
 /** One failing upstream must not prevent refreshing the other sources. */
 export async function refreshBatch<T>(

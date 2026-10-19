@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { DAILY_SITES, dailyScheduleItems, dailySite } from '../src/queue/daily-coverage.js';
-import { executeCollection, type CollectionExecutionDependencies } from '../src/core/collection-execution.js';
+import { executeCollection, type CollectionExecutionDependencies } from '../src/application/services/collection/collection-execution.js';
 import { dailyConnector } from '../src/queue/daily-worker.js';
 import { isBlockedPage } from '../src/connectors/htmlagenda.js';
 import { lerCards, judicialAssetTitle } from '../src/connectors/soleon.js';

@@ -6,7 +6,7 @@ import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller, looksLikeCollectible, looksLikePart, parseTitle } from '../core/normalize.js';
 import * as campos from '../core/campos.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36';
 const PAGINAS = ['/', '/agenda-de-leiloes', '/agenda', '/Agenda.aspx', '/eventos/proximos', '/evento.php', '/leilao', '/lotes-encerrando', '/lotes', '/lotes/imoveis', '/lotes/veiculos'];
@@ -120,7 +120,7 @@ function dinheiro(v?: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-async function linksDePagina(base: string, path: string, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<{ status: number; links: string[]; body: string }> {
+async function linksDePagina(base: string, path: string, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt): Promise<{ status: number; links: string[]; body: string }> {
   let r;
   try {
     r = await fetchText(`${base}${path}`, { headers: { 'user-agent': UA }, gapMs: 900 });
@@ -150,7 +150,7 @@ async function linksDePagina(base: string, path: string, observer?: import('../c
   return { status: r.status, links: [...links], body: r.body };
 }
 
-async function aspCatalog(base: string, body: string, attempt?: import('../core/tenant-attempts.js').TenantAttempt, remaining = Number.MAX_SAFE_INTEGER): Promise<{ lots: CanonicalLot[]; fetched: number; skipped: number; httpStatus: number; truncated: boolean }> {
+async function aspCatalog(base: string, body: string, attempt?: import('../domain/collection/tenant-attempts.js').TenantAttempt, remaining = Number.MAX_SAFE_INTEGER): Promise<{ lots: CanonicalLot[]; fetched: number; skipped: number; httpStatus: number; truncated: boolean }> {
   const allEvents = [...new Set([...body.matchAll(/catalogo\.asp\?Num=(\d+)/gi)].map((m) => m[1]))];
   const events = allEvents.slice(0, 4);
   const lots: CanonicalLot[] = [];
@@ -306,7 +306,7 @@ export function mapHtmlAgendaLot(host: string, url: string, html: string, status
   };
 }
 
-async function loteDeUrl(host: string, url: string, observer?: import('../core/tenant-attempts.js').TenantAttempt): Promise<CanonicalLot | null> {
+async function loteDeUrl(host: string, url: string, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt): Promise<CanonicalLot | null> {
   let html = '';
   let status = 0;
   try {
@@ -355,7 +355,7 @@ function mjTitleEligible(title: string): boolean {
     !looksLikePart(title) && !looksLikeCollectible(title) && !FORA_ESCOPO.test(title) && classifyAsset(title).assetType !== 'outro';
 }
 
-export async function collectMjLeiloes(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
+export async function collectMjLeiloes(host: string, limit: number, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
   const base = `https://${host}`, reasons = new Set<string>(), candidates = new Map<string, { url: string; title: string }>();
   let httpStatus = 0, skipped = 0;
   const get = async (url: string): Promise<string | null> => {
@@ -419,7 +419,7 @@ export function isMonitorOnlyDomain(domain: string): boolean {
   return MONITORED_ONLY.includes(domain.replace(/^www\./i, '').replace(/\.$/, '').toLowerCase());
 }
 
-export async function collectHtmlAgendaMonitor(host: string, attempt: import('../core/tenant-attempts.js').TenantAttempt | undefined, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
+export async function collectHtmlAgendaMonitor(host: string, attempt: import('../domain/collection/tenant-attempts.js').TenantAttempt | undefined, fetcher: HtmlAgendaFetch = fetchText): Promise<CollectResult> {
   let fetched = 0, skipped = 0, httpStatus = 0;
   let failureMarked = false;
   const fail = (kind: 'network' | 'parser' | 'budget') => { failureMarked = true; attempt?.failure(kind); };

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createImageTelemetry } from '../src/core/antibot/image-telemetry.js';
-import { createImageMetricsLog } from '../src/core/antibot/image-metrics-log.js';
+import { createImageTelemetry } from '../src/application/security/image-telemetry.js';
+import { createImageMetricsLog } from '../src/infra/observability/image-metrics-log.js';
 
 test('image metrics count minutes, cache, blocks, latency and client peaks without identifiers', () => {
   let now = Date.parse('2026-10-10T10:00:00Z');

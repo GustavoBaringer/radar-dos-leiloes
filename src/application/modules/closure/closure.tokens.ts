@@ -1,0 +1,2 @@
+export const LOT_CLOSURE_REPOSITORY = Symbol('LOT_CLOSURE_REPOSITORY');
+export const LOT_VERIFIERS = Symbol('LOT_VERIFIERS');

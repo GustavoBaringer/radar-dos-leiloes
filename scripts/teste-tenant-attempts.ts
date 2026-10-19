@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTenantObserver } from '../src/core/tenant-attempts.js';
+import { createTenantObserver } from '../src/application/services/collection/tenant-observer.js';
 
 const context = { runId: 12, sourceId: 'source-x', origin: 'cron' as const };
 function fake() {

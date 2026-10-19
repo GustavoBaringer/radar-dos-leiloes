@@ -6,8 +6,8 @@ import * as campos from '../core/campos.js';
 import { parseTitle, classifyAsset, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
-import type { TenantAttempt } from '../core/tenant-attempts.js';
-import { CollectionCancellationError, throwIfCancelled } from '../core/collection-cancellation.js';
+import type { TenantAttempt } from '../domain/collection/tenant-attempts.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 /**
  * LEILOAR — plataforma white-label (CakePHP), N leiloeiros por 1 conector.
@@ -290,7 +290,7 @@ export async function collectCakeTenant(host: string, limit: number, request: (u
   }
 }
 
-export async function collectNasar(host: string, limit: number, observer?: import('../core/tenant-attempts.js').TenantAttempt, fetch = fetchText): Promise<CollectResult> {
+export async function collectNasar(host: string, limit: number, observer?: import('../domain/collection/tenant-attempts.js').TenantAttempt, fetch = fetchText): Promise<CollectResult> {
   const origin = `https://${host}`;
   const partialReasons = new Set<string>();
   let root;

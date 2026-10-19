@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { fetchText, fetchJson } from './http.js';
-import { throwIfCancelled } from '../core/collection-cancellation.js';
+import { throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 import { parseTitle, classifyAsset, looksLikePart, looksLikeCollectible } from '../core/normalize.js';
 import type { Connector } from './types.js';
 import type { CanonicalLot } from '../core/types.js';

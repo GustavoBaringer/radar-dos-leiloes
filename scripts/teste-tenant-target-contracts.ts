@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { collectCakeTenant, parseCakeCards } from '../src/connectors/leiloar.js';
 import { collectWebLeiloes, parseWebLote, suporteleiloes } from '../src/connectors/suporteleiloes.js';
-import { executeCollection } from '../src/core/collection-execution.js';
+import { executeCollection } from '../src/application/services/collection/collection-execution.js';
 import { fetchTenantText, TenantScopeError } from '../src/connectors/http.js';
 
 const root = new URL('../fixtures/', import.meta.url);

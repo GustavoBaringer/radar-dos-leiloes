@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import sharp from 'sharp';
-import { createImageService } from '../src/core/antibot/images.js';
-import type { ImageRequestOptions, ImageTransportResponse } from '../src/core/antibot/images.js';
+import { createImageService } from '../src/infra/media/image-proxy.js';
+import type { ImageRequestOptions, ImageTransportResponse } from '../src/infra/media/image-proxy.js';
 import { createResourcePool } from '../src/core/antibot/resources.js';
 
 const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#234567' } }).png().toBuffer();
