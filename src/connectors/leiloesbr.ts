@@ -35,7 +35,8 @@ function leiloeiroDoHost(host: string): string {
 const EVENTOS_POR_TENANT = 3;
 const PAGINAS_POR_EVENTO = 6;
 
-async function tenants(limite: number): Promise<string[]> {
+async function tenants(limite: number, tenant?: string): Promise<string[]> {
+  if (tenant) return [tenant];
   const rows = await query<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leiloesbr' AND http_status=200
       ORDER BY auctioneers DESC LIMIT $1`,
@@ -99,13 +100,13 @@ export const leiloesbr: Connector = {
     siteUrl: 'https://www.leiloesbr.com.br',
     notes: 'White-label ASP/IIS, arte e colecionismo. Sem status por item — fecha pelo relógio (data do evento, sem hora, 23:59:59 BRT).',
   },
-  async collect({ limit }): Promise<CollectResult> {
+  async collect({ limit, tenant }): Promise<CollectResult> {
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
 
-    const dominios = await tenants(Number(process.env.LEILOESBR_TENANTS ?? 58));
+    const dominios = await tenants(Number(process.env.LEILOESBR_TENANTS ?? 58), tenant);
     const cota = Math.max(30, Math.ceil(limit / Math.max(1, dominios.length)));
 
     for (const host of dominios) {

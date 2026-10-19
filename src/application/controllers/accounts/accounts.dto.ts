@@ -8,6 +8,7 @@ export class AccountPaginationDto {
 }
 
 export class AccountBodyDto {
+  @Allow() turnstileToken?: unknown;
   @Allow() email?: unknown;
   @Allow() nome?: unknown;
   @Allow() interesse?: unknown;

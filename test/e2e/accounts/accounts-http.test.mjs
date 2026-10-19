@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import request from 'supertest';
-import { Module } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { accountDependencies } from './helpers/accounts-fixture.mjs';
@@ -22,6 +22,7 @@ describe('accounts HTTP module', () => {
     class AccountsTestRoot {}
     Module({ imports: [HttpPlatformModule.forRoot({ env, paths, dependencies: fixture.deps }), AccountsModule] })(AccountsTestRoot);
     app = await NestFactory.create(AccountsTestRoot, new FastifyAdapter(radarHttpAdapterOptions(env)), { logger: false });
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
     await configureHttpPlatform(app, app.get(RADAR_HTTP_CONTEXT));
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -91,4 +92,21 @@ describe('accounts HTTP module', () => {
     expect(limited.status).toBe(429);
     expect(state.queries).toHaveLength(0);
   });
+
+  it('admits the upstream-validated challenge token on public signup', async () => {
+    const server = await start();
+    const accepted = await request(server).post('/api/cadastro').send({
+      nome: 'Pessoa Exemplo', email: 'pessoa@example.test', documento: '52998224725', celular: '11987654321',
+      consentimento: 'Aceito os termos', consentimentoVersao: 'v1', turnstileToken: 'fixture-token',
+    });
+    expect(accepted.status).toBe(201);
+    expect(state.writes).toHaveLength(1);
+    const unknown = await request(server).post('/api/cadastro').send({
+      nome: 'Pessoa Exemplo', email: 'pessoa@example.test', documento: '52998224725', celular: '11987654321',
+      consentimento: 'Aceito os termos', consentimentoVersao: 'v1', turnstileToken: 'fixture-token', unexpected: true,
+    });
+    expect(unknown.status).toBe(400);
+    expect(state.writes).toHaveLength(1);
+  });
+
 });

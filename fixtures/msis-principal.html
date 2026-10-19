@@ -1,0 +1,1958 @@
+
+<style type="text/css">
+
+.baseCk{
+	position: fixed; 
+	bottom:0px; 
+	width: 100%; 
+	height: 50px;
+	animation-name: animaModalBoxCk;
+  	animation-duration: .5s;
+  	animation-timing-function: ease-out;
+	background-color:#274d5f;
+/*	border: 1px solid #b7b7b7; */
+	-webkit-box-shadow: 0px -8px 15px 0px rgba(0,0,0,0.62);
+	-moz-box-shadow: 0px -8px 15px 0px rgba(0,0,0,0.62);
+	box-shadow: 0px -8px 15px 0px rgba(0,0,0,0.62);
+	z-index:991;	
+}
+
+/* Animation */
+@-webkit-keyframes animaModalBoxCk {
+  0% {
+    bottom: -50px; 
+    opacity: 0;
+  }
+  100% {
+    bottom: 0px; 
+    opacity: 1;
+  }
+}
+
+@keyframes animaModalBoxCk {
+  0% {
+    bottom: -50px; 
+    opacity: 0;
+  }
+  100% {
+    bottom: 0px; 
+    opacity: 1;
+  }
+}
+
+.letraCk{
+	font-family: 'Montserrat', sans-serif;	
+	font-size: 13px;
+/*	font-weight: bold; */
+	color: #FFFFFF;
+	line-height: 1.5;
+}
+
+A.linkCookie:link {text-decoration:none; color:#ff9000; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: normal}
+A.linkCookie:visited {text-decoration:none; color:#ff9000;font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: normal}
+A.linkCookie:hover {text-decoration:underline; color:#FFFFFF;font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: normal}
+A.linkCookie:active {text-decoration:none; color:#ff9000; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: normal}
+
+
+</style>
+
+
+<div id="divCookie" class="baseCk" style="display:none">
+	<div style="position: absolute; width:976px; top:0px; left:50%; margin-left:-488px; height:50px;">
+		<div style="position: absolute; width:820px; top:5px; left:20px;" class="letraCk">Utilizamos cookies para melhorar a sua experiência de navegação em nosso site.  Ao visitar o site, está a consentir a sua utilização. Para mais informações sobre os cookies utilizados, visite nossa <a href="#void" onclick="abreCookiePol();" class="linkCookie">POLÍTICA DE PRIVACIDADE</a>.</div>
+
+		<div style="position: absolute; width:10px; top:10px; left:856px;"><input type="button" name="btnOkCookie" id="btnOkCookie" value="ACEITAR" class="classBotao" onClick="criarCk(3650);" style="width: 100px; background-color:#ff9000" onmouseover="this.style.backgroundColor='#CC6600';" onmouseout="this.style.backgroundColor='#ff9000';"></div>
+
+	</div>
+</div>
+
+
+<SCRIPT LANGUAGE="JavaScript">
+
+var vCkName='ANALUCIA';
+var vCkVlr='CCLeiloes';
+
+function abreAvisoCookie(){
+	document.getElementById('divCookie').style.display='';
+}
+
+function criarCk(daysToExpire){
+	var vDt = new Date();
+	vDt.setTime(vDt.getTime()+(daysToExpire*24*60*60*1000));
+   document.cookie = vCkName + "=" + vCkVlr + "; expires=" + vDt.toGMTString();
+	document.getElementById('divCookie').style.display='none';
+}
+
+function lerCookie() {
+
+	var name = vCkName + "=";
+  	var decodedCookie = decodeURIComponent(document.cookie);
+	var vFound='n';
+  	var ca = decodedCookie.split(';');
+
+  	for(var i = 0; i <ca.length; i++) {
+   	var c = ca[i];
+    	while (c.charAt(0) == ' ') {
+      	c = c.substring(1);
+    	}
+    	if (c.indexOf(name) == 0) {
+			var vCkTest=c.substring(name.length, c.length);
+			if(vCkTest==vCkVlr){
+				vFound='s';
+			}
+    	}
+  	}
+	if(vFound=='n'){
+		abreAvisoCookie();
+	}
+
+}
+
+lerCookie();
+
+
+//deleteCookie();
+function deleteCookie() {
+	document.cookie = vCkName + "=" + "; expires=Thu, 01-Jan-70 00:00:01 GMT";
+}
+
+function abreCookiePol(){
+	window.location.href=('PoliticaPrivacidade.asp');
+}
+
+</script>
+
+
+<script language="JavaScript">
+  var check = false;
+  (function(a){
+    if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) 
+      check = true;
+  })(navigator.userAgent||navigator.vendor||window.opera);
+
+if(check==true){
+	window.open('mPrincipal.asp','_self');
+}
+</script>
+
+
+<html>
+<head>
+<title>Ana Lúcia - Leiloeira Pública</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="description" content="Confira nossos leilões - Ana Lúcia Gomes de Sá"/>
+<meta name="keywords" content="leilões de imóveis, leilões de imóveis Rio de Janeiro, leilões judiciais, venda apartamentos, venda de imóveis, leilões extrajudiciais, leilões judiciais, leiloeiros públicos, imóveis em leilão, leiloeiro público, investimento imóveis leilão, investir imóveis, leilões melhor oferta"/>
+
+<link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="_styleGeneral4.css" />
+<link rel="shortcut icon" href="https://www.analucialeiloeira.com.br/imagens/ico_imagem.ico">
+
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
+</head>
+
+<body leftmargin="0" topmargin="0" bgcolor="#f7f7f7">
+<div id="divFdo" class="Fdo" style="display:none"></div>
+
+<div class="Topo1_container">
+	<div class="Topo1_linha1"></div>
+	<div class="Topo1_barrasup"></div>
+	<div class="Topo1_lateral" style="top:3px;"></div>
+	<div class="Topo1_inside" style="top:3px; height:40px;">
+		<div class="Topo1_msg">Leilões Presenciais, Online e Presenciais/Online - Judiciais e Extrajudiciais</div>
+
+
+
+      <div class="Topo1_cadastrese1"><img src="Imagens/imgCadastrese.png" width="23" height="23"></div>
+      <div class="Topo1_cadastrese2"><a href="#void" onclick="abreCadastrar();" class="Login">Cadastre-se</a></div>
+      <div class="Topo1_login1"><img src="Imagens/imgLoginBco.png" width="23" height="23"></div>
+      <div class="Topo1_login2"><a href="#void" onclick="abreLogin();" class="Login">Login</a></div>
+
+
+
+   </div>
+
+	<div class="Topo1_linha2"></div>
+	<div class="Topo1_barraprinc"></div>
+	<div class="Topo1_lateral" style="top:3px;"></div>
+	<div class="Topo1_inside" style="top:46px; height:120px;">
+		<div class="Topo1_logo" style="left:0px; top:10px;"><img src="Imagens/imgLogo.png" height="100"></div>
+      <div class="Topo1_busca1" id="divBusca1"><div align="right"><input name="txtDado" type="text" id="txtDado" size="30" maxlength="50" placeholder="Digite o que procura" class="Topo1_classTXT" onfocus="expandeContraiDado('e');" onfocusout="expandeContraiDado('c');" onKeyPress="detectarEnter(event);" value=""></div></div>
+      <div class="Topo1_busca2" onclick="pesquisarTopo();"><div align="right"><img src="Imagens/imgLupa.png" width="30" height="30"></div></div>
+	</div>
+
+	<div class="Topo1_linha3"></div>
+	<div class="Topo1_barramenu"></div>
+	<div class="Topo1_inside" style="top:180px; z-index:1; display:-webkit-flex; display:flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center;">
+		<div style="display:-webkit-flex; display:flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; top:0px; /*border:1px solid #FFFF00;*/">
+			<div class="Topo1_mnu_PrincH" onclick="acionarMenu('HOME');" align="center">Home</div>
+			<div class="Topo1_mnu_PrincL" onclick="acionarMenu('HOME');" align="center">Leilões</div>
+         <div class="Topo1_mnu_PrincLe" onclick="acionarMenu('LEILOEIRO');" align="center">Leiloeira</div>
+         <div class="Topo1_mnu_PrincC" onclick="acionarMenu('COMOVENDER');" align="center">Como vender</div>
+         <div class="Topo1_mnu_PrincCo" onclick="acionarMenu('CONTATO');" align="center">Contato</div>
+         <div class="Topo1_mnu_PrincA" onclick="acionarMenu('AJUDA');" align="center">Ajuda</div>
+		</div>
+	</div>
+	<div class="Topo1_mnu_Princ_grad" style="z-index:2;"></div>
+</div>
+
+
+
+<form name="frmTopo" method="post">
+<input type="hidden" name="pesq">
+</form>
+
+<script language="JavaScript">
+
+function abreLogin(){
+	document.getElementById('divLogin').className='classDIVLogin';
+	document.getElementById('divFdo').style.zIndex='904';
+	document.getElementById('divFdo').style.display='';
+	document.getElementById('divLogin').style.display='';
+}
+function fechaLogin(){
+	document.getElementById('divLogin').className='classDIVLogin2';
+	document.getElementById('divFdo').style.display='none';
+}
+
+function abreLoginTrocaSenha(){
+	document.getElementById('divLoginTrocaSenha').className='classDIVLogin';
+	document.getElementById('divFdo').style.zIndex='904';
+	document.getElementById('divFdo').style.display='';
+	document.getElementById('divLoginTrocaSenha').style.display='';
+}
+function fechaLoginTrocaSenha(){
+	window.location.href=('Sair.asp');
+}
+
+function abreLogado(){
+	var vL="https://www.analucialeiloeira.com.br";
+	top.location.href=(vL+'/AreaCliente.asp');
+}
+
+function abreCadastrar(){
+/* com SSL
+	window.location.href=('Cadastro.asp');
+*/
+	var vL="https://www.analucialeiloeira.com.br";
+	top.location.href=(vL+'/?pag=7');
+}
+
+function acionarMenu(vD){
+/* com SSL
+	if(vD=='HOME'){
+		window.location.href=('Principal.asp');
+	}else if(vD=='LEILOEIRO'){
+		window.location.href=('Leiloeiro.asp');
+	}else if(vD=='COMOVENDER'){
+		window.location.href=('ComoVender.asp');
+	}else if(vD=='CONTATO'){
+		window.location.href=('Contato.asp');
+	}else if(vD=='AJUDA'){
+		window.location.href=('Ajuda.asp');
+	}else if(vD=='TERMOS'){
+		window.location.href=('Termos.asp');
+	}else if(vD=='POLPRIV'){
+		window.location.href=('PoliticaPrivacidade.asp');
+	}
+*/
+	var vL='https://www.analucialeiloeira.com.br';
+
+	if(vD=='HOME'){
+		top.location.href=(vL+'/?pag=1');
+	}else if(vD=='LEILOEIRO'){
+		top.location.href=(vL+'/?pag=2');
+	}else if(vD=='COMOVENDER'){
+		top.location.href=(vL+'/?pag=3');
+	}else if(vD=='CONTATO'){
+		top.location.href=(vL+'/?pag=4');
+	}else if(vD=='AJUDA'){
+		top.location.href=(vL+'/?pag=5');
+	}else if(vD=='TERMOS'){
+		top.location.href=(vL+'/?pag=6');
+	}else if(vD=='POLPRIV'){
+		top.location.href=(vL+'/?pag=9');
+	}
+
+}
+
+function detectarEnter(e){
+	var code = (e.keyCode ? e.keyCode : e.which);
+	if(code == 13) { //Enter keycode
+		pesquisarTopo();
+	}
+}
+
+function detectarEnter2(e){
+	var code = (e.keyCode ? e.keyCode : e.which);
+	if(code == 13) { //Enter keycode
+		entrar();
+	}
+}
+
+function detectarEnter3(e){
+	var code = (e.keyCode ? e.keyCode : e.which);
+	if(code == 13) { //Enter keycode
+		document.frmLoginTrocarSenha.txtNSenha2.focus();
+	}
+}
+
+function detectarEnter4(e){
+	var code = (e.keyCode ? e.keyCode : e.which);
+	if(code == 13) { //Enter keycode
+		trocar();
+	}
+}
+
+function pesquisarTopo(){
+	document.frmTopo.action='https://www.analucialeiloeira.com.br/Principal.asp';
+	document.frmTopo.pesq.value=document.getElementById('txtDado').value;
+	frmTopo.submit();
+}
+
+function esqueciSenha(){
+	document.frmTopo.action='EsqueciASenha.asp';
+	frmTopo.submit();
+}
+
+var vKKK="9383695";
+var vrR="Principal.asp";
+var vrN="";
+var vrNL="";
+
+function entrar(){
+	document.frmLogin.action='Login.asp?kkk='+vKKK;
+	if(document.frmLogin.txtLogin.value==''){
+		alert('Campos LOGIN e SENHA são de preenchimento obrigatório.');
+	}else{
+		document.frmLogin.r.value=vrR;
+		document.frmLogin.n.value=vrN;
+		document.frmLogin.nl.value=vrNL;
+		document.frmLogin.submit();
+	}
+}
+
+function RightEsp(str, n){
+    if (n <= 0)
+       return "";
+    else if (n > String(str).length)
+       return str;
+    else {
+       var iLen = String(str).length;
+       return String(str).substring(iLen, iLen - n);
+    }
+}
+
+function LeftEsp(str, n){
+	if (n <= 0)
+	    return "";
+	else if (n > String(str).length)
+	    return str;
+	else
+	    return String(str).substring(0,n);
+}
+
+function verificaLogin(){
+
+	var vPw=document.frmLoginTrocaSenha.txtNSenha.value;
+	if(vPw.length>5&&vPw.length<11){
+		document.getElementById('divLoginItem1').style.backgroundColor='#003a75';
+		document.getElementById('divLoginItem1texto').className='Letra12 CorAzulEsc';
+	}else{
+		document.getElementById('divLoginItem1').style.backgroundColor='#7a7a7a';
+		document.getElementById('divLoginItem1texto').className='Letra12 CorCinza';
+	}
+
+	var vLt='aáàâãbcçdeéêfghiíjklmnoóõpqrstuúvwxyzAÂÀÁÃBCÇDEÉÊFGHIÍJKLMNOÓÕPQRSTUÚVWXYZ';
+	var vNt='0123456789';
+	var vEt='@.,:?{}/\\';
+	var vC;
+	var vL=0;
+	var vN=0;
+	var vE=0;
+
+	var vCd=RightEsp(vPw,1);
+	var vLtC=vLt+vNt+vEt;
+
+  	if(vLtC.indexOf(vCd)<0){
+		alert('O caracter abaixo não é permitido e por isso vamos removê-lo.\n\n'+vCd+'\n\nA SENHA deve ter entre 6 e 10 caracteres, contendo no mínimo: 2 letras, 2 números e 1 símbolo especial   @   .   ,   :   ?   {   }   /   \\.');
+		document.frmLoginTrocaSenha.txtNSenha.value=LeftEsp(vPw,vPw.length-1);
+		return false;
+	}
+
+	for (i = 0; i < vPw.length; i++) {
+	  vC=vPw.substr(i, 1);
+	  if(vLt.indexOf(vC)>-1){vL=vL+1};
+	  if(vNt.indexOf(vC)>-1){vN=vN+1};
+	  if(vEt.indexOf(vC)>-1){vE=vE+1};
+	}
+
+	if(vL>1){
+		document.getElementById('divLoginItem2').style.backgroundColor='#003a75';
+		document.getElementById('divLoginItem2texto').className='Letra12 CorAzulEsc';
+	}else{
+		document.getElementById('divLoginItem2').style.backgroundColor='#7a7a7a';
+		document.getElementById('divLoginItem2texto').className='Letra12 CorCinza';
+	}
+
+
+	if(vN>1){
+		document.getElementById('divLoginItem3').style.backgroundColor='#003a75';
+		document.getElementById('divLoginItem3texto').className='Letra12 CorAzulEsc';
+	}else{
+		document.getElementById('divLoginItem3').style.backgroundColor='#7a7a7a';
+		document.getElementById('divLoginItem3texto').className='Letra12 CorCinza';
+	}
+
+
+	if(vE==1){
+		document.getElementById('divLoginItem4').style.backgroundColor='#003a75';
+		document.getElementById('divLoginItem4texto').className='Letra12 CorAzulEsc';
+	}else{
+		document.getElementById('divLoginItem4').style.backgroundColor='#7a7a7a';
+		document.getElementById('divLoginItem4texto').className='Letra12 CorCinza';
+	}
+
+
+}
+
+function trocar(){
+
+	if(document.frmLoginTrocaSenha.txtNSenha.value==''||document.frmLoginTrocaSenha.txtNSenha2.value==''){
+		alert('Campos DIGITE A NOVA SENHA e REDIGITE A NOVA SENHA são de preenchimento obrigatório.');
+		return false;
+	}
+	if(document.frmLoginTrocaSenha.txtNSenha.value!=document.frmLoginTrocaSenha.txtNSenha2.value){
+		alert('Campos DIGITE A NOVA SENHA e REDIGITE A NOVA SENHA devem ser iguais.');
+		return false;
+	}
+
+	var vPw=document.frmLoginTrocaSenha.txtNSenha.value;
+	if(vPw.length<6||vPw.length>10){
+		alert('Nova senha inválida. A SENHA deve ter entre 6 e 10 caracteres, contendo no mínimo: 2 letras, 2 números e 1 símbolo especial   @   .   ,   :   ?   {   }   /   \\. Não são permitidos outros caracteres especiais.');
+		return false;
+	}
+
+	var vLt='aáàâãbcçdeéêfghiíjklmnoóõpqrstuúvwxyzAÂÀÁÃBCÇDEÉÊFGHIÍJKLMNOÓÕPQRSTUÚVWXYZ';
+	var vNt='0123456789';
+	var vEt='@.,:?{}/\\';
+	var vC;
+	var vL=0;
+	var vN=0;
+	var vE=0;
+	for (i = 0; i < vPw.length; i++) {
+	  vC=vPw.substr(i, 1);
+	  if(vLt.indexOf(vC)>-1){vL=vL+1};
+	  if(vNt.indexOf(vC)>-1){vN=vN+1};
+	  if(vEt.indexOf(vC)>-1){vE=vE+1};
+	}
+	if(vL<2||vN<2||vE<1){
+		alert('Nova senha inválida. A SENHA deve ter entre 6 e 10 caracteres, contendo no mínimo: 2 letras, 2 números e 1 símbolo especial   @   .   ,   :   ?   {   }   /   \\. Não são permitidos outros caracteres especiais.');
+		return false;
+	}
+
+	document.frmLoginTrocaSenha.action='LoginTrocaSenha.asp';
+	document.frmLoginTrocaSenha.submit();
+
+}
+
+function enableBtnL(){
+	document.getElementById('btnEntrarL').className='classBotaoL';
+	document.getElementById('btnEntrarL').setAttribute("onclick","entrar();");
+} 
+
+function disableBtnL(){
+	document.getElementById('btnEntrarL').className='classBotaoInativo';
+	document.getElementById('btnEntrarL').removeAttribute("onclick");
+} 
+
+function enableBtnT(){
+	document.getElementById('btnEntrarT').className='classBotaoL';
+	document.getElementById('btnEntrarT').setAttribute("onclick","trocar();");
+} 
+
+function disableBtnT(){
+	document.getElementById('btnEntrarT').className='classBotaoInativo';
+	document.getElementById('btnEntrarT').removeAttribute("onclick");
+} 
+
+function expandeContraiDado(vT){
+	if(vT=='e'){
+		document.getElementById('divBusca1').style.zIndex='930'; 
+		document.getElementById('divFdo').style.display='';
+	}else if(vT=='c'){
+		document.getElementById('divBusca1').style.zIndex='1'; 
+		document.getElementById('divFdo').style.display='none';
+	}
+}
+
+function confereLogin(){
+
+	var vLogin=document.getElementById('txtLogin').value;
+	
+	if(vLogin.trim()===''){
+		alert('Digite o seu e-mail ou login');
+		return false;
+	}
+
+	var head = document.getElementsByTagName('head').item(0);
+	var eScript = document.createElement('script');
+	eScript.setAttribute('type','text/javascript');
+	eScript.setAttribute('src','_Topo_cl.asp?l='+vLogin);
+	head.appendChild(eScript);
+}
+
+</script>
+
+<style type="text/css">
+
+.classBotaoL {
+	background-color:#ff9000;   /* cor do botão */
+	border:0px;
+	text-indent:0;
+	display:inline-block;
+	color:#ffffff;
+	font-family:'Montserrat', sans-serif;
+	font-size:12px;
+	font-weight:bold;
+	font-style:normal;
+	height:30px;
+	line-height:30px;
+	width:80px;
+	text-decoration:none;
+	text-align:center;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+}
+.classBotaoL:hover {background-color:#CC6600; cursor:hand; cursor:pointer;} /* cor do botão em hover */
+.classBotaoL:active {position:relative; top:1px;}
+
+
+.classBotaoL2 {
+	background-color:#ffffff;   /* cor do botão */
+	border:2px solid #CC6600;
+	text-indent:0;
+	display:inline-block;
+	color:#CC6600;
+	font-family:'Montserrat', sans-serif;
+	font-size:14px;
+	font-weight:bold;
+	font-style:normal;
+	height:40px;
+	line-height:36px;
+	width:300px;
+	text-decoration:none;
+	text-align:center;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+}
+.classBotaoL2:hover {background-color:#CC6600; color:#FFFFFF; cursor:hand; cursor:pointer;} /* cor do botão em hover */
+
+
+.classDIVLogin{
+	position:fixed;
+	top:0px; 
+	width:450px; 
+	height:100%; 
+	background-color:#FFFFFF;
+	right:0px;
+	animation-name: animaDIVLogin;
+  	animation-duration: .3s;
+  	animation-timing-function: ease-out;
+}
+
+.classDIVLogin2{
+	position:fixed;
+	top:0px; 
+	width:450px; 
+	height:100%; 
+	background-color:#FFFFFF;
+	right:-450px;
+	animation-name: animaDIVLogin2;
+  	animation-duration: .3s;
+  	animation-timing-function: ease-out;
+}
+
+
+/* Animation */
+@-webkit-keyframes animaDIVLogin {
+  0% {
+    right: -450px; 
+    opacity: 0;
+  }
+  100% {
+    right: 0px; 
+    opacity: 1;
+  }
+}
+@keyframes animaDIVLogin {
+  0% {
+    right: -450px; 
+    opacity: 0;
+  }
+  100% {
+    right: 0px; 
+    opacity: 1;
+  }
+}
+/* Animation */
+@-webkit-keyframes animaDIVLogin2 {
+  0% {
+    right: 0px; 
+    opacity: 1;
+  }
+  100% {
+    right: -450px; 
+    opacity: 0;
+	 display: none;
+  }
+}
+@keyframes animaDIVLogin2 {
+  0% {
+    right: 0px; 
+    opacity: 1;
+  }
+  100% {
+    right: -450px; 
+    opacity: 0;
+	 display: none;
+  }
+}
+
+
+</style>
+
+
+
+
+
+
+<div id="divLogin" class="classDIVLogin" style="display:none; z-index:1000;">
+
+
+	<div style="position:absolute; top:0px; width:100%; left:0px; height:110px; background-color:#0b977d;"></div>
+
+
+
+   <div onClick="fechaLogin()" style="position:absolute; width:30px; height:30px; right:10px; top:10px; cursor:pointer; z-index:906">
+      <div style="position:absolute; top:0px; left:-6px; width:32px; height:32px; border-radius:50%; overflow:hidden; background:rgba(0, 0, 0, 0.5);"></div>
+      <div style="position:absolute; top:15px; left:0px; width:20px;	height:1px;	background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+      <div style="position:absolute; top:15px; left:0px;	width:20px; height:1px; background-color:#ffffff; -ms-transform: rotate(-45deg); transform: rotate(-45deg);"></div>
+   </div>
+
+	<div class="Topo1_logo" style="position:absolute; top:15px; width:100%; left:50%; margin-left:-70px;"><img src="Imagens/imgLogo.png" width="140"></div>
+
+   <div class="JanLoginFdo" style="left:63px; top:110px; height:330px; width:323px;">
+
+      <form name="frmLogin" method="post">
+
+      <div class="JanLoginTit" align="center" style="top:25px; font-family:ARIAL; font-size:20px; width:323px;"><strong>Acesso de clientes</strong></div>
+      <div class="JanLoginLoginIcon" style="left:18px; top:75px;"><img src="Imagens/imgLoginIntra.png" width="20" height="20"></div>
+      <div class="JanLoginLogin" style="left:10px; width:300px; top:70px;" align="right"><input name="txtLogin" type="text" id="txtLogin" maxlength="255" placeholder="Digite o seu e-mail ou login" class="JanLoginLoginTXT" style="font-size:16px; width:260px;"></div>
+
+      <div id="divLoginKeyIntra" class="JanLoginPWIcon" style="left:18px; top:116px; margin-top:5px; display:none;"><img src="Imagens/imgKeyIntra.png" width="22" height="22"></div>
+      <div id="divLogintxtPW" class="JanLoginPW" align="right" style="left:10px; width:300px; top:110px; margin-top:5px; display:none;"><input name="txtPW" type="password" id="txtPW" maxlength="30" placeholder="Digite a sua senha" class="JanLoginPWTXT" onKeyPress="detectarEnter2(event);" style="font-size:16px; width:260px;"></div>
+
+      <div id="divLoginRecaptcha" class="g-recaptcha" data-sitekey="6LeK9lUoAAAAABsKdfB4nsn-cwxdEKolaIjUDT59" data-callback="enableBtnL" data-expired-callback="disableBtnL" style="position:absolute; top:160px; left:10px; display:none;"></div>
+
+      <div id="divLoginBtnEntrarL" class="JanLoginEntrar" style="top:260px; width:323px; left:0px; display:none;" align="center"><input type="button" name="btnEntrarL" id="btnEntrarL" value="ENTRAR" class="classBotaoInativo" style="width:300px; height:40px; line-height:40px; font-size:14px;"></div>
+
+      <div id="divLoginBtnAvancarL" class="JanLoginEntrar" style="top:130px; width:323px; left:0px" align="center"><input type="button" name="btnAvancarL" id="btnAvancarL" value="AVANÇAR" class="classBotaoL" style="width:300px; height:40px; line-height:40px; font-size:14px;" onclick="confereLogin()"></div>
+
+      <input type="hidden" name="r">
+      <input type="hidden" name="n">
+      <input type="hidden" name="nl">
+      <input type="hidden" name="rcp" id="rcp">
+      </form>
+
+      <div id="divLoginEsqueci" class="JanLoginEsqueci" style="position:absolute; top:180px; width:323px; left:0px" align="center"><a href="#void" onclick="esqueciSenha();" class="esqueciPW">esqueci a senha</a></div>
+
+      <div id="divLoginbtnEntrarL2" class="JanLoginEntrar" style="top:220px; width:323px; left:0px" align="center"><input type="button" name="btnEntrarL2" id="btnEntrarL2" value="Não tem cadastro? Cadastre-se" class="classBotaoL2" onclick="abreCadastrar();"></div>
+	</div>
+
+</div>
+
+
+<div id="divLoginTrocaSenha" class="classDIVLogin" style="display:none; z-index:1000;">
+
+	<div style="position:absolute; top:0px; width:100%; left:0px; height:110px; background-color:#0b977d;"></div>
+
+
+   <div onClick="fechaLoginTrocaSenha()" style="position:absolute; width:30px; height:30px; right:10px; top:10px; cursor:pointer; z-index:906">
+      <div style="position:absolute; top:0px; left:-6px; width:32px; height:32px; border-radius:50%; overflow:hidden; background:rgba(0, 0, 0, 0.5);"></div>
+      <div style="position:absolute; top:15px; left:0px; width:20px;	height:1px;	background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+      <div style="position:absolute; top:15px; left:0px;	width:20px; height:1px; background-color:#ffffff; -ms-transform: rotate(-45deg); transform: rotate(-45deg);"></div>
+   </div>
+
+	<div class="Topo1_logo" style="position:absolute; top:15px; width:100%; left:50%; margin-left:-70px;"><img src="Imagens/imgLogo.png" width="140"></div>
+
+   <div class="JanLoginFdo" style="left:63px; top:110px; height:330px; width:323px;">
+
+      <form name="frmLoginTrocaSenha" method="post">
+      <div class="JanLoginTit" align="center" style="top:25px; font-family:ARIAL; font-size:20px; width:323px;"><strong>Troca de senha obrigatória</strong></div>
+      <div class="JanLoginLoginIcon" style="left:18px; top:80px;"><img src="Imagens/imgLoginIntra.png" width="20" height="20"></div>
+      <div class="JanLoginLogin" style="left:10px; width:300px; top:74px;"><span class="Letra16" style="position:absolute; left:48px; top:5px;"></span></div>
+      <div class="JanLoginPWIcon" style="left:18px; top:116px; margin-top:5px"><img src="Imagens/imgKeyIntra.png" width="22" height="22"></div>
+      <div class="JanLoginPW" align="right" style="left:10px; width:300px; top:110px; margin-top:5px;"><input name="txtNSenha" type="password" id="txtNSenha" maxlength="30" placeholder="Digite a nova senha" class="JanLoginPWTXT" onKeyPress="detectarEnter3(event);" onKeyUp="verificaLogin();" style="font-size:16px; width:260px;" onpaste="return false" ondrop="return false"></div>
+      <div class="JanLoginPWIcon" style="left:18px; top:157px; margin-top:5px"><img src="Imagens/imgKeyIntra.png" width="22" height="22"></div>
+      <div class="JanLoginPW" align="right" style="left:10px; width:300px; top:151px; margin-top:5px;"><input name="txtNSenha2" type="password" id="txtNSenha2" maxlength="30" placeholder="Redigite a nova senha" class="JanLoginPWTXT" onKeyPress="detectarEnter4(event);" style="font-size:16px; width:260px;" onpaste="return false" ondrop="return false"></div>
+
+      <div class="g-recaptcha" data-sitekey="6LeK9lUoAAAAABsKdfB4nsn-cwxdEKolaIjUDT59" data-callback="enableBtnT" data-expired-callback="disableBtnT" style="position:absolute; top:200px; left:10px;"></div>
+
+      <div class="JanLoginEntrar" style="top:290px; width:323px; left:0px" align="center"><input type="button" name="btnEntrarT" id="btnEntrarT" value="TROCAR" class="classBotaoInativo" style="width:300px; height:40px; line-height:40px; font-size:14px;"></div>
+
+      <div style="position:absolute; top:320px; width:323px; height:80px; background-color:#FFffFF">
+         <div style="position:absolute; top:26px; width:300px; left:12px;"><span class="Letra12">Regras para composição da nova senha:</span></div>
+      </div>
+
+      <div style="position:absolute; top:370px; width:323px; left:18px;">
+         <div id="divLoginItem1" style="position:absolute; top:0px; left:-6px; width:14px; height:14px; border-radius:50%; overflow:hidden; background-color:#7a7a7a;"></div>
+         <div style="position:absolute; top:8px; left:-4px; width:5px; height:1px; background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+         <div style="position:absolute; top:7px; left:-2px; width:8px; height:1px; background-color:#ffffff; -ms-transform: rotate(-60deg); transform: rotate(-60deg);"></div>
+
+         <div id="divLoginItem1texto" style="position:absolute; top:-1px; width:300px; left:14px;" class="Letra12 CorCinza">Tamanho entre 6 e 10 caracteres</div>
+
+      </div>
+
+      <div style="position:absolute; top:390px; width:323px; left:18px;">
+         <div id="divLoginItem2" style="position:absolute; top:0px; left:-6px; width:14px; height:14px; border-radius:50%; overflow:hidden; background-color:#7a7a7a;"></div>
+         <div style="position:absolute; top:8px; left:-4px; width:5px; height:1px; background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+         <div style="position:absolute; top:7px; left:-2px; width:8px; height:1px; background-color:#ffffff; -ms-transform: rotate(-60deg); transform: rotate(-60deg);"></div>
+
+         <div id="divLoginItem2texto" style="position:absolute; top:-1px; width:300px; left:14px;" class="Letra12 CorCinza">Deve ter pelo menos 2 letras</div>
+
+      </div>
+
+      <div style="position:absolute; top:410px; width:323px; left:18px;">
+         <div id="divLoginItem3" style="position:absolute; top:0px; left:-6px; width:14px; height:14px; border-radius:50%; overflow:hidden; background-color:#7a7a7a;"></div>
+         <div style="position:absolute; top:8px; left:-4px; width:5px; height:1px; background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+         <div style="position:absolute; top:7px; left:-2px; width:8px; height:1px; background-color:#ffffff; -ms-transform: rotate(-60deg); transform: rotate(-60deg);"></div>
+
+         <div id="divLoginItem3texto" style="position:absolute; top:-1px; width:300px; left:14px;" class="Letra12 CorCinza">Deve ter pelo menos 2 números</div>
+
+      </div>
+
+      <div style="position:absolute; top:430px; width:323px; left:18px;">
+         <div id="divLoginItem4" style="position:absolute; top:0px; left:-6px; width:14px; height:14px; border-radius:50%; overflow:hidden; background-color:#7a7a7a;"></div>
+         <div style="position:absolute; top:8px; left:-4px; width:5px; height:1px; background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+         <div style="position:absolute; top:7px; left:-2px; width:8px; height:1px; background-color:#ffffff; -ms-transform: rotate(-60deg); transform: rotate(-60deg);"></div>
+
+         <div id="divLoginItem4texto" style="position:absolute; top:-1px; width:300px; left:14px;" class="Letra12 CorCinza">Deve ter 1 símbolo especial:<br /> &nbsp;&nbsp;&nbsp; @&nbsp;&nbsp;&nbsp; .&nbsp;&nbsp;&nbsp; ,&nbsp;&nbsp;&nbsp; :&nbsp;&nbsp;&nbsp; ?&nbsp;&nbsp;&nbsp; {&nbsp;&nbsp;&nbsp; }&nbsp;&nbsp;&nbsp; /&nbsp;&nbsp;&nbsp; \</div>
+
+      </div>
+
+      </form>
+
+	</div>
+
+</div>
+
+<style type="text/css">
+.fdoModalTermos{
+	width:100%;
+	height:100%;
+	background: url(imagens/imgFundoModal.png);
+	position:fixed;
+	top:0;
+	left:0;
+	z-index:990; 	
+}
+.janelaModalTermos{
+	position:absolute; 
+	width:78%; 
+	min-width:976px; 
+	top:70px; 
+	left:11%; 
+	height:620px; 
+	display:-webkit-flex; 
+	display:flex;
+	animation-name: animaModalBox;
+  	animation-duration: .3s;
+  	animation-timing-function: ease-out;
+	background-color:#ffffff;
+	border: 1px solid #b7b7b7;
+	z-index:991;
+}
+/* Animation */
+@-webkit-keyframes animaModalBox {
+  0% {
+    top: -400px; 
+    opacity: 0;
+  }
+  100% {
+    top: 100px; 
+    opacity: 1;
+  }
+}
+
+@keyframes animaModalBox {
+  0% {
+    top: -400px; 
+    opacity: 0;
+  }
+  100% {
+    top: 100px; 
+    opacity: 1;
+  }
+}
+.xModalTermos{
+	position: absolute;
+	top: 2px;
+	right:5px;
+	z-index:994;	
+}
+
+A.linkTermos:link {text-decoration:none; color:#274d5f; font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: bold}
+A.linkTermos:visited {text-decoration:none; color:#274d5f;font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: bold}
+A.linkTermos:hover {text-decoration:underline; color:#000000;font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: bold}
+A.linkTermos:active {text-decoration:none; color:#274d5f; font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: bold}
+</style>
+
+<script language="JavaScript">
+
+function abreAceitePolPriv(){
+	document.getElementById('divPolPriv').className='classDIVLogin';
+	document.getElementById('divFdo').style.zIndex='904';
+	document.getElementById('divFdo').style.display='';
+	document.getElementById('divPolPriv').style.display='';
+}
+function fechaAceitePolPriv(){
+		window.location.href=('Sair.asp');
+}
+function abrePolPriv(){
+	document.getElementById('divFdoModalPolPriv').style.display='';
+}
+function fechaPolPriv(){
+	document.getElementById('divFdoModalPolPriv').style.display='none';
+}
+
+function enviarAceite(){
+
+	if(document.getElementById('chkPolPriv2').checked==false){
+		alert('Para prosseguir, você deve marcar que deu consentimento para coleta, uso e tratamento de seus dados, conforme a nossa política de privacidade.');
+		return false;
+	}
+	document.frmAceitePolPriv.action='AceitePolPriv.asp';
+	frmAceitePolPriv.submit();
+
+}
+
+</script>
+
+<div id="divPolPriv" class="classDIVLogin" style="display:none; z-index:1000;">
+
+  	<form name="frmAceitePolPriv" id="frmAceitePolPriv" method="post">
+
+	<div style="position:absolute; top:0px; width:100%; left:0px; height:110px; background-color:#0b977d;"></div>
+
+
+
+   <div onClick="fechaAceitePolPriv();" style="position:absolute; width:30px; height:30px; right:10px; top:10px; cursor:pointer; z-index:906">
+      <div style="position:absolute; top:0px; left:-6px; width:32px; height:32px; border-radius:50%; overflow:hidden; background:rgba(0, 0, 0, 0.5);"></div>
+      <div style="position:absolute; top:15px; left:0px; width:20px;	height:1px;	background-color:#ffffff; -ms-transform: rotate(45deg); transform: rotate(45deg);"></div>
+      <div style="position:absolute; top:15px; left:0px;	width:20px; height:1px; background-color:#ffffff; -ms-transform: rotate(-45deg); transform: rotate(-45deg);"></div>
+   </div>
+
+	<div class="Topo1_logo" style="position:absolute; top:15px; width:100%; left:50%; margin-left:-70px;"><img src="Imagens/imgLogo.png" width="140"></div>
+
+   <div style="position:absolute; top:125px; width:323px; left:63px; font-family:'Montserrat', sans-serif; font-size:15px; font-weight:bold;">
+      <div align="center" style="position:absolute; top:20px; width:323px; font-family:'Montserrat', sans-serif; font-size:20px; color:#e12d00;"><strong>Aviso importante</strong></div>
+      <div align="center" style="position:absolute; top:57px; width:323px; font-family:'Montserrat', sans-serif; font-size:20px; color:#000000;"><strong>Política de Privacidade</strong></div>
+      <div align="center" style="position:absolute; top:95px; width:323px; font-family:'Montserrat', sans-serif; font-size:14px; color:#000000;">Atualizamos nossa política de privacidade e precisamos de seu consentimento para prosseguir.</div>
+
+      <div align="center" style="position:absolute; top:155px; width:323px; font-family:'Montserrat', sans-serif; font-size:14px; color:#4f4f4f;">Vale lembrar que o tratamento de seus dados pessoais é condição necessária para que possamos prestar nossos serviços. Caso você tenha dúvidas sobre qualquer um dos termos explicados aqui, estamos à disposição em nossos canais de atendimento para ajudá-lo.</div>
+
+      <div align="center" style="position:absolute; top:265px; width:323px; font-family:'Montserrat', sans-serif; font-size:14px; color:#000000;">Para ter acesso à Política de Privacidade, <a href="#void" onClick="abrePolPriv();" class="linkTermos">CLIQUE AQUI</a>.</div>
+
+      <div align="center" style="position:absolute; top:315px; width:323px; font-family:'Montserrat', sans-serif; font-size:14px; color:#000000;"><input name="chkPolPriv2" type="checkbox" id="chkPolPriv2" value="SIM"> Eu li e estou ciente das condições de tratamento dos meus dados pessoais e forneço meu consentimento, quando aplicável, conforme descrito na <a href="#void" onClick="abrePolPriv();" class="linkTermos">POLÍTICA DE PRIVACIDADE</a>.</div>
+
+
+      <div class="JanLoginEntrar" style="top:440px; left:0px; width:323px;" align="center"><input type="button" name="btnEntrarL" id="btnEntrarL" value="ENVIAR" class="classBotao" style="width:300px; height:40px; line-height:40px; font-size:14px;" onclick="enviarAceite();"></div>
+
+	</div>
+
+   </form>
+
+
+</div>
+
+<div id="divFdoModalPolPriv" class="fdoModalTermos" style="display:none; z-index:1001;">
+   <div class="Pags_lateral" style="top:0px; /*border:1px solid #00FFFF;*/"></div>
+	<div class="janelaModalTermos">
+		<div class="xModalTermos"><a href="#void" onClick="fechaPolPriv()"><img src="Imagens/btnXModalAz.png" width="27" height="27"></a></div>
+		<div id="divPolPriv" style="position:absolute; top:30px; width:96%; margin-left:20px; padding-right:15px; text-align:justify; height:570px; overflow-x:hidden; overflow-y:scroll;">
+			
+<div class="Pags_barraTit" style="position:absolute; left:-10px; top:0px; width:100%; height:40px; background-color:#89ab8a;"></div>
+
+<div style="position:absolute; left:0px; top:0px; width:100%; margin-top:10px;" class="Letra22 CorBranca Negrito"><span style="margin-left:7px;">Política de Privacidade</span></div>
+
+
+<br><br><br><br>
+
+
+
+<span class="Letra18 CorCinzaEsc Negrito">Introdução</span>
+
+<br><br>
+
+	<span class="Letra16 CorCinzaEsc">Quando você se cadastra no site da&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá, você nos fornece os seus dados pessoais para que possamos: Identificar você e contatá-lo a respeito de algum serviço; Atender você por meio de nossos canais de atendimento, caso seja necessário solucionar dúvidas; Validar e autenticar sua identidade; Fornecer a você informações relevantes sobre os serviços contratados; Criar um ambiente seguro e confiável para os usuários; Prevenir e detectar fraudes ou quaisquer incidentes de segurança; Para recebimento de publicidade (caso autorizado) ou comunicações em geral através das nossas redes sociais (ressaltamos que as redes sociais possuem política de privacidade própria que não são de responsabilidade da&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá); Defender e/ou reivindicar os direitos da&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá em processos administrativos e/ou judiciais de qualquer natureza.</span>
+   <br>
+   <br>
+	<span class="Letra16 CorCinzaEsc">O TITULAR responde pela veracidade, exatidão, vigência e autenticidade dos seus dados pessoais e se compromete a mantê-los devidamente atualizados.</span>
+   <br>
+   <br>
+	<span class="Letra16 CorCinzaEsc">Somente o cadastrado terá acesso à sua senha, e desta forma, caberá ao mesmo mantê-la em segurança e sigilo.</span>
+   <br>
+   <br>
+	<span class="Letra16 CorCinzaEsc">Após a leitura desta Política de Privacidade, se você tiver dúvidas, reclamações, quiser exercer seus direitos relacionados aos seus dados pessoais ou se comunicar com a&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá sobre esse assunto, você pode entrar em contato conosco pelos nossos canais de atendimento.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">1) Aplicação </span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">As práticas descritas nesta Política de Privacidade só se aplicam ao tratamento dos seus dados pessoais no Brasil e estão sujeitas às leis locais aplicáveis, com destaque para a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais, ou "LGPD") a partir de sua entrada em vigor.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">2) Quais dados pessoais são coletados </span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Pessoa Física: Nome, apelido (nome de usuário), e-mail, CPF, estado civil, identidade, profissão, data de nascimento, sexo, endereço completo e telefones de contato.</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Pessoa Jurídica: Nome, apelido (nome de usuário), e-mail, CNPJ, inscrição (estadual ou municipal), CPF dos sócios, nome dos sócios, endereço completo e telefones de contato.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Durante os leilões, coletamos o endereço IP de todos que efetuam lances, bem como os respectivos horários dos acessos.</span>
+   <br>
+   <br>
+	<span class="Letra16 CorCinzaEsc">É importante destacar que você não é obrigado a nos fornecer seus dados pessoais. No entanto, caso você não forneça seus dados pessoais, não será possível utilizar os serviços disponíveis, ou a capacidade de fornecer serviços a você poderá ser significativamente prejudicada, podendo, inclusive, ocasionar a suspensão dos serviços prestados a você.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">3) Como usamos seus dados pessoais</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">A leiloeira&nbsp;Ana Lúcia Gomes de Sá utiliza os seus dados pessoais para poder prestar um serviço de alta qualidade a você. Detalhamos a seguir as finalidades para as quais utilizamos os seus dados pessoais.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Utilizamos seus dados pessoais para que sejam cumpridas obrigações legais e/ou regulatórias as quais esteja sujeito. Assim, poderá armazenar e/ou transmitir dados pessoais ao órgão ou autoridade que a legislação aplicável determinar, nos termos do inciso II, do artigo 7º, da LGPD.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Para criação de acesso em nossa estrutura. Isso permite a você acessar nosso site de maneira segura e com rastreabilidade, atendendo aos requisitos de auditoria e segurança da informação.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Os documentos pessoais são necessários para garantir a autenticidade do solicitante do cadastro.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">E-mails e telefones e mensagens são utilizados para ativação da conta e outras informações relevantes ao leilão, envio de link de agendamento de retirada e avisos de ofertas mediante expressa autorização no cadastro.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Para participar de cada leilão, você precisará ler atentamente o edital, as condições de venda e pagamento e se estiver de acordo, dar o seu aceite através da habilitação no leilão.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">E em caso de arrematação, os dados cadastrais serão utilizados para emissão de Ata/Auto de Arrematação ou Nota de Venda em Leilão.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">4) Compartilhamento de dados pessoais</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Em caso de arrematação, seus dados cadastrais serão repassados aos Comitentes Vendedores (Proprietários dos bens leiloados), para formalização da venda. Nesse momento será necessário, para garantir a autenticidade da arrematação, a apresentação de seus documentos pessoais.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Além disso, também existem outras hipóteses em que seus dados poderão ser compartilhados, que são:</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Determinação legal, requerimento, requisição ou ordem judicial, com autoridades judiciais, administrativas ou governamentais competentes.</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Proteção dos direitos da&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá em qualquer tipo de conflito, inclusive os de teor judicial.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">5) Retenção e exclusão dos seus dados pessoais</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Enquanto você tiver um cadastro ativo com a&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá, manteremos seus dados pessoais conosco e em segurança.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Exclusão: Para solicitar a exclusão de seus dados entre em contato (via e-mail ou telefone) diretamente com nosso departamento de cadastro. Caso não tenha realizado nenhuma compra, todos os seus dados cadastrais serão excluídos. Se houver compra realizada, seu cadastro do site será excluído, porém, os documentos e arquivos gerados a partir de seus dados serão mantidos.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Em qualquer uma das duas situações, os dados já presentes nos logs de segurança ou de auditoria, os registros de suporte ou os registros de transação de negócios podem ser mantidos para os seus respectivos propósitos e atendimento às exigências legais.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">6) Seus direitos como titular de dados pessoais</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">A partir da entrada em vigor da LGPD, você, como titular de dados pessoais, pode exercer seus direitos frente aos controladores dos seus dados pessoais. A qualquer tempo você poderá exercer seus direitos:</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Confirmação da existência de tratamento de dados pessoais.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Acesso aos dados pessoais, mediante adequada identificação pessoal e uso de senha, para que não haja prejuízo ao princípio da segurança.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Correção de dados pessoais incompletos, inexatos ou desatualizados.  Você poderá ter acesso aos seus dados cadastrais a qualquer momento em nosso site, através da opção “Área do Cliente” no menu superior, ou entrando em contato (via e-mail ou telefone) diretamente com nosso departamento de cadastro para solicitar alterações e/ou atualizações, caso necessite.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Se você verificar que os seus dados pessoais estão incompletos, inexatos ou desatualizados, você pode pedir a correção ou complementação. Para isso, você precisará enviar um documento que comprove a forma correta e atual do dado pessoal.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Caso qualquer dado pessoal seja tratado de forma desnecessária, em excesso para a finalidade a que se destina ou em desconformidade com a LGPD, você pode solicitar o bloqueio ou eliminação desses dados, desde que fique efetivamente constatado o excesso, a falta de necessidade ou a desconformidade com a lei.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Revogação do consentimento
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Caso você tenha dado o seu consentimento para tratamento dos seus dados pessoais, você pode solicitar a revogação desta autorização. A revogação do consentimento pode resultar na impossibilidade de uso de nosso serviço.
+</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">7) Cookies</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">O que são cookies?</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Como é prática comum com quase todos os sites profissionais, este site usa cookies, que são pequenos arquivos que são baixados no seu computador, para melhorar a sua experiência. Esta página descreve que informações reúnem, como usá-las e por que, às vezes, precisamos armazenar esses cookies. Também compartilharemos como você pode evitar que esses cookies sejam armazenados, contudo isso pode prejudicar ou ‘quebrar’ alguns elementos da funcionalidade dos sites.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Como usamos cookies</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Usamos cookies para uma variedade de motivos detalhados abaixo. Infelizmente, na maioria dos casos, não há opções padrão da indústria para desabilitar os cookies sem desabilitar completamente a funcionalidade e os recursos que eles adicionam a este site. Recomenda-se que você deixe todos os cookies ativos, se você não tiver certeza se precisa deles ou não no caso em que forem usados para oferecer um serviço que você usa.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Os cookies que definimos</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Cookies técnicos: necessários para o bom funcionamento do site, eles são usados para fins de navegação ou para fornecer um serviço solicitado pelo usuário; eles não são usados para outros fins e geralmente são instalados pelo dono do site.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Cookies de terceiros (third party): são transmitidos, sem o controle do responsável pelo site, por terceiros (exemplo: Google Maps, Youtube, Linkedin e Twitter), que podem interceptar o usuário também enquanto navega em outro site. Esses cookies, normalmente persistentes, não podem ser controlados diretamente pelo administrador. Portanto, não pode garantir como os proprietários de terceiros usam as informações coletadas.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Desabilitando cookies</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Você pode evitar a configuração de cookies ajustando as configurações no seu navegador (veja a Ajuda do seu navegador para como fazer isso). Esteja ciente de que desabilitar cookies afetará a funcionalidade deste e de muitos outros sites que você visitar. Desabilitar cookies normalmente resultará em também desabilitar certas funcionalidades e recursos deste e outros sites. Portanto, recomenda-se que você não desabilite cookies.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Todas as tecnologias utilizadas por nós sempre respeitarão os termos desta Política de Privacidade.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">8) Medidas de segurança</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">A leiloeira&nbsp;Ana Lúcia Gomes de Sá usa diversos tipos de medidas de segurança para garantir a integridade de seus dados pessoais, como padrões de segurança de informação praticados pela indústria quando coleta e armazena dados pessoais.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Os dados pessoais podem, ainda, ser armazenados por meios de tecnologia de cloud computing e outras tecnologias que surjam futuramente, visando sempre a melhoria e aperfeiçoamento de nossos serviços e segurança.
+</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Tratamos a segurança dos seus dados pessoais com o máximo de cuidado, utilizando padrões e melhores práticas adotados no mercado. Temos uma equipe robusta, altamente qualificada e responsável por garantir as melhores práticas de segurança, dentre elas:</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Comunicação por protocolo seguro;</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Armazenamento em local seguro;</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Controle de acesso por níveis;</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Segurança de rede por Firewall;</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Tratamento via rede privada;</span>
+   <br>
+   <span class="Letra16 CorCinzaEsc">- Backup.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Recomendamos ainda que você nunca compartilhe sua senha com ninguém, ela é pessoal e intransferível, e sempre tome cuidado ao postar seus dados pessoais em redes sociais ou qualquer outro ambiente público. </span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">9) Consentimento</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Ao longo desta Política de Privacidade, informamos que alguns dados pessoais somente serão coletados pela&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá com o seu consentimento. Da mesma forma, esses dados pessoais somente poderão ser tratados mediante autorização e para as finalidades descritas nesse documento.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Ao ler esta Política de Privacidade e clicar, ao final, em "Eu li e estou ciente das condições de tratamento dos meus dados pessoais e forneço meu consentimento, quando aplicável, conforme descrito na POLÍTICA DE PRIVACIDADE.", você consente com o tratamento dos dados pessoais nas formas aqui indicadas.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Vale lembrar que o tratamento de seus dados pessoais é condição necessária para que possamos prestar nossos serviços. Caso você tenha dúvidas sobre qualquer um dos termos explicados aqui, estamos à disposição em nossos canais de atendimento para ajudá-lo.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">10) Alterações a essa Política de Privacidade </span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Essa Política de Privacidade poderá ser alterada a qualquer tempo. Toda vez que alguma condição relevante desta Política de Privacidade for alterada, essas alterações serão válidas, eficazes e vinculantes após a nova versão ser divulgada no nosso site ou enviada por e-mail para você.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Prezamos sempre pela transparência: toda vez que uma alteração relevante for feita, nós enviaremos um comunicado a você indicando a nova versão vigente. Ao continuar a usar nossos produtos e serviços após uma alteração na Política de Privacidade, você estará concordando com as novas condições – mas você sempre pode manifestar a sua discordância por meio dos nossos canais de atendimento, se for o caso.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Nas hipóteses em que as alterações a esta Política de Privacidade resultarem em mudanças nas práticas de tratamento de dados pessoais que dependam do seu consentimento, solicitaremos o seu consentimento com os novos termos da Política de Privacidade em relação ao tratamento de dados e finalidades indicados.</span>
+   <br>
+   <br>
+ 	<span class="Letra18 CorCinzaEsc Negrito">11) Fale Conosco</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Segundo a Lei nº 13.709/2018, a&nbsp;leiloeira&nbsp;Ana Lúcia Gomes de Sá é considerado o “Controlador” dos seus dados pessoais. Se após a leitura desta Política de Privacidade você ainda tiver qualquer dúvida, ou por qualquer razão precisar se comunicar conosco para assuntos envolvendo os seus dados pessoais, você pode entrar em contato pelos canais divulgados no rodapé do site.</span>
+   <br>
+   <br>
+   <span class="Letra16 CorCinzaEsc">Estamos sempre à disposição para esclarecer suas dúvidas e colocar você no controle dos seus dados pessoais.</span>
+   
+
+		</div>      
+	</div>
+</div>
+
+
+
+
+
+<script language="JavaScript">
+
+var vAcm='';
+if(vAcm!=''){
+	if(String(vAcm).substring(0,8)=='polpriv#'){
+		abreAceitePolPriv();
+	}else{
+		abreLoginTrocaSenha();
+	}
+}
+
+
+</script>
+
+<div id="divBanners1" class="Banners" style="top:219px; background-color:#b2c7b2; display:none;" onClick="abrirLink('0');">
+
+	<div class="BannerLateral" style="padding-top:10px;"></div>
+	<div class="BannerContainer" style="margin-top:20px;">
+
+		<div id="divBanner1" class="Banner">
+
+
+			<div id="divBaseTexto" style="position:absolute; top:0px; left:0px; height:240px; width:33%; background-color:#b2c7b2;"></div> 
+			<div id="divImagem" style="position:absolute; top:0px; left:33%; height:240px; width:67%;"><img src="Arquivos/Banners/BANN_17_Capturar1.JPG" width="100%" height="240"></div>
+			<div id="divTransicao" style="position:absolute; top:0px; left:33%; height:240px; width:8%; background: -moz-linear-gradient(90deg, rgba(178,199,178,1) 0%, rgba(178,199,178,0.75) 50%, rgba(178,199,178,0) 100%); /* FF3.6-15 */; background: -webkit-linear-gradient(90deg, rgba(178,199,178,1) 0%, rgba(178,199,178,0.75) 50%, rgba(178,199,178,0) 100%); /* Chrome10-25,Safari5.1-6 */; background: linear-gradient(90deg, rgba(178,199,178,1) 0%, rgba(178,199,178,0.75) 50%, rgba(178,199,178,0) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */ ; filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='b2c7b2', endColorstr='b2c7b2',GradientType=1 );/* IE6-9 */;"></div>
+
+			<div id="divTexto" style="position:absolute; top:0px; left:2%; height:240px; width:35%;"><span style="position:absolute; width:100%; bottom:0px; color:000000;"><p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:22px"><span style="color:#000000"><strong>CADASTRE-SE&nbsp;NO&nbsp;SITE &Eacute; SIMPLES R&Aacute;PIDO E GRATUITO</strong></span></span></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><span style="color:#000000"><strong>D&Ecirc;&nbsp;SEU LANCE ONLINE</strong></span></span></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><span style="color:#000000"><strong>BONS NEG&Oacute;CIOS S&Atilde;O FEITOS</strong></span></span></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><span style="color:#000000"><strong>DE GRANDES OPORTUNIDADES</strong></span></span></span></p>
+</span></div>
+
+
+		</div>
+	</div>
+</div>
+
+
+
+
+<div id="divBanners2" class="Banners" style="top:219px; background-color:#b0c9b1; display:none;" onClick="abrirLink('0');">
+
+	<div class="BannerLateral" style="padding-top:10px;"></div>
+	<div class="BannerContainer" style="margin-top:20px;">
+
+		<div id="divBanner2" class="Banner">
+
+
+			<div id="divImagem" style="position:absolute; top:0px; left:0px; height:240px; width:67%;"><img src="Arquivos/Banners/BANN_19_Capturar1.JPG" width="100%" height="240"></div>
+			<div id="divBaseTexto" style="position:absolute; top:0px; left:67%; height:240px; width:33%; background-color:#b0c9b1;"></div> 
+			<div id="divTransicao" style="position:absolute; top:0px; left:59%; height:240px; width:8%; background: -moz-linear-gradient(270deg, rgba(176,201,177,1) 0%, rgba(176,201,177,0.75) 50%, rgba(176,201,177,0) 100%); /* FF3.6-15 */; background: -webkit-linear-gradient(270deg, rgba(176,201,177,1) 0%, rgba(176,201,177,0.75) 50%, rgba(176,201,177,0) 100%); /* Chrome10-25,Safari5.1-6 */; background: linear-gradient(270deg, rgba(176,201,177,1) 0%, rgba(176,201,177,0.75) 50%, rgba(176,201,177,0) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */ ; filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='b0c9b1', endColorstr='b0c9b1',GradientType=1 );/* IE6-9 */;"></div>
+
+			<div id="divTexto" style="position:absolute; top:0px; left:63%; height:240px; width:35%; /*border:1px solid #0000FF;*/"><span style="position:absolute; width:100%; bottom:0px; color:#000000;"><p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><strong><span style="font-size:24px">FIQUE POR DENTRO DA AGENDA DE LEIL&Otilde;ES</span></strong></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><strong>JUDICIAIS/ PATRIMONIAIS/ EXTRAJUDICIAIS</strong></span></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><strong>IM&Oacute;VEIS, SALAS COMERCIAIS E OUTROS</strong></span></span></p>
+
+<p style="text-align:center"><span style="font-family:Arial,Helvetica,sans-serif"><span style="font-size:20px"><strong>CADASTRE-SE EM NOSSO SITE&nbsp;</strong></span></span></p>
+</span></div>
+
+
+		</div>
+	</div>
+</div>
+
+
+
+<div class="Banner_navegs" align="center">
+
+	<div style="position:relative; display:inline; height:9px; width:11px; padding-left:10px; padding-right:10px;">
+		<div id="divBanner1_naveg" class="Banner2_naveg" onclick="iniciaBanner(0,2);"></div>
+	</div>
+
+	<div style="position:relative; display:inline; height:9px; width:11px; padding-left:10px; padding-right:10px;">
+		<div id="divBanner2_naveg" class="Banner2_naveg" onclick="iniciaBanner(1,2);"></div>
+	</div>
+
+</div>
+
+<script language="JavaScript">
+
+var vX_b="2";
+var vCont;
+
+if(vX_b==1){
+	document.getElementById('divBanners1').style.display='';
+}else if(vX_b>1){
+	iniciaBanner(0,vX_b);
+}
+
+function iniciaBanner(vB,vT){
+
+	clearTimeout(vCont);
+	var i;
+	for (i = 0; i < vT; i++) {
+		document.getElementById('divBanners'+(i+1)).style.display='none';
+		document.getElementById('divBanner'+(i+1)+'_naveg').className='Banner2_naveg';
+	}
+	document.getElementById('divBanners'+(vB+1)).style.display='';
+	document.getElementById('divBanner'+(vB+1)+'_naveg').className='Banner2_navegSel';
+	vB=vB+1;
+	if(vB==vT){
+		vB=0;
+	}
+	contadorBanner(0,vB,vT);
+}
+
+function contadorBanner(vC,vB,vT){
+	if(vC>60){
+		iniciaBanner(vB,vT);
+	}else{
+		vC=vC+1;
+		vCont=setTimeout('contadorBanner('+vC+','+vB+','+vT+')', 100);
+	}
+}
+
+function abrirLink(vN){
+	if(vN==0){
+	}else{
+		abrirDetalhesLeilao(vN);
+	}	
+}
+
+</script>
+
+<div style="position:absolute; top:538; display:-webkit-flex; display:flex; width:100%; left:0px; height:auto;">
+	<div style="position:absolute; width:78%; min-width:964px; top:0px; left:11%; height:auto; cursor:pointer;" onClick="javascrit:window.open('Art895.asp','_self');">
+		<div style="position:absolute; top:0px; left:0px; width:100%; height:auto; border:2px solid #d1b7b7;"><img src="Imagens/imgBannerPagParcelado.png" width="100%"></div>
+	</div>
+</div>
+
+
+
+<div class="Anuncio1_container" style="margin-top:638px; height:1px;"></div>
+<div style="clear: both;"></div>
+
+
+		
+<div style="float:left; left:0px; width:11%; height:100px;"></div>
+		
+<div id="divAnuncio1_1" class="Anuncio1_1" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20051884901063009060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/003689/003689_000000_05_7443.png" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 3689/2026</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #0b7500; border-bottom:1px solid #0b7500">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#0b7500; float:left;">
+            <div class="Anuncio1_data" style="color:#FFFFFF; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#FFFFFF; top:26%;//9px; font-size:.8rem;" align="center">04/11/2026 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">11/11/2026 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APARTAMENTO DE 62M2 - GLORIA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SITUADO NA RUA SANTO AMARO, Nº 172 - APTO 205 - GLORIA</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="ABERTO PARA LANCES" class="classBotao" style="background-color: #0b7500; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#0b7500';" onmouseover="this.style.backgroundColor='#085a00';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_2" class="Anuncio1_2" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041814601062008060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002616/002616_000000_05_5916.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2616/2023</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">05/09/2023 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">13/09/2023 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SALA COM 18M2 - CENTRO</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SITUADA NA RUA CARLOS SAMPAIO, Nº 351 - CENTRO/RJ</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_3" class="Anuncio1_3" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20031824001062003060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002620/002620_000000_05_5933.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2620/2023</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">05/10/2023 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">09/10/2023 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APTO DE 52M2 - JACAREPAGUÁ/RJ</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SITUADO NA RUA GIOVANI DE CASTRO, 230 - BLOCO II - APTO 103 - FREGUESIA/RJ</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_4" class="Anuncio1_4" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041834501062009060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002635/002635_000000_05_6058.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2635/2024</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">27/02/2024 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">05/03/2024 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APTO DE 40M2 - - VILA ISABEL</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">RUA TORRES HOMEM, Nº 699 - APTO 203</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+
+<div style="clear: both; height:30px; width:100%;"></div>
+		
+<div style="float:left; left:0px; width:11%; height:100px;"></div>
+		
+<div id="divAnuncio1_1" class="Anuncio1_1" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041834801062002060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002638/002638_000000_05_6075.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2638/2024</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">04/04/2024 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">11/04/2024 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SALA  DE 24M2 - CENTRO</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">RUA ALVARO ALVIM, Nº 48 - SALA 814 - CENTRO</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_2" class="Anuncio1_2" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041834901062003060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002639/002639_000000_05_6076.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2639/2024</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">08/05/2024 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">15/05/2024 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APTO DE 53M2 E VAGA - BARRA </div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">AV. ADOLPHO DE VASCONCELOS, 204 - BLOCO 01 E VAGA DE GARAGEM - BARRA DA TIJUCA</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_3" class="Anuncio1_3" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041864101062008060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002661/002661_000000_05_6213.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2661/2024</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">28/11/2024 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">05/12/2024 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APTO DE 45M2  E VAGA  - VAZIO </div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SITUADO NA AV. BRAS DE PINA, Nº 1427  VILA DA PENHA/RJ - DE FRENTE E VAZIO</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_4" class="Anuncio1_4" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041864201062009060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="imagens/ImgPadrao.gif" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online/Presencial</div>
+      <div class="Anuncio1_cod">Cód 2662/2025</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">08/04/2025 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">15/04/2025 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">LOJA DE 18M2 - COPACABANA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">LOJA NA RUA SIQUEIRA CAMPOS, Nº 143 - LOJA 89</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+
+<div style="clear: both; height:30px; width:100%;"></div>
+		
+<div style="float:left; left:0px; width:11%; height:100px;"></div>
+		
+<div id="divAnuncio1_1" class="Anuncio1_1" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041864301062000060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002663/002663_000000_05_6236.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2663/2025</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">08/05/2025 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">15/05/2025 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APARTAMENTO DE 52M2 - PENHA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">NA RUA PATAGONIA, Nº 16 - BLOCO II - APTO 707 - PENHA</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_2" class="Anuncio1_2" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041864401062001060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/002664/002664_000000_05_7251.JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 2664/2025</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">20/08/2025 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">27/08/2025 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APARTAMENTO DE 52M2 - PENHA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">NA RUA PATAGONIA, Nº 16 - BLOCO 01 -  APTO 1410 - PENHA</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_3" class="Anuncio1_3" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041874101063000060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/003671/003671_000000_05_7280.jpg" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 3671/2025</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">23/09/2025 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">30/09/2025 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">LOJA DE 28M2 NA  PENHA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">SITUADA NA RUA SÃO CAMILO, Nº 56 LOJA  H</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+		
+<div class="Anuncio1_entre1" style="width:2.34%; min-width:15px;"></div>
+		
+<div id="divAnuncio1_4" class="Anuncio1_4" style="width:17.75%; min-width:226px; position:relative; height:auto; min-height:360px; float:left; aspect-ratio: 226 / 360; //border:3px solid #FF0000" onClick="abrirDetalhesLeilao('20041874301063002060001');">
+
+	<div class="Anuncio1_img" style="position:relative ;max-height:58%; //z-index:-1;">
+     	<img src="Arquivos/003673/003673_000000_05_7301..JPG" width="100%">
+      <div class="Anuncio1_grad" style="position:absolute; top:0px; left:0px;//z-index:1;"></div>
+      <div class="Anuncio1_tipo">Online</div>
+      <div class="Anuncio1_cod">Cód 3673/2025</div>
+
+		
+   </div>
+
+	<div style="position:relative; margin-top:0px; width:100%; min-width:226px; left:0px; border-top:1px solid #813838; border-bottom:1px solid #813838">
+
+
+      <div style="position:relative; margin-top:0px; left:0px; width:100%; height:11%; min-height:40px;">
+         <div style="position:relative; margin-top:0px; left:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:16%;//5px; font-size:.8rem;" align="center">1º Leilão</div>
+            <div class="Anuncio1_data" style="color:#3b3b3b; top:26%;//9px; font-size:.8rem;" align="center">04/11/2025 13:00h</div>
+         </div>
+         <div style="position:relative; margin-top:0px; width:50%; height:100%; min-height:40px; background-color:#dcdcdc; float:left;">
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:16%; font-size:.8rem;" align="center">2º Leilão</div>
+            <div class="Anuncio1_data" style="color: #3b3b3b; top:26%; font-size:.8rem;" align="center">11/11/2025 13:00h</div>
+         </div>
+		</div>
+
+   </div>
+
+	<div style="position:relative; margin-top:0px; left:0px; width:100%; height:23%; min-height:80px;">
+		<div class="Anuncio1_faixa" style="top:0px; height:100%;">
+         <div class="Anuncio1_tit"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">APARTAMENTO DE 76M2 E VAGA</div></div>
+         <div class="Anuncio1_descr"><div style="margin-left:8px; margin-right:8px; font-size: clamp(11px, 0.8rem, 12px);">NA RUA FABIO LUZ,. Nº 275 - BL. 03 - APTO 204 - MÉIER</div></div>
+		</div>
+   </div>
+
+	<div style="position:absolute; bottom:0px; left:0px; width:100%; height:8%; min-height:30px;">
+		<div class="Anuncio1_botao" style="position:absolute; top:0px; height:100%;"><input type="button" name="btnCons" id="btnCons" value="VENDIDO" class="classBotao" style="background-color: #813838; width:100%; height:100%; line-height:100%;" onmouseout="this.style.backgroundColor='#813838';" onmouseover="this.style.backgroundColor='#611515';"></div>
+   </div>
+
+</div>
+
+
+<div style="clear: both; height:30px; width:100%;"></div>
+
+
+<div style="position:relative; left:11%; margin-top:0px; width:100%; height:1px;">
+	<div class="Anuncio1_linha"></div>
+</div>
+
+
+
+<div class="Anuncio1_rodape" style="margin-top:30px; //top:748px; /*border:1px solid #0000FF*/">
+   <div class="Anuncio1_rodapelateral" style="height:10px;"></div>
+   <div class="Anuncio1_seletores">
+      <div class='Anuncio1_seletor' align='center' onClick='pagina(4);'><div class='Anuncio1_seletorStr'>>></div></div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletor' align='center' onClick='pagina(2);'><div class='Anuncio1_seletorStr'>></div></div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletor' align='center' onClick='pagina(4);'>4</div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletor' align='center' onClick='pagina(3);'>3</div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletor' align='center' onClick='pagina(2);'>2</div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletorSel' align='center'>1</div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletorIna' align='center'><div class='Anuncio1_seletorStr'><</div></div><div class="Anuncio1_seletorEsp"></div><div class='Anuncio1_seletorIna' align='center'><div class='Anuncio1_seletorStr'><<</div></div><div class="Anuncio1_seletorEsp"></div>
+   </div>
+</div>
+
+
+<div style="position:relative; width:100%; width:100vw; margin-top:0px; margin-left:0px; margin-right:0px; padding-left:0px; padding-right:0px;">
+	<script language="JavaScript">
+
+function enviarCadasInf(){
+	var vEnv='S';
+	if(document.getElementById('txtNome_inf').value==''||document.getElementById('txtEMail_inf').value==''){
+		vEnv='N';
+		alert('Todos os campos são de preenchimento obrigatório.');
+	}
+	if(vEnv=='S'){
+	
+		var vEMail=document.getElementById('txtEMail_inf').value;
+		while(vEMail.indexOf(" ")!=-1){
+			vEMail=vEMail.replace(" ","");
+		}
+		vEMail=vEMail.toLowerCase(); 
+		var vErrados="áàãâäéèêëíìîïóòõôöúùûüç";
+		var vCertos= "aaaaaeeeeiiiiooooouuuuc";
+		for (i = 0; i < vErrados.length; i++){
+			vEMail=vEMail.replace(vErrados.substr(i,1),vCertos.substr(i,1));
+		}
+	
+		var vUsuario = vEMail.substring(0, vEMail.indexOf("@"));
+		var vDominio = vEMail.substring(vEMail.indexOf("@")+ 1, vEMail.length);
+	
+		if((vUsuario.length >=1) &&
+		 (vDominio.length >=3) && 
+		 (vUsuario.search("@")==-1) && 
+		 (vDominio.search("@")==-1) &&
+		 (vUsuario.search(" ")==-1) && 
+		 (vDominio.search(" ")==-1) &&
+		 (vDominio.search(".")!=-1) &&      
+		 (vDominio.indexOf(".") >=1)&& 
+		 (vDominio.lastIndexOf(".") < vDominio.length - 1)){
+		}else{
+			vEnv='N';
+			alert('E-MAIL inválido.');
+			document.getElementById("txtEMail_inf").value='';
+			document.getElementById("txtEMail_inf").placeholder='Digite o seu e-mail';
+			document.getElementById("txtEMail_inf").focus();
+			vOk="N";
+		};
+	}
+	
+	if(vEnv=='S'){
+		document.frm1N.action='CadastroNews_G.asp';
+		document.frm1N.n.value=document.getElementById('txtNome_inf').value;
+		document.frm1N.e.value=document.getElementById('txtEMail_inf').value;
+		frm1N.submit();
+	}
+}
+
+function toScrollto(){
+	if(window.scrollY!=0){
+  		setTimeout(function() {
+    	window.scrollTo(0,window.scrollY-10);
+      toScrollto();
+    	}, 1);
+   }
+}
+
+</script>
+<div id="divRodape1_topo1" class="Rodape1_btn_topo" style="top: -20px;" align="center" onclick="toScrollto();"><div class="Rodape1_stretch">^</div></div>
+<div id="divRodape1_topo2" class="Rodape1_linha" style="top: 0px;"></div>
+
+<div id="divRodape1_topo3" class="Rodape1_container" style="top: 5px;">
+
+   <div class="Rodape1_lateral" style="top:0px; /*border:1px solid #00FFFF;*/"></div>
+   <div class="Rodape1_inside" style="top:0px; height:320px; /*border:1px solid #0000ff;*/">
+
+		<div class="Rodape1_bloco1">
+
+         <div style="position: absolute; top: 30px; left: 8px;"><img src="Imagens/imgMartelo.png" height="23" width="23"></div>
+         <div class="Rodape1_textos" style="top: 33px; color: #ffffff; font-weight: bold;">Ana Lúcia Gomes de Sá</div>
+   
+         <div style="position: absolute; top: 60px; left: 8px;"><img src="Imagens/imgEMail.png" height="23" width="23"></div>
+         <div class="Rodape1_textos" style="top: 62px; left:41px"><a href="mailto:analuciasaleiloeira@gmail.com" class="EMail">analuciasaleiloeira@gmail.com</a></div>
+   
+         <div style="position: absolute; top: 90px; left: 8px;"><img src="Imagens/imgPhone.png" height="23" width="23"></div>
+         <div class="Rodape1_textos" style="top: 92px"><a href="tel:2125329443" class="EMail">21 2532-9443</a>&nbsp;/&nbsp;<a href="tel:21993835890" class="EMail">21 99383-5890 (Home office)</a></div>
+   
+         <div style="position: absolute; top: 120px; left: 8px;"><img src="Imagens/imgLocal.png" height="23" width="23"></div>
+         <div class="Rodape1_textos" style="top: 122px">Rua do Carmo, 6 - Sala 1308 - Centro</div>
+         <div class="Rodape1_textos" style="top: 142px">Rio de Janeiro - RJ</div>
+
+		</div>
+
+		<div class="Rodape1_bloco2">
+     		<div class="Rodape1_bloco_meio_titulo negrito" style="color:#ffffff;">Receba nossos informativos</div>
+         <div class="Rodape1_base_txt_nome" align="right"><input name="txtNome_inf" type="text" id="txtNome_inf" maxlength="250" placeholder="Digite o seu nome" class="Rodape1_txt_nome"></div>
+         <div class="Rodape1_icon_nome"><img src="Imagens/imgLoginIntra.png" width="18" height="18"></div>
+         <div class="Rodape1_base_txt_email" align="right"><input name="txtEMail_inf" type="text" id="txtEMail_inf" maxlength="250" placeholder="Digite o seu e-mail" class="Rodape1_txt_email"></div>
+         <div class="Rodape1_icon_email"><img src="Imagens/imgEMailIntra.png" width="18" height="18"></div>
+         <div class="Rodape1_botao_enviar"><input type="button" name="btnEnviar" id="btnEnviar" value="ENVIAR" class="classBotao" onClick="enviarCadasInf();" style="width: 250px; background-color:#ff9000" onmouseover="this.style.backgroundColor='#CC6600';" onmouseout="this.style.backgroundColor='#ff9000';"></div>
+		</div>   
+
+		<div class="Rodape1_bloco3">
+     		<div class="Rodape1_bloco_dir_titulo negrito" style="color:#ffffff;">Informações</div>
+      	<div style="position: absolute; top: 40px; width:100%;" align="left"><a href="#void" onclick="acionarMenu('TERMOS');" class="EMail">Termos de uso</a></div>
+      	<div style="position: absolute; top: 70px; width:100%;" align="left"><a href="#void" onclick="acionarMenu('POLPRIV');" class="EMail">Política de Privacidade</a></div>
+      	<div style="position: absolute; top: 100px; width:100%;"><a href="#void" onclick="acionarMenu('CONTATO');" class="EMail">Contato</a></div>
+      	<div style="position: absolute; top: 130px; width:100%;"><a href="#void" onclick="acionarMenu('AJUDA');" class="EMail">Ajuda</a></div>
+		</div>   
+
+		<div class="Rodape1_bloco4">
+         <div class="RodapeMSIS_logo"><a href="https://www.msis.com.br" target="_blank"><img src="Imagens/imgLogoMSIS2.gif" width="27" height="27" border="0"></a></div>
+         <div class="RodapeMSIS_textos" style="color:#cccccc;">desenvolvido por</div>
+		</div>
+
+   </div>
+
+</div>
+
+<form name="frm1N" id="frm1N" method="post">
+<input name="e" type="hidden" id="e">
+<input name="n" type="hidden" id="n">
+</form>
+</div>
+
+
+</body>
+</html>
+<form name="frm1" id="frm1" method="post">
+<input type="hidden" name="pesq" id="pesq">
+<input type="hidden" name="dest">
+<input type="hidden" name="pag">
+<input type="hidden" name="n">
+<input type="hidden" name="e">
+<input type="hidden" name="acaoDest" id="acaoDest">
+</form>
+<script language="JavaScript">
+
+document.getElementById('acaoDest').value='S';
+document.getElementById('pesq').value='';
+
+function pagina(vP){
+	document.frm1.action='Principal.asp';
+	document.frm1.pag.value=vP;
+	frm1.submit();
+}
+
+function listarConsulta(vT){
+	if(vT=='0'){vT='N'}
+	if(vT=='1'){vT='S'}
+	document.frm1.action='Principal.asp';
+	document.getElementById('acaoDest').value=vT;
+	frm1.submit();
+}
+
+function abrirDetalhesLeilao(vZ){
+	document.frm1.action='Leilao.asp?zz='+vZ;
+	frm1.submit();
+}
+
+function limparBusca(){
+	document.frm1.action='Principal.asp';
+	document.getElementById('acaoDest').value='';
+	document.getElementById('pesq').value='';
+	frm1.submit();
+}
+	
+</script>

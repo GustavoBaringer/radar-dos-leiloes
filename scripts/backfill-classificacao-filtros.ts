@@ -86,7 +86,7 @@ export function validateChange(c: any): c is Change {
   return !!c && Number.isSafeInteger(c.id) && c.id > 0 && scopeAllows(c.source, 'veiculo') &&
     (c.externalId === null || typeof c.externalId === 'string') && FIELD_SET.has(c.field) &&
     (c.before === null || typeof c.before === 'string') && typeof c.after === 'string' &&
-    (c.field === 'vehicle_type' ? ['carro', 'picape', 'suv'].includes(c.before) && ['moto', 'maquina', 'nautico', 'caminhao'].includes(c.after) : c.source === 'vlance' && c.before === 'judicial' && DOC_SET.has(c.after)) &&
+    (c.field === 'vehicle_type' ? ((['carro', 'picape', 'suv'].includes(c.before) && ['moto', 'maquina', 'nautico', 'caminhao'].includes(c.after)) || (c.before === 'caminhao' && c.after === 'maquina')) : c.source === 'vlance' && c.before === 'judicial' && DOC_SET.has(c.after)) &&
     typeof c.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(c.fingerprint);
 }
 type SourceEvidence = { externalId: string; leilaoId: string; host: string; docType: string | null; origin: string | null; ambiguous: boolean; title: string };
@@ -179,9 +179,14 @@ async function build(cache: Map<string, SourceEvidence>): Promise<{ report: any;
   for (const r of rows) {
     const fp = fingerprint(r);
     const strong = evidenceDoTitulo(r.title_raw, r.source_category);
-    if (strong && ['carro', 'picape', 'suv'].includes(String(r.vehicle_type)) && strong !== r.vehicle_type) {
+    const podeTrocar =
+      strong &&
+      strong !== r.vehicle_type &&
+      (['carro', 'picape', 'suv'].includes(String(r.vehicle_type)) ||
+        (r.vehicle_type === 'caminhao' && strong === 'maquina'));
+    if (podeTrocar) {
       changes.push({ id: r.id, source: r.source_id, externalId: r.external_id, field: 'vehicle_type', before: r.vehicle_type, after: strong,
-        evidence: { origin: 'titulo+source_category', rule: 'tipoForteDoTitulo; tipo forte moto/maquina/nautico/caminhao; troca apenas de carro/picape/suv' }, fingerprint: fp });
+        evidence: { origin: 'titulo+source_category', rule: 'tipoForteDoTitulo; tipo forte moto/maquina/nautico/caminhao; troca de carro/picape/suv ou caminhao->maquina' }, fingerprint: fp });
     }
     if (isJudicial(r) && confirmar) {
       if (ambiguous.has(r.id)) { skipped.push({ id: r.id, source: r.source_id, reason: 'fonte ausente/conflitante ou identidade não confirmada' }); continue; }

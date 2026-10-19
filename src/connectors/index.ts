@@ -38,13 +38,14 @@ import { rochaleiloes } from './rochaleiloes.js';
 import { docxhtml } from './docxhtml.js';
 import { maycosantos } from './maycosantos.js';
 import { htmlagenda } from './htmlagenda.js';
-import { rocketleiloes, savoyleiloes } from './supabaseleiloes.js';
+import { supabaseTenants } from './supabaseleiloes.js';
 import { mcleilao } from './mcleilao.js';
 import { vipleiloes } from './vipleiloes.js';
 import { portalPublic, ghvmPublic } from './reviewed-public.js';
 import { leiloesbrasilPublic } from './leiloesbrasil-public.js';
 import { celsocunha } from './celsocunha.js';
 import { coliseumPublic } from './coliseum-public.js';
+import { msis } from './msis.js';
 
 export const connectors: Connector[] = [
   coliseumPublic,
@@ -52,8 +53,9 @@ export const connectors: Connector[] = [
   leiloar, leiloesbr, leilotech, bomvalormercado, sishp, leilovia, megaleiloes, grupolance, portalzuk, parquedosleiloes,
   benedetto, paulobotelho, tableau, schulmann, karlapepe, leiloesbraga, lucianleiloes,
   hastapublica, flexleiloes, alfaleiloes, casadeleiloes, grupocarvalho, simonleiloes, globoleiloes, leiloesfreire, rochaleiloes,
-  docxhtml, maycosantos, htmlagenda, rocketleiloes, savoyleiloes, mcleilao, vipleiloes, portalPublic, ghvmPublic, leiloesbrasilPublic,
+  docxhtml, maycosantos, htmlagenda, ...supabaseTenants, mcleilao, vipleiloes, portalPublic, ghvmPublic, leiloesbrasilPublic,
   celsocunha, ...supraTenants,
+  msis,
 ];
 
 export function getConnector(id: string): Connector | undefined {

@@ -13,8 +13,7 @@ export function createLiveBidReaders(io: ReaderIO = { fetchText: httpFetchText, 
   return { status: r.status, data: r.ok ? await r.json() : null };
 } }) {
   const lerJson = async (url: string): Promise<{ ok: boolean; status: number; data: any }> => {
-    try { const r = await io.fetchJson(url, { timeoutMs: FIREBASE_TIMEOUT_MS }); return { ok: r.status >= 200 && r.status < 300, status: r.status, data: r.status >= 200 && r.status < 300 ? r.data : null }; }
-    catch (e) { throw e; }
+    const r = await io.fetchJson(url, { timeoutMs: FIREBASE_TIMEOUT_MS }); return { ok: r.status >= 200 && r.status < 300, status: r.status, data: r.status >= 200 && r.status < 300 ? r.data : null };
   };
   const valor = (v: unknown) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
   const baseVlance = (banco: string) => `https://serrano-vlance-${banco}.firebaseio.com`;

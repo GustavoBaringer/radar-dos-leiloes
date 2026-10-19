@@ -84,7 +84,7 @@ export async function collectCelsocunha(limit: number, request: typeof fetchText
   const event = parseCelsocunhaEvent(first.body);
   const pages = celsocunhaPages(first.body);
   if (!pages.length) return { lots, fetched, skipped: 1, httpStatus, note: 'paginação não encontrada' };
-  const candidateLimit = Math.min(100, limit);
+  const candidateLimit = limit;
   for (const page of pages) {
     if (seen.size >= candidateLimit) { partial = true; break; }
     const response = new URL(page).searchParams.get('page') === '1' ? first : await request(page, { gapMs: 1100, timeoutMs: 30000 });
@@ -109,10 +109,10 @@ export async function collectCelsocunha(limit: number, request: typeof fetchText
     }
     if (lots.length >= candidateLimit) { partial = true; break; }
   }
-  return { lots, fetched, skipped, httpStatus, note: partial || lots.length >= Math.min(100, limit) ? 'cobertura parcial: limite ou páginas observadas' : undefined };
+  return { lots, fetched, skipped, httpStatus, note: partial || lots.length >= limit ? 'cobertura parcial: limite ou páginas observadas' : undefined };
 }
 
 export const celsocunha: Connector = {
-  def: { id: 'celsocunha', name: 'Celso Cunha Leilões', platform: 'celsocunha', method: 'html', tier: 2, siteUrl: `https://${HOST}`, notes: 'Evento público observado; usa somente páginas indicadas por data-page, máximo de 100 lotes.' },
+  def: { id: 'celsocunha', name: 'Celso Cunha Leilões', platform: 'celsocunha', method: 'html', tier: 2, siteUrl: `https://${HOST}`, notes: 'Evento público observado; usa somente páginas indicadas por data-page.' },
   async collect({ limit }: CollectOptions) { return collectCelsocunha(limit); },
 };

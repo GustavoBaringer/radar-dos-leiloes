@@ -64,6 +64,20 @@ describe('auth HTTP module', () => {
     expect(form.headers.location).toBe('/busca');
   });
 
+  it('admits the upstream-validated challenge token in login DTO and still rejects unknown fields', async () => {
+    const server = await start();
+    const accepted = await request(server).post('/api/login').send({
+      usuario: 'valid-user', senha: 'valid-password', turnstileToken: 'fixture-token',
+    });
+    expect(accepted.status).toBe(302);
+    expect(state.passwordCalls).toEqual([{ usuario: 'valid-user', senha: 'valid-password' }]);
+    const unknown = await request(server).post('/api/login').send({
+      usuario: 'valid-user', senha: 'valid-password', turnstileToken: 'fixture-token', unexpected: true,
+    });
+    expect(unknown.status).toBe(400);
+    expect(state.passwordCalls).toHaveLength(1);
+  });
+
   it('starts OIDC with safe callback destination, state/PKCE cookie, trusted origin and Secure flag', async () => {
     const server = await start();
     const response = await request(server).get('/auth/login?de=https%3A%2F%2Fevil.example').set('Host', 'trusted.example').set('X-Forwarded-Proto', 'https');

@@ -11,7 +11,7 @@ export class JobOwnership {
     this.client = new Redis(url, {
       lazyConnect: true, enableReadyCheck: false, enableOfflineQueue: false, maxRetriesPerRequest: 0,
       connectTimeout: 500, commandTimeout: 500, autoResendUnfulfilledCommands: false,
-      retryStrategy: () => null,
+      retryStrategy: attempt => Math.min(attempt * 100, 1_000),
     });
     this.client.on('error', () => this.cancel());
     this.client.on('close', () => this.cancel());

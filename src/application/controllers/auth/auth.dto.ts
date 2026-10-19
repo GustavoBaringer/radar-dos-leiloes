@@ -5,6 +5,7 @@ export class AuthLoginBodyDto {
   @ApiPropertyOptional() @Allow() usuario?: unknown;
   @ApiPropertyOptional() @Allow() senha?: unknown;
   @ApiPropertyOptional() @Allow() de?: unknown;
+  @ApiPropertyOptional() @Allow() turnstileToken?: unknown;
 }
 
 export class AuthQueryDto {

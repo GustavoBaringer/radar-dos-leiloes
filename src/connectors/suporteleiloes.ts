@@ -46,6 +46,10 @@ const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes
 export const FOLLOWUP_TENANTS = new Set([
   'leiloespb.com.br', 'colossoleiloes.com.br', 'atlanticoleiloes.com.br', 'marcotulioleiloes.com.br',
   'vlleiloes.com.br', 'leiloesmonteiro.com.br', 'maglianoleiloes.com.br',
+  // Contrato v1 atual: `/leiloes` não enumera os cards; o crawler público lê
+  // também `/buscador`, onde os lotes são publicados.
+  'buaizleiloes.com.br', 'esleiloes.com.br', 'suedpeterleiloes.com.br', 'emleilao.com.br',
+  'renannerisleiloeiro.com.br', 'portoleiloes.com.br', 'leilaobrasil.com.br',
 ]);
 
 async function eligibleTenants(limite: number, tenant?: string): Promise<string[]> {
@@ -129,6 +133,14 @@ export async function collectOfertaTenant(host: string, limit: number, assetType
       for (const next of eventNextPages(event.body, host, pageUrl)) if (!pageSeen.has(next)) pages.push(next);
       if (pages.length && pageSeen.size >= 10) truncated = true;
     }
+  }
+  // Alguns tenants atuais deixam `/leiloes` vazio (ou só com eventos fechados)
+  // e publicam os lotes diretamente no buscador.
+  if (!events.size) {
+    const search = await get(`https://${host}/buscador`);
+    if (search?.status === 200 && ehSuporteLeiloes(search.body)) {
+      ofertaLinks(search.body, host).forEach((url) => events.set(url, ''));
+    } else if (search?.status === 200) attempt?.failure('parser');
   }
   for (const [url] of events) {
     throwIfCancelled();

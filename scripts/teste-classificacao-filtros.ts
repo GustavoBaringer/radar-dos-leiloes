@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classifyAsset } from '../src/core/normalize.js';
+import { classifyAsset, parseTitle } from '../src/core/normalize.js';
 
 test('classifica sinais inequívocos de náutico e ensiladeira', () => {
   for (const title of ['Sea-Doo GTX', 'Sea-Doo', 'Seadoo Spark', 'Jet-ski Yamaha', 'Jet ski Yamaha', 'Jetsky Yamaha']) {
@@ -130,3 +130,312 @@ test('reboque no título não é caminhão, mesmo com a categoria dizendo o cont
   assert.notEqual(classifyAsset('RE/ROYAL HUNTER 350, 26/27').vehicleType, 'reboque');
   assert.deepEqual(classifyAsset('TOYOTA/YARIS SA PLUS CONNECT'), { assetType: 'veiculo', vehicleType: 'carro' });
 });
+
+test('classifica caminhões, ônibus e utilitários da Mercedes-Benz reportados em produção', () => {
+  // Ônibus escolares e rodoviários
+  assert.deepEqual(classifyAsset('MERCEDES-BENZ/OF 1519 R.ORE'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('MERCEDES BENZ OF 1318, ANO/MOD: 1994/1994, COMBUSTÍVEL; DIESEL, COR: BRANCO'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('MERCEDES BENZ OF 1620, ANO/MOD: 1995/1995'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('Um automóvel, IMP/M.BENZ OF 1620, ano de fabricação/modelo 1994/1995'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('Mercedes-Benz Masc Granmini O 2009'), { assetType: 'veiculo', vehicleType: 'onibus' });
+
+  // Caminhões (pesados, semi-pesados, linha L, LS, LK, LA, Atron, Accelo)
+  assert.deepEqual(classifyAsset('M. BENZ / LS 1935'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Mercedes-Benz LS 1935 1994'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.BENZ LS 1938 - 03/03 - Brumado/BA'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Mercedes-Benz LS 1938 2003'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.Benz LS 1634 ano/mod. 2007/2008'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M. Benz LS'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('LK 1113 - MERCEDES BENZ'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('L 1620 - MERCEDES BENZ'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('- M.BENZ - LA 1113'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('MERCEDES-BENZ - LK-2217'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('- M.BENZ/L 312'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('MERCEDES-BENZ - ACELLO 815'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.BENZ/915C - 10/10 - Tupã/SP'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Mercedes Benz 710 - 97/97'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.BENZ 1418 - 91/92'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.BENZ/ ATRON 1719'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M.BENZ/ATRON 1719 K'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('M/BENZ Z 1620 2008'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('MBENZ 1111 MB, ANO/MODELO 1967, COR AZUL.'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+
+  // Utilitários e Vans (Sprinter, MB 180D)
+  assert.deepEqual(classifyAsset('MERCEDES-BENZ 315 CDI STREET C 2024 / 2025'), { assetType: 'veiculo', vehicleType: 'utilitario' });
+  assert.deepEqual(classifyAsset('I/M.BENZ 313SPRI JAEDI A Ano/modelo: 2011/2012'), { assetType: 'veiculo', vehicleType: 'utilitario' });
+  assert.deepEqual(classifyAsset('- M. BENZ/ 310D SPRINTERM'), { assetType: 'veiculo', vehicleType: 'utilitario' });
+  assert.deepEqual(classifyAsset('Mercedes-Benz 415CDI Sprinterm 2015/2016'), { assetType: 'veiculo', vehicleType: 'utilitario' });
+  assert.deepEqual(classifyAsset('Imp/Mercedes Benz MB 180D - 95/96'), { assetType: 'veiculo', vehicleType: 'utilitario' });
+
+  // Peças de pneus não entram como veículo
+  assert.deepEqual(classifyAsset('BENS MED. - MATERIAL PNEUS - 2 PNEUS 245./45./20 PERFIL BAIXO'), { assetType: 'outro', vehicleType: 'peca' });
+});
+
+test('não confunde sigla de motor/versão MB da Volkswagen com marca Mercedes-Benz', () => {
+  const polo = parseTitle('POLO MB');
+  assert.equal(polo.brand, 'VOLKSWAGEN');
+  assert.equal(polo.model, 'POLO');
+
+  const fox = parseTitle('FOX ROCK RIO MB');
+  assert.equal(fox.brand, 'VOLKSWAGEN');
+  assert.equal(fox.model, 'FOX');
+
+  const voyage = parseTitle('VOYAGE CITY MB');
+  assert.equal(voyage.brand, 'VOLKSWAGEN');
+  assert.equal(voyage.model, 'VOYAGE');
+
+  const gol = parseTitle('VWGOL 1.6L MB');
+  assert.equal(gol.brand, 'VOLKSWAGEN');
+  assert.equal(gol.model, 'GOL');
+
+  const c4 = parseTitle('C4 PALLAS 20 GLA');
+  assert.equal(c4.brand, 'CITROEN');
+  assert.equal(c4.model, 'C4');
+});
+
+test('mantém carros de passeio da Mercedes-Benz como carro', () => {
+  assert.deepEqual(classifyAsset('2018 MERCEDES BENZ CLASSE C'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('Direitos sobre Carro Mercedes Benz A200 AMG LINE - 2023'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('M.BENZ A 160 2003'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('M.BENZ A 190 2002'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('M.BENZ/A 160 ANO 2005 MODELO 2006'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('Mercedes-Benz SLK 200K - 2008'), { assetType: 'veiculo', vehicleType: 'carro' });
+});
+
+test('classifica caminhões, ônibus, carros e SUVs da Volvo reportados em produção', () => {
+  // Caminhões do print de produção (inclusive quando vêm de categorias genéricas/erradas como 'Hatches' ou 'Carros')
+  assert.deepEqual(classifyAsset('Volvo VM 260 6X2R 2008', 'Hatches'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Volvo VM 260 6X2R 2008', 'Carros'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Volvo VM 260 6X2R 2008'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Volvo VM 270 6X2R 2014', 'Hatches'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('Volvo VM 270 6X2R 2014'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+
+  // Outros caminhões Volvo da linha pesada/semipesada
+  assert.deepEqual(classifyAsset('VOLVO/NH12380 4X2T, 99/00, PLACA: J__-___0, DIESEL, AZUL'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO FH 460 6X2T'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO FH 540 6X4'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO VM 330 8X4R'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO FM 370'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO FMX 460'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO NL10'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO NL 12'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO N10'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO N12'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO EDC 360'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('VOLVO FH GLOBETROTTER'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+  assert.deepEqual(classifyAsset('CAMINHÃO TRATOR VOLVO/FH 460 6X2T'), { assetType: 'veiculo', vehicleType: 'caminhao' });
+
+  // Ônibus com chassi Volvo e/ou encarroçadora Irizar
+  assert.deepEqual(classifyAsset('Ônibus Volvo Irizar 16 PB R, ano/modelo 2013/2014'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('Volvo/B58 4x2 - 1995/1995 - Placa FINAL: 2H08'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('ÔNIBUS RODOVIÁRIO VOLVO IRIZAR CENTURY, 2012 / 2012, Placa FINAL 3 (SP)'), { assetType: 'veiculo', vehicleType: 'onibus' });
+  assert.deepEqual(classifyAsset('ÔNIBUS VOLVO B10 - ANO 1995'), { assetType: 'veiculo', vehicleType: 'onibus' });
+
+  // Carros de passeio da Volvo permanecem como carro
+  assert.deepEqual(classifyAsset('Volvo C30 (2P) 2009/2010'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('Volvo V60 2.0 T5 RD DY 2014'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('Volvo S60 2.0 T5 R-Des 2014/2015'), { assetType: 'veiculo', vehicleType: 'carro' });
+  assert.deepEqual(classifyAsset('VOLVO/V40 T4 COMFORTLI (4P)'), { assetType: 'veiculo', vehicleType: 'carro' });
+
+  // SUVs da Volvo permanecem como SUV
+  assert.deepEqual(classifyAsset('Volvo XC60 2.0 T5'), { assetType: 'veiculo', vehicleType: 'suv' });
+  assert.deepEqual(classifyAsset('Volvo XC40'), { assetType: 'veiculo', vehicleType: 'suv' });
+  assert.deepEqual(classifyAsset('Volvo XC90'), { assetType: 'veiculo', vehicleType: 'suv' });
+  assert.deepEqual(classifyAsset('Volvo C40'), { assetType: 'veiculo', vehicleType: 'suv' });
+  assert.deepEqual(classifyAsset('Volvo EX30'), { assetType: 'veiculo', vehicleType: 'suv' });
+
+  // Peças de caminhão não entram como veículo
+  assert.deepEqual(classifyAsset('GERAL - 60 (SESSENTA) JOGOS DE LONA DE FREIO DIANTEIRO VOLVO DA MARCA THERMOIDE'), { assetType: 'outro', vehicleType: 'peca' });
+});
+
+test('classifica máquinas agrícolas e ferramentas/acoplagens sem afetar caminhões rodoviários', () => {
+  // Máquinas agrícolas e implementos
+  assert.deepEqual(
+    classifyAsset('COLHEITADERIA - MASSEY FERGUSON/MF 9695 TRIDENT'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('NEW HOLLAND/PLATAFORMA 7220'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('PLATAFORMA 11LX50', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('GRADE ARADORA CRI DE 16C/DSC REC 28', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('GRADE ARADORA PESADA / ANTONIASI /GRADE PESADA ATA 24GPATA', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('TRATO AGRICOLA, MODELO MF 6711, MARCA MASSEY FERGUSON ANO 20', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+
+  // Contra-testes com caminhões reais
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR MERCEDES-BENZ LS 1932 1985 ID: #36', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO MERCEDES-BENZ L-2213 1973 COM PLATAFORMA GUINDAUTO', 'Caminhões Guindauto'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('SUCATA DE CAMINHÃO PLATAFORMA MERCEDES-BENZ L 2013', 'Sucata de Caminhões'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('VOLKSWAGEN CONSTELLATION 13 180 ANO 2011 COM BAU E PLATAFORMA', 'Caminhões Baú'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR SCANIA P114 ID: #3701175', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAMINHÃO TRATOR VOLVO FH12 380 6X2 ANO 1998/1998', 'Cavalos Mecânicos'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('C. TRATOR SCANIA P114', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ / LS 1935 / TRA / C. TRATOR', null),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('CAM. TRATOR VOLVO FH 460', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('Tratores agrícolas Massey Ferguson', 'Pesados'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+});
+
+test('classifica modelos clássicos Mercedes, ônibus Induscar, vans e eixos', () => {
+  // Caminhões clássicos e anos antigos. "M.BENZ 1963 1963 AZUL" NÃO entra aqui:
+  // ano de modelo não é código de caminhão, e o lote está em "Hatches" no
+  // índice. Era a regra "marca + ano" que o transformava em caminhão (16/10).
+  assert.deepEqual(
+    classifyAsset('M.BENZ  1963 1963 AZUL', 'Hatches'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  assert.deepEqual(
+    classifyAsset('Mercedes-Benz 1111 MB 1967', 'Sucata de Carros'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/LP 321 – 59/59'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/LAP 321 – 65/65'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES 608  1982/1982', 'Bomvalor Corporativo'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES 1519 6 X 6  1976/1976', 'Bomvalor Corporativo'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+
+  // Utilitários / Vans Mercedes
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENS FURGÃO MODELO: 415DISPRINTERF', 'Carros'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ MARIMAR - PLACA: O**-**19', 'Carros'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('I/M.BENZ VITO111CDI'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+
+  // Ônibus Induscar
+  assert.deepEqual(
+    classifyAsset('MERCEDES BENZ/INDUSCAR APACHE U'),
+    { assetType: 'veiculo', vehicleType: 'onibus' },
+  );
+  assert.deepEqual(
+    classifyAsset('M.BENZ/INDUSCAR MILLEN U'),
+    { assetType: 'veiculo', vehicleType: 'onibus' },
+  );
+
+  // Peças / Eixos
+  assert.deepEqual(
+    classifyAsset('Eixo Mercedes', 'Telehandlers'),
+    { assetType: 'outro', vehicleType: 'peca' },
+  );
+
+  // Contra-testes com carros legítimos Mercedes
+  assert.deepEqual(
+    classifyAsset('M.BENZ A 160 2005 2005 PRATA', 'Hatches'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  assert.deepEqual(
+    classifyAsset('2018 MERCEDES BENZ CLASSE C', 'Automóveis'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  assert.deepEqual(
+    classifyAsset('AUTOMOVEL - IMP MERCEDES BENZ 190 E 2.6'),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+  // O ano de modelo colado na marca não pode virar código de caminhão: em
+  // 16/10 o "2013" estava na lista e estas três viravam `caminhao` — a van e o
+  // sedan perdiam o filtro de leve e o caminhão entrava com ano de carro.
+  assert.deepEqual(
+    classifyAsset('2013 MERCEDES BENZ SPRINTER', 'Utilitários Grandes'),
+    { assetType: 'veiculo', vehicleType: 'utilitario' },
+  );
+  assert.deepEqual(
+    classifyAsset('MERCEDES-BENZ C-180 TURBO 2013/2014 GASOLINA', null),
+    { assetType: 'veiculo', vehicleType: 'carro' },
+  );
+});
+
+test('motobomba é equipamento, não motocicleta', () => {
+  assert.deepEqual(
+    classifyAsset('Conjunto de Irrigação Motor Mercedes Benz com Moto Bomba', 'Bombas'),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  assert.deepEqual(
+    classifyAsset('SCHNEIDER - MOTOBOMBA CENTRIFUGA SUBMERSIVEL', null),
+    { assetType: 'veiculo', vehicleType: 'maquina' },
+  );
+  // A palavra "moto" sozinha continua sendo motocicleta.
+  assert.deepEqual(
+    classifyAsset('MOTO HONDA CG 125 FAN 2011', 'Motos'),
+    { assetType: 'veiculo', vehicleType: 'moto' },
+  );
+});
+
+test('título que declara o bem vence categoria de equipamento', () => {
+  // O Superbid e o grupolance guardam veículo em "Eletrônico": eles sumiam do
+  // índice inteiro (23 lotes medidos em 16/10).
+  assert.deepEqual(
+    classifyAsset('Caminhão Mercedes Benz/L 1620, ano/modelo 2010', 'Eletrônico'),
+    { assetType: 'veiculo', vehicleType: 'caminhao' },
+  );
+  assert.deepEqual(
+    classifyAsset('Motocicleta Honda/CG 125 Titan KS', 'Eletrônico'),
+    { assetType: 'veiculo', vehicleType: 'moto' },
+  );
+  // Equipamento que não é veículo continua fora do índice de veículos.
+  assert.deepEqual(
+    classifyAsset('CAIXA DE SOM PULSE', 'Equipamentos'),
+    { assetType: 'outro', vehicleType: null },
+  );
+});
+
+
+

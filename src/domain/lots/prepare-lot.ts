@@ -10,6 +10,7 @@ import {
   marcaCanonica,
   scrubPlates,
   tituloDeVeiculoLimpo,
+  tipoForteDoTitulo,
 } from './normalize.js';
 import { isBidSuspect } from './bid-rules.js';
 
@@ -77,7 +78,8 @@ export function prepareLotForPersistence(l: CanonicalLot): PrepareLotResult {
     return { kind: 'out-of-scope', sourceId: l.sourceId, externalId: l.externalId };
   }
 
-  const vehicleType = assetType === 'veiculo' ? (l.vehicleType ?? cls.vehicleType) : null;
+  const forte = tipoForteDoTitulo(titleRaw, l.sourceCategory);
+  const vehicleType = assetType === 'veiculo' ? (forte ?? l.vehicleType ?? cls.vehicleType) : null;
   const propertyType = assetType === 'imovel' ? (l.propertyType ?? classifyProperty(titleRaw, l.sourceCategory)) : null;
   const brand = marcaCanonica(l.brand, titleRaw, vehicleType);
   const modeloFonte = (l.model ?? '').trim() || null;

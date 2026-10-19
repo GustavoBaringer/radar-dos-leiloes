@@ -5,6 +5,7 @@ import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, classifyAsset } from '../core/normalize.js';
 
 const URL_SEARCH = 'https://api.leilo.com.br/v1/lote/busca-elastic';
+export const LEILO_TIPOS = ['Carros', 'Motos', 'Utilitarios', 'Pesados', 'Equipamentos', 'Imoveis'] as const;
 
 /**
  * A fonte mais rica do levantamento: traz km, valor de mercado, laudo e custos.
@@ -67,32 +68,13 @@ function fimDoObjeto(s: string, inicio: number): number {
   }
   return -1;
 }
-/** "ABC Def/GHI" -> "abc-def-ghi" */
-function slug(v?: string | null): string {
-  return (v ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'lote';
-}
-
-/**
- * A URL pública NÃO é `/lote/{uuid}` — essa rota devolve a página de "não
- * encontrado" (a SPA responde 200 e renderiza o 404, então o status engana).
- * O formato real é `/leilao/{cidade-uf}/{tipo}/{leilao}/{bem}/ano.{ano}/{uuid}`.
- * Os segmentos de slug não precisam bater com os do site, mas o formato sim.
- */
 function lotUrl(l: any): string {
-  const loc = l.localizacao ?? {};
-  const v = l.veiculo ?? {};
-  const cidadeUf = slug(`${loc.cidade ?? 'brasil'} ${loc.estado ?? ''}`);
-  const tipo = slug(l.tipo ?? 'lotes');
-  const leilao = slug(l.leilao?.nome);
-  const bem = slug(l.nome);
-  const ano = v.anoModelo ?? v.anoFabricacao;
-  return `https://www.leilo.com.br/leilao/${cidadeUf}/${tipo}/${leilao}/${bem}/ano${ano ? `.${ano}` : ''}/${l.id}`;
+  const query = new URLSearchParams({
+    'leilao.nome': String(l.leilao?.nome ?? ''),
+    tipo: String(l.tipo ?? ''),
+    tipoLista: String(l.tipo ?? ''),
+  });
+  return `https://www.leilo.com.br/lote/${l.id}/?${query}`;
 }
 
 /**
@@ -104,7 +86,7 @@ function mediaPhoto(url: string): string {
   return url.replace(/(\.[a-z]+)$/i, '_media$1');
 }
 
-function mapLot(l: any, eventos: Map<string, Leiloeiro>): CanonicalLot | null {
+export function mapLot(l: any, eventos: Map<string, Leiloeiro>): CanonicalLot | null {
   const title = l.nome ?? '';
   if (!title || looksLikePart(title)) return null;
   const v = l.veiculo ?? {};
@@ -185,7 +167,7 @@ export const leilo: Connector = {
     // 'Utilitários' devolvia count:0 em silêncio — duas categorias inteiras
     // simplesmente não entravam no índice. Os reais, medidos: Carros 485,
     // Motos 55, Utilitarios 24, Sucatas 24, Pesados 12, Equipamentos 1, Imoveis 55.
-    for (const tipo of ['Carros', 'Motos', 'Utilitarios', 'Sucatas', 'Pesados', 'Equipamentos']) {
+    for (const tipo of LEILO_TIPOS) {
       for (let from = 0; lots.length < limit; from += pageSize) {
         const { status: st, data } = await fetchJson<any>(URL_SEARCH, {
           method: 'POST',

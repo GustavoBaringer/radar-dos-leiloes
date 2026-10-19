@@ -30,6 +30,98 @@ async function waitForAbort(signal) {
 }
 
 describe('real BullMQ ownership and atomic PostgreSQL persistence', () => {
+  it('reconnects its checker after connection loss and authorizes the next persisted job', async () => {
+    guardFixture();
+    const name = `${prefix}-recovery`;
+    const sourceId = `${prefix}-recovery`;
+    const checker = new JobOwnership(redisUrl);
+    const admin = new Redis(redisUrl, { maxRetriesPerRequest: 0 });
+    admin.on('error', () => {});
+    const queue = new Queue(name, { connection, prefix });
+    queue.on('error', () => {});
+    let worker;
+    let context;
+    let prisma;
+    let sourceCreated = false;
+    let oldController;
+    let oldJob;
+    let oldToken;
+    let oldAborted = deferred();
+    let oldRelease = deferred();
+    let finished = deferred();
+    let outcome;
+    const lot = externalId => ({ sourceId, externalId, titleRaw: 'Honda Civic 2020',
+      closingModel: 'timer_por_lote', sourceTz: 'America/Sao_Paulo', status: 'aberto', currentBid: 100, photos: [] });
+    try {
+      await checker.start();
+      context = await createCollectionContext({ overrides: {
+        lookupConnector: () => ({ collect: async () => ({ lots: [lot('one'), lot('two')], fetched: 2, skipped: 0, httpStatus: 200 }) }),
+        processarAposColeta: async () => ({ disparos: 0, push: 0, emails: 0, pendentesEmail: 0 }),
+      } });
+      prisma = context.app.get(PrismaService);
+      await prisma.$executeRaw`INSERT INTO sources (id,name,method) VALUES (${sourceId}, ${'ownership recovery fixture'}, ${'html'})`;
+      sourceCreated = true;
+      worker = new Worker(name, async (job, token) => {
+        const controller = checker.track(job.id);
+        try {
+          if (job.name === 'old') {
+            oldController = controller;
+            oldJob = job;
+            oldToken = token;
+            oldAborted.resolve();
+            await oldRelease.promise;
+            throw controller.signal.reason;
+          }
+          const result = await context.service.execute({ sourceId, tenant: 'fixture.example.test', guaranteeTenantAttempt: true,
+            limit: 2, signal: controller.signal, authorizePersistence: () => checker.authorize(job, token), publish: async () => {} }, {
+            upsertLots: new LotsRepository(prisma).upsertLots.bind(new LotsRepository(prisma)),
+            startRun,
+            observerForCollection: ctx => observerForCollection(ctx, true),
+          });
+          outcome = result;
+          return result.upserted;
+        } finally { checker.release(job.id, controller); }
+      }, { connection, prefix, concurrency: 1, lockDuration: 20_000, stalledInterval: 20_000 });
+      checker.monitor(worker);
+      worker.on('error', () => {});
+      worker.on('completed', job => { if (job.name === 'new') finished.resolve(); });
+      worker.on('failed', job => { if (job.name === 'new') finished.resolve(); });
+      await worker.waitUntilReady();
+      await queue.add('old', {}, { jobId: 'old', attempts: 1 });
+      await oldAborted.promise;
+      const checkerId = await checker.client.call('CLIENT', 'ID');
+      // The checker owns a separate connection; kill only that exact client.
+      if (!checkerId) throw new Error('Could not identify private checker Redis connection');
+      expect(await admin.call('CLIENT', 'KILL', 'ID', checkerId)).toBe(1);
+      await waitForAbort(oldController.signal);
+      expect(oldController.signal.reason.kind).toBe('lock_lost');
+      expect(checker.client.status).not.toBe('ready');
+      await expect(checker.authorize(oldJob, oldToken)).rejects.toMatchObject({ kind: 'lock_lost' });
+      oldRelease.resolve();
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline && checker.client.status !== 'ready') await new Promise(resolve => setTimeout(resolve, 25));
+      expect(checker.client.status).toBe('ready');
+      await queue.add('new', {}, { jobId: 'new', attempts: 1 });
+      await finished.promise;
+      expect(outcome.upserted).toBe(2);
+      expect(await prisma.lots.count({ where: { source_id: sourceId } })).toBe(2);
+      expect(await prisma.lots.count({ where: { source_id: sourceId, external_id: { in: ['one', 'two'] } } })).toBe(2);
+    } finally {
+      oldRelease.resolve();
+      await worker?.close();
+      try {
+        await queue.obliterate({ force: true });
+        await queue.close();
+        if (prisma && sourceCreated) {
+          await prisma.$executeRaw`DELETE FROM tenant_collection_attempts WHERE source_id=${sourceId}`;
+          await prisma.$executeRaw`DELETE FROM collection_runs WHERE source_id=${sourceId}`;
+          await prisma.$executeRaw`DELETE FROM lots WHERE source_id=${sourceId}`;
+          await prisma.$executeRaw`DELETE FROM sources WHERE id=${sourceId}`;
+        }
+      } finally { await context?.close(); checker.close(); admin.disconnect(); }
+    }
+  }, 60_000);
+
   for (const mode of ['missing', 'replaced', 'renewal', 'success']) {
     it(`${mode}: actual processor token/key guards the shared service and transaction`, async () => {
       guardFixture();

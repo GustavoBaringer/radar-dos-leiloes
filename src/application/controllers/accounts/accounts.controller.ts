@@ -15,6 +15,9 @@ export class AccountsController {
     return work();
   }
   private actor(req: RadarHttpRequest) { return radarActorFromRequest(req)?.eu; }
+  private serviceBody(body: AccountBodyDto) {
+    return Object.fromEntries(Object.entries(body).filter(([key, value]) => key !== 'turnstileToken' && value !== undefined));
+  }
   private read<T>(work: () => Promise<T>) { return this.context.runRead(work); }
 
   @Get('me') me(@Req() req: RadarHttpRequest) {
@@ -24,10 +27,10 @@ export class AccountsController {
     return this.read(() => this.invoke(() => this.accounts.listAlerts(this.actor(req)!, query)));
   }
   @Post('alerts') createAlert(@Req() req: RadarHttpRequest, @Body() body: AccountBodyDto) {
-    return this.read(() => this.invoke(() => this.accounts.createAlert(this.actor(req)!, { ...body })));
+    return this.read(() => this.invoke(() => this.accounts.createAlert(this.actor(req)!, this.serviceBody(body))));
   }
   @Patch('alerts/:id') updateAlert(@Req() req: RadarHttpRequest, @Param('id') id: string, @Body() body: AccountBodyDto) {
-    return this.read(() => this.invoke(() => this.accounts.updateAlert(this.actor(req)!, id, { ...body })));
+    return this.read(() => this.invoke(() => this.accounts.updateAlert(this.actor(req)!, id, this.serviceBody(body))));
   }
   @Delete('alerts/:id') deleteAlert(@Req() req: RadarHttpRequest, @Param('id') id: string) {
     return this.read(() => this.invoke(() => this.accounts.deleteAlert(this.actor(req)!, id)));
@@ -36,31 +39,31 @@ export class AccountsController {
     return this.read(() => this.invoke(() => this.accounts.listAlertHits(this.actor(req)!, query)));
   }
   @Post('alerts/hits/seen') seen(@Req() req: RadarHttpRequest, @Body() body: AccountBodyDto) {
-    return this.read(() => this.invoke(() => this.accounts.markAlertHitsSeen(this.actor(req)!, { ...body })));
+    return this.read(() => this.invoke(() => this.accounts.markAlertHitsSeen(this.actor(req)!, this.serviceBody(body))));
   }
   @Get('favorites') favorites(@Req() req: RadarHttpRequest, @Query() query: AccountPaginationDto) {
     return this.read(() => this.invoke(() => this.accounts.listFavorites(this.actor(req)!, query)));
   }
   @Post('favorites') addFavorite(@Req() req: RadarHttpRequest, @Body() body: AccountBodyDto) {
-    return this.read(() => this.invoke(() => this.accounts.addFavorite(this.actor(req)!, { ...body })));
+    return this.read(() => this.invoke(() => this.accounts.addFavorite(this.actor(req)!, this.serviceBody(body))));
   }
   @Delete('favorites/:lotId') deleteFavorite(@Req() req: RadarHttpRequest, @Param('lotId') id: string) {
     return this.read(() => this.invoke(() => this.accounts.deleteFavorite(this.actor(req)!, id)));
   }
   @Get('push/key') pushKey() { return this.accounts.pushKey(); }
   @Post('push/subscribe') subscribe(@Req() req: RadarHttpRequest, @Body() body: AccountBodyDto, @Headers('user-agent') agent?: string) {
-    return this.read(() => this.invoke(() => this.accounts.subscribePush(this.actor(req)!, { ...body }, agent)));
+    return this.read(() => this.invoke(() => this.accounts.subscribePush(this.actor(req)!, this.serviceBody(body), agent)));
   }
   @Get('notificacoes/status') status(@Req() req: RadarHttpRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     reply.header('cache-control', 'no-store');
     return this.read(() => this.invoke(() => this.accounts.notificationStatus(this.actor(req)!)));
   }
   @Post('espera') waitlist(@Body() body: AccountBodyDto) {
-    return this.read(() => this.invoke(() => this.accounts.joinWaitlist({ ...body })));
+    return this.read(() => this.invoke(() => this.accounts.joinWaitlist(this.serviceBody(body))));
   }
   @Post('cadastro') async register(@Req() req: RadarHttpRequest, @Body() body: AccountBodyDto, @Res({ passthrough: true }) reply: FastifyReply) {
     reply.code(201);
-    return this.read(() => this.invoke(() => this.accounts.register({ ...body }, req.clientIp ?? '')));
+    return this.read(() => this.invoke(() => this.accounts.register(this.serviceBody(body), req.clientIp ?? '')));
   }
 }
 
