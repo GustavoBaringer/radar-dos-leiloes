@@ -242,10 +242,10 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] Teste e2e cobre POST `/api/alerts` com canal `email` sem campo `email` no corpo
-- [ ] Valida que alerta gravado possui `email` do usuário logado
-- [ ] Validação de front e de back executadas com sucesso
-- [ ] Gate check passes: `npm run typecheck && npm run test:unit && npm run test:e2e`
+- [x] Teste e2e cobre POST `/api/alerts` com canal `email` sem campo `email` no corpo
+- [x] Valida que alerta gravado possui `email` do usuário logado
+- [x] Validação de front e de back executadas com sucesso
+- [x] Gate check passes: `npm run typecheck && npm run test:unit && npm run test:e2e`
 
 **Tests**: e2e
 **Gate**: build

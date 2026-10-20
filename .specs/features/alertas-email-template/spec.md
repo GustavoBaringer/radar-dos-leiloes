@@ -96,7 +96,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | EMAIL-01 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
 | EMAIL-02 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
 | EMAIL-03 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
-| EMAIL-04 | P2: Template de E-mail com Design System do Radar | Tasks | Pending |
+| EMAIL-04 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
 
 **Coverage:** 7 total, 7 mapped to tasks, 0 unmapped.
 
@@ -104,8 +104,8 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 ## Success Criteria
 
-- [ ] Nenhum formulário de alerta exibe caixa de texto de e-mail para usuário logado.
-- [ ] Alertas salvos com canal de e-mail herdam confiavelmente o e-mail da sessão autenticada.
-- [ ] Template de e-mail é gerado com o Design System oficial do Radar (dark mode, cards, botões).
-- [ ] 100% dos links de lotes no e-mail apontam para `/lote/:slug` dentro do Radar.
-- [ ] Suítes de testes unitários e de integração de frontend e backend executam com sucesso.
+- [x] Nenhum formulário de alerta exibe caixa de texto de e-mail para usuário logado.
+- [x] Alertas salvos com canal de e-mail herdam confiavelmente o e-mail da sessão autenticada.
+- [x] Template de e-mail é gerado com o Design System oficial do Radar (dark mode, cards, botões).
+- [x] 100% dos links de lotes no e-mail apontam para `/lote/:slug` dentro do Radar.
+- [x] Suítes de testes unitários e de integração de frontend e backend executam com sucesso.

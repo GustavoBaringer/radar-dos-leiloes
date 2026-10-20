@@ -60,6 +60,30 @@ describe('accounts HTTP module', () => {
     expect(state.queries.some(({ params }) => params[0] === 11)).toBe(true);
   });
 
+  it('creates alert with email channel inheriting authenticated session email when omitted from body', async () => {
+    const server = await start();
+    const response = await request(server)
+      .post('/api/alerts')
+      .set('Cookie', cookie('user-one'))
+      .send({
+        label: 'Alerta Veículos E2E',
+        q: 'civic',
+        channels: ['sino', 'email'],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.email).toBe('user-one@test.invalid');
+    expect(response.body.channels).toEqual(['sino', 'email']);
+
+    const alertWrite = state.writes.find(w => w.sql.includes('INSERT INTO alerts'));
+    expect(alertWrite).toBeDefined();
+    expect(alertWrite.params[0]).toBe('Alerta Veículos E2E');
+    expect(alertWrite.params[1]).toBe('civic');
+    expect(alertWrite.params[3]).toEqual(['sino', 'email']);
+    expect(alertWrite.params[4]).toBe('user-one@test.invalid');
+    expect(alertWrite.params[5]).toBe(11);
+  });
+
   it('rejects malformed and unknown favorite fields before any query', async () => {
     const server = await start();
     const response = await request(server).post('/api/favorites').set('Cookie', cookie()).send({ lotId: 3, ownerId: 22 });
