@@ -82,18 +82,26 @@ export class AccountsService {
     return { ...pageRows, items: pageRows.items.map(toPublicAlert), total: Number(totals[0]?.total ?? 0) };
   }
 
+  private resolveAlertEmail(channels: string[], bodyEmail: string | null | undefined, actorEmail: string | null): string | null {
+    if (!channels.includes('email')) return null;
+    const email = bodyEmail ?? actorEmail ?? null;
+    if (!email || !emailValido(email)) throw new AccountsServiceError(400, 'Conta sem e-mail válido para notificações.');
+    return email;
+  }
+
   async createAlert(actorInput: AccountActor, input: unknown) {
     const actor = requireActor(actorInput);
     const body = ValidateAlertInput(input);
     const q = body.q?.trim() ?? '';
     const channels = body.channels ?? ['sino'];
+    const email = this.resolveAlertEmail(channels, body.email, actor.email);
     const [alert] = await this.repository.createAlert({
       ownerId: actor.userId,
       label: body.label ?? (q || 'Alerta'),
       q: q || null,
       filters: body.filters ?? {},
       channels,
-      email: body.email ?? null,
+      email,
     });
     const candidates = await this.countCandidates({
       id: Number(alert.id), owner_id: actor.userId, created_at: '', label: alert.label,
@@ -107,9 +115,11 @@ export class AccountsService {
     const id = safePositiveId(rawId);
     if (id === null) throw new AccountsServiceError(400, 'id inválido');
     const body = ValidateAlertInput(input, { edit: true });
+    const channels = body.channels ?? ['sino'];
+    const email = this.resolveAlertEmail(channels, body.email, actor.email);
     const [alert] = await this.repository.updateAlert({
       id, ownerId: actor.userId, label: body.label ?? null,
-      channels: body.channels ?? ['sino'], email: body.email ?? null,
+      channels, email,
     });
     if (!alert) throw new AccountsServiceError(404, 'alerta não encontrado');
     const [counts] = await this.repository.alertHitCounts(id);

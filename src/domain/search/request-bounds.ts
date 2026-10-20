@@ -267,12 +267,13 @@ export function ValidateAlertInput(value: unknown, options: { edit?: boolean } =
     channels = values;
   }
   let email: string | null | undefined;
-  if (body.email === null) email = null;
-  else if (body.email !== undefined) {
+  if (body.email === null) {
+    if (channels.includes('email')) return fail('Canal email exige endereço válido.');
+    email = null;
+  } else if (body.email !== undefined) {
     email = scalar(body.email, 'email')!.trim();
-    if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return fail('E-mail do alerta inválido.');
+    if (!email || email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return fail('E-mail do alerta inválido.');
   }
-  if (channels.includes('email') && !email) return fail('Canal email exige endereço válido.');
   if (!options.edit && !q && !Object.keys(filters ?? {}).length) return fail('Alerta exige termo de busca ou ao menos um filtro.');
   return { label, q, filters, channels, email };
 }
