@@ -55,6 +55,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
   const summaryGeneration = useRef({ request: 0, identity: 0, mutation: 0 });
   const [versaoFavoritos, setVersaoFavoritos] = useState(0);
   const [alvoDialogo, setAlvoDialogo] = useState<AlvoDialogo | null>(null);
+  const [emailUsuario, setEmailUsuario] = useState<string | null>(null);
   const [lancesAoVivo, setLances] = useState<Record<number, number>>({});
   const [piscando, setPiscando] = useState<Set<number>>(new Set());
   const { toasts, toast } = useToasts();
@@ -79,6 +80,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
     setFavoriteContext(result.state);
     setNaoVistos(result.unreadAlertCount);
     setPapel(r.papel ?? 'comum');
+    if (r.conta?.email) setEmailUsuario(r.conta.email);
   }, []);
 
   const atualizarResumo = useCallback(() => {
@@ -451,6 +453,7 @@ export default function App({ loteInicial = null, publico = false }: { loteInici
         aoFechar={() => setAlvoDialogo(null)}
         aoSalvar={() => setVersaoAlertas((v) => v + 1)}
         toast={toast}
+        emailUsuario={emailUsuario}
       />
       <Toasts toasts={toasts} />
     </>

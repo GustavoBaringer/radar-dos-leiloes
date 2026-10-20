@@ -95,7 +95,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | ALERT-03 | P1: Criação de Alerta sem Solicitação de E-mail | Execute | Verified |
 | EMAIL-01 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
 | EMAIL-02 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
-| EMAIL-03 | P2: Template de E-mail com Design System do Radar | Tasks | Pending |
+| EMAIL-03 | P2: Template de E-mail com Design System do Radar | Execute | Verified |
 | EMAIL-04 | P2: Template de E-mail com Design System do Radar | Tasks | Pending |
 
 **Coverage:** 7 total, 7 mapped to tasks, 0 unmapped.

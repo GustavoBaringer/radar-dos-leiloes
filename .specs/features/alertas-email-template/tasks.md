@@ -216,11 +216,11 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] Campo `<input type="email">` removido do formulário
-- [ ] Validação que bloqueava envio sem digitação de e-mail removida
-- [ ] Mensagem informativa exibida ao marcar checkbox "E-mail" indicando envio para a conta
-- [ ] Typecheck do frontend passa sem erros
-- [ ] Gate check passes: `npm run typecheck`
+- [x] Campo `<input type="email">` removido do formulário
+- [x] Validação que bloqueava envio sem digitação de e-mail removida
+- [x] Mensagem informativa exibida ao marcar checkbox "E-mail" indicando envio para a conta
+- [x] Typecheck e build do frontend passam sem erros
+- [x] Gate check passes: `npm run typecheck` e build do `app-busca`
 
 **Tests**: unit
 **Gate**: quick

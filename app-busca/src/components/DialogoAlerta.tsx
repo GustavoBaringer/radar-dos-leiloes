@@ -16,18 +16,17 @@ interface Props {
   aoFechar: () => void;
   aoSalvar: () => void;
   toast: (t: string) => void;
+  emailUsuario?: string | null;
 }
 
-export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
+export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast, emailUsuario }: Props) {
   const dlg = useRef<HTMLDialogElement>(null);
   const [label, setLabel] = useState('');
   const [canalPush, setCanalPush] = useState(false);
   const [canalEmail, setCanalEmail] = useState(false);
-  const [email, setEmail] = useState('');
   const [salvando, setSalvando] = useState(false);
   // Erro DENTRO do diálogo: o toast fica atrás do backdrop do <dialog> modal.
   const [erro, setErro] = useState<string | null>(null);
-  const campoEmail = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!alvo) {
@@ -38,7 +37,6 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
     const canais = alvo.alerta?.channels ?? ['sino'];
     setCanalPush(canais.includes('push'));
     setCanalEmail(canais.includes('email'));
-    setEmail(alvo.alerta?.email ?? '');
     setSalvando(false);
     setErro(null);
     if (!dlg.current?.open) dlg.current?.showModal();
@@ -46,6 +44,7 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
 
   if (!alvo) return null;
   const editando = alvo.alerta !== null;
+  const emailDestino = alvo.alerta?.email || emailUsuario || null;
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -64,19 +63,13 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
         }
       }
       if (canalEmail) {
-        if (!email.trim()) {
-          setErro('Informe o e-mail ou desmarque o canal de e-mail.');
-          campoEmail.current?.focus();
-          setSalvando(false);
-          return;
-        }
         canais.push('email');
       }
 
       const nome = label.trim() || alvo.q.trim() || 'Alerta';
       const corpo = editando
-        ? { label: nome, channels: canais, email: canalEmail ? email.trim() : null }
-        : { label: nome, q: alvo.q.trim(), filters: alvo.filtros, channels: canais, email: canalEmail ? email.trim() : null };
+        ? { label: nome, channels: canais, email: canalEmail ? (emailDestino || null) : null }
+        : { label: nome, q: alvo.q.trim(), filters: alvo.filtros, channels: canais, email: canalEmail ? (emailDestino || null) : null };
 
       const r = editando
         ? ((await api.editarAlerta(alvo.alerta!.id, corpo)) as { no_indice_agora?: number })
@@ -126,11 +119,11 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast }: Props) {
             <span>E-mail</span>
           </label>
           {canalEmail && (
-            <input
-              ref={campoEmail} type="email" placeholder="seu@email.com" value={email}
-              onChange={(e) => { setEmail(e.target.value); setErro(null); }} aria-label="E-mail para o alerta"
-              aria-invalid={erro && !email.trim() ? true : undefined}
-            />
+            <p className="dlg-sub" style={{ margin: '4px 0 0 24px', fontSize: '13px', color: '#93a4c4' }}>
+              {emailDestino
+                ? `Enviaremos os alertas para ${emailDestino}.`
+                : 'Enviaremos os alertas para o e-mail cadastrado na sua conta.'}
+            </p>
           )}
         </fieldset>
 

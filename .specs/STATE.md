@@ -15,10 +15,10 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 3 / T5 complete -> starting T6
-- **Completed**: T1, T2, T3, T4, T5
-- **In-progress**: Iniciar T6 (atualizar formulário do diálogo de alertas na SPA app-busca)
-- **Next step**: Atualizar `app-busca/src/components/DialogoAlerta.tsx`
+- **Phase / Task**: Phase 4 / T6 complete -> starting T7
+- **Completed**: T1, T2, T3, T4, T5, T6
+- **In-progress**: Iniciar T7 (validação full-stack e testes e2e de ponta a ponta)
+- **Next step**: Atualizar `test/e2e/accounts/accounts-http.test.mjs` para testar fluxo completo de alerta e notificação
 - **Blockers**: none
-- **Uncommitted files**: `src/application/services/notifications/notification.service.ts`, `.specs/*`
+- **Uncommitted files**: `app-busca/src/components/DialogoAlerta.tsx`, `app-busca/src/App.tsx`, `.specs/*`
 - **Branch**: feat/alertas-email-template
