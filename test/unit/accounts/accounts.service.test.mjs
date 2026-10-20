@@ -128,4 +128,27 @@ describe('AccountsService', () => {
     await expect(fixture.service.joinWaitlist({ email: 'nope', consentimento: 'ok' })).rejects.toMatchObject({ statusCode: 400 });
     expect(fixture.calls.filter(({ sql }) => sql.startsWith('INSERT INTO espera'))).toHaveLength(0);
   });
+
+  it('auto-completes actor email when alert enables email channel and rejects when actor lacks email', async () => {
+    fixture = setup();
+    await fixture.service.createAlert(userA, {
+      q: 'civic',
+      channels: ['sino', 'email'],
+    });
+    const insertAlert = fixture.calls.find(({ sql }) => sql.startsWith('INSERT INTO alerts'));
+    expect(insertAlert.params[3]).toEqual(['sino', 'email']);
+    expect(insertAlert.params[4]).toBe('a@example.test');
+
+    await expect(fixture.service.createAlert(admin, {
+      q: 'civic',
+      channels: ['sino', 'email'],
+    })).rejects.toMatchObject({ statusCode: 400, message: 'Conta sem e-mail válido para notificações.' });
+
+    await fixture.service.updateAlert(userA, 7, {
+      channels: ['sino', 'email'],
+    });
+    const updateAlert = fixture.calls.find(({ sql }) => sql.startsWith('UPDATE alerts SET'));
+    expect(updateAlert.params[2]).toEqual(['sino', 'email']);
+    expect(updateAlert.params[3]).toBe('a@example.test');
+  });
 });

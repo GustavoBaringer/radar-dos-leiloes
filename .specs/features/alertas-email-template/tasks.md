@@ -109,11 +109,11 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] `createAlert` associa `actor.email` quando canal 'email' for selecionado e nenhum email informado no body
-- [ ] `updateAlert` preserva ou associa `actor.email` quando canal 'email' for selecionado
-- [ ] Rejeita com `AccountsServiceError(400)` se canal 'email' for selecionado mas usuário autenticado não possuir e-mail
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: testes passam sem erros
+- [x] `createAlert` associa `actor.email` quando canal 'email' for selecionado e nenhum email informado no body
+- [x] `updateAlert` preserva ou associa `actor.email` quando canal 'email' for selecionado
+- [x] Rejeita com `AccountsServiceError(400)` se canal 'email' for selecionado mas usuário autenticado não possuir e-mail
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 39 testes passam sem erros (+1 novo cobrindo os cenários)
 
 **Tests**: unit
 **Gate**: quick

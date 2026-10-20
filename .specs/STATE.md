@@ -15,10 +15,10 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 1 / T1 complete -> starting T2
-- **Completed**: T1
-- **In-progress**: Iniciar T2 (auto-preenchimento de actor.email em accounts.service.ts)
-- **Next step**: Implementar T2 em `src/application/services/accounts/accounts.service.ts`
+- **Phase / Task**: Phase 1 / T2 complete -> starting T3
+- **Completed**: T1, T2
+- **In-progress**: Iniciar T3 (enriquecer dados dos lotes casados no AlertsRepository com campos de slug)
+- **Next step**: Implementar T3 em `src/infra/database/repositories/alerts.repository.ts`
 - **Blockers**: none
-- **Uncommitted files**: `src/domain/search/request-bounds.ts`, `test/unit/domain/request-bounds.test.mjs`, `.specs/*`
+- **Uncommitted files**: `src/application/services/accounts/accounts.service.ts`, `test/unit/accounts/accounts.service.test.mjs`, `.specs/*`
 - **Branch**: feat/alertas-email-template
