@@ -15,10 +15,10 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 2 / T4 complete -> starting T5
-- **Completed**: T1, T2, T3, T4
-- **In-progress**: Iniciar T5 (integrar template no NotificationService)
-- **Next step**: Integrar `renderAlertEmail` em `src/application/services/notifications/notification.service.ts`
+- **Phase / Task**: Phase 3 / T5 complete -> starting T6
+- **Completed**: T1, T2, T3, T4, T5
+- **In-progress**: Iniciar T6 (atualizar formulário do diálogo de alertas na SPA app-busca)
+- **Next step**: Atualizar `app-busca/src/components/DialogoAlerta.tsx`
 - **Blockers**: none
-- **Uncommitted files**: `src/infra/notifications/alert-email.templates.ts`, `test/unit/notifications/alert-email.templates.test.mjs`, `.specs/*`
+- **Uncommitted files**: `src/application/services/notifications/notification.service.ts`, `.specs/*`
 - **Branch**: feat/alertas-email-template

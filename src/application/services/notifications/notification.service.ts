@@ -6,6 +6,7 @@ import { VAPID_OK, enviarWebPush } from '../../../infra/notifications/web-push.a
 import { criarTransporteSmtp, type EmailMessage } from '../../../infra/notifications/smtp.adapter.js';
 import type { Disparo } from '../../../domain/alerts/alert-types.js';
 import { agruparDisparos, mensagemResumo, urlDoAlerta } from '../../../domain/alerts/alerta-resumo.js';
+import { renderAlertEmail } from '../../../infra/notifications/alert-email.templates.js';
 
 /**
  * Entrega dos alertas. O sino é sempre gravado (é só uma linha em alert_hits);
@@ -189,16 +190,20 @@ async enviarEmail(disparos: Disparo[], deps?: EmailDependencies) {
   let pendentes = 0;
   for (const grupo of agruparDisparos(alvos)) {
     const a = grupo[0];
-    const linhas = grupo
-      .map((d) => `<li><a href="${escaparHtml(urlSegura(d.lotUrl))}">${escaparHtml(d.title)}</a> — <b>${moeda(d.bid)}</b> <small>(${escaparHtml(d.source)})</small></li>`)
-      .join('');
+    const siteUrl = env.PUBLIC_URL || env.SITE_URL || 'http://localhost:4500';
+    const emailData = renderAlertEmail({
+      label: a.label,
+      alertId: a.alertId,
+      disparos: grupo,
+      siteUrl,
+    });
     try {
       await transporte.sendMail({
         from: env.SMTP_FROM ?? 'Radar de Leilões <radar@localhost>',
         to: a.email!,
-        subject: `Radar: ${mensagemResumo(a.label, grupo.length)}`,
-        html: `<p>${escaparHtml(mensagemResumo(a.label, grupo.length))}</p><ul>${linhas}</ul>`,
-        text: `${mensagemResumo(a.label, grupo.length)}\n\n${grupo.map((d) => `${d.title} — ${moeda(d.bid)} — ${urlSegura(d.lotUrl)}`).join('\n')}`,
+        subject: emailData.subject,
+        html: emailData.html,
+        text: emailData.text,
       });
       for (const d of grupo) await mark(d.alertId, d.lotId, 'email');
       enviados++;

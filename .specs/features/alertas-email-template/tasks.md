@@ -190,11 +190,11 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] `enviarEmail` utiliza `renderAlertEmail` para gerar subject, html e text
-- [ ] URLs geradas respeitam variável de ambiente da URL pública da aplicação
-- [ ] Testes unitários de `NotificationService` atualizados e passando
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: todos os testes de notificação passam
+- [x] `enviarEmail` utiliza `renderAlertEmail` para gerar subject, html e text
+- [x] URLs geradas respeitam variável de ambiente da URL pública da aplicação
+- [x] Testes unitários de `NotificationService` atualizados e passando
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: todos os 44 testes de notificação e domínio passam sem erros
 
 **Tests**: unit
 **Gate**: quick
