@@ -67,9 +67,10 @@ export function DialogoAlerta({ alvo, aoFechar, aoSalvar, toast, emailUsuario }:
       }
 
       const nome = label.trim() || alvo.q.trim() || 'Alerta';
-      const corpo = editando
-        ? { label: nome, channels: canais, email: canalEmail ? (emailDestino || undefined) : null }
-        : { label: nome, q: alvo.q.trim(), filters: alvo.filtros, channels: canais, email: canalEmail ? (emailDestino || undefined) : null };
+      const corpo = {
+        label: nome, channels: canais, email: canalEmail ? (emailDestino || undefined) : null,
+        ...(editando ? {} : { q: alvo.q.trim(), filters: alvo.filtros }),
+      };
 
       const r = editando
         ? ((await api.editarAlerta(alvo.alerta!.id, corpo)) as { no_indice_agora?: number })

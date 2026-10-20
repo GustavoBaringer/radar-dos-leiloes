@@ -14,9 +14,6 @@ import { renderAlertEmail } from '../../../infra/notifications/alert-email.templ
  * os outros canais nem a coleta.
  */
 
-const moeda = (v?: number | null) =>
-  v == null ? 'sem lance' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
-
 export interface PushDependencies {
   enabled: boolean;
   query: typeof query;
@@ -59,14 +56,6 @@ export const defaultNotificationPorts: NotificationPorts = {
   env: process.env,
   smtp: criarTransporteSmtp,
   mark: marcarNotificado,
-};
-
-const escaparHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-}[char]!));
-const urlSegura = (value: string | null) => {
-  try { const url = new URL(value ?? ''); return ['https:', 'http:'].includes(url.protocol) ? url.href : '#'; }
-  catch { return '#'; }
 };
 
 @Injectable()

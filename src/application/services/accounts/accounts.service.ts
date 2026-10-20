@@ -82,18 +82,19 @@ export class AccountsService {
     return { ...pageRows, items: pageRows.items.map(toPublicAlert), total: Number(totals[0]?.total ?? 0) };
   }
 
+  private resolveAlertEmail(channels: string[], bodyEmail: string | null | undefined, actorEmail: string | null): string | null {
+    if (!channels.includes('email')) return null;
+    const email = bodyEmail ?? actorEmail ?? null;
+    if (!email || !emailValido(email)) throw new AccountsServiceError(400, 'Conta sem e-mail válido para notificações.');
+    return email;
+  }
+
   async createAlert(actorInput: AccountActor, input: unknown) {
     const actor = requireActor(actorInput);
     const body = ValidateAlertInput(input);
     const q = body.q?.trim() ?? '';
     const channels = body.channels ?? ['sino'];
-    let email: string | null = null;
-    if (channels.includes('email')) {
-      email = body.email ?? actor.email ?? null;
-      if (!email || !emailValido(email)) {
-        throw new AccountsServiceError(400, 'Conta sem e-mail válido para notificações.');
-      }
-    }
+    const email = this.resolveAlertEmail(channels, body.email, actor.email);
     const [alert] = await this.repository.createAlert({
       ownerId: actor.userId,
       label: body.label ?? (q || 'Alerta'),
@@ -115,13 +116,7 @@ export class AccountsService {
     if (id === null) throw new AccountsServiceError(400, 'id inválido');
     const body = ValidateAlertInput(input, { edit: true });
     const channels = body.channels ?? ['sino'];
-    let email: string | null = null;
-    if (channels.includes('email')) {
-      email = body.email ?? actor.email ?? null;
-      if (!email || !emailValido(email)) {
-        throw new AccountsServiceError(400, 'Conta sem e-mail válido para notificações.');
-      }
-    }
+    const email = this.resolveAlertEmail(channels, body.email, actor.email);
     const [alert] = await this.repository.updateAlert({
       id, ownerId: actor.userId, label: body.label ?? null,
       channels, email,

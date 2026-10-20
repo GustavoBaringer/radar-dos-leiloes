@@ -1,4 +1,5 @@
 import type { Disparo } from '../../domain/alerts/alert-types.js';
+import { urlDoAlerta } from '../../domain/alerts/alerta-resumo.js';
 
 const escapeHtml = (value: string) => String(value ?? '').replace(/[&<>"']/g, (c) => ({
   '&': '&amp;',
@@ -21,20 +22,7 @@ function formatMoeda(val: number | null | undefined): string {
   return 'Sob consulta';
 }
 
-export interface RenderAlertEmailInput {
-  label: string;
-  alertId: number;
-  disparos: Disparo[];
-  siteUrl?: string;
-}
-
-export interface RenderedAlertEmail {
-  subject: string;
-  html: string;
-  text: string;
-}
-
-export function renderAlertEmail(input: RenderAlertEmailInput): RenderedAlertEmail {
+export function renderAlertEmail(input: { label: string; alertId: number; disparos: Disparo[]; siteUrl?: string }) {
   const label = input.label?.trim() || 'Alerta';
   const disparos = input.disparos ?? [];
   const qtd = disparos.length;
@@ -42,7 +30,7 @@ export function renderAlertEmail(input: RenderAlertEmailInput): RenderedAlertEma
   const alertId = input.alertId;
 
   const subject = `Radar: ${qtd} ${qtd === 1 ? 'novo lote encontrado' : 'novos lotes encontrados'} para "${label}"`;
-  const viewAlertUrl = `${siteUrl}/alertas?alertId=${alertId}`;
+  const viewAlertUrl = `${siteUrl}${urlDoAlerta(alertId)}`;
 
   // Montagem dos cards HTML de cada lote
   const cardsHtml = disparos.map((d) => {
