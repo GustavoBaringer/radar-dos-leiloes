@@ -75,7 +75,8 @@ test('new/edit alert inputs allow only matcher fields and bounded channels/email
   assert.throws(() => ValidateAlertInput({ q: 'civic', filters: { place: '-23,-46' } }), BoundedInputError);
   assert.throws(() => ValidateAlertInput({ q: 'civic', filters: { priceMin: 'NaN' } }), BoundedInputError);
   assert.throws(() => ValidateAlertInput({ q: 'civic', filters: { vehicleType: { x: 1 } } }), BoundedInputError);
-  assert.throws(() => ValidateAlertInput({ q: 'civic', channels: ['email'] }), BoundedInputError);
+  assert.equal(ValidateAlertInput({ q: 'civic', channels: ['email'] }).email, undefined);
+  assert.throws(() => ValidateAlertInput({ q: 'civic', channels: ['email'], email: 'invalido' }), BoundedInputError);
   assert.throws(() => ValidateAlertInput({ q: 'civic', extra: true }), BoundedInputError);
 });
 
