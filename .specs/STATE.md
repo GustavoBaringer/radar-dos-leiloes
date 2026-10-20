@@ -15,10 +15,10 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 2 / T3 complete -> starting T4
-- **Completed**: T1, T2, T3
-- **In-progress**: Iniciar T4 (desenvolver template de e-mail de alerta com Design System do Radar)
-- **Next step**: Implementar `src/infra/notifications/alert-email.templates.ts`
+- **Phase / Task**: Phase 2 / T4 complete -> starting T5
+- **Completed**: T1, T2, T3, T4
+- **In-progress**: Iniciar T5 (integrar template no NotificationService)
+- **Next step**: Integrar `renderAlertEmail` em `src/application/services/notifications/notification.service.ts`
 - **Blockers**: none
-- **Uncommitted files**: `src/domain/alerts/alert-types.ts`, `src/infra/database/repositories/alerts.repository.ts`, `test/unit/notifications/alerts.repository.test.mjs`, `.specs/*`
+- **Uncommitted files**: `src/infra/notifications/alert-email.templates.ts`, `test/unit/notifications/alert-email.templates.test.mjs`, `.specs/*`
 - **Branch**: feat/alertas-email-template

@@ -161,13 +161,14 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] Template HTML implementa a paleta do Radar (`#05070f`, `#0b1120`, `#1e2941`, `#2f6bff`)
-- [ ] Links de cada lote apontam para `${siteUrl}/lote/${slug}`
-- [ ] Link geral de visualização do alerta aponta para `${siteUrl}/alertas?alertId=${alertId}`
-- [ ] Versão plain text estruturada gerada em conjunto
-- [ ] Sanitização com `escapeHtml` contra XSS e injeção
-- [ ] Suíte de testes unitários dedicada `test/unit/notifications/alert-email.templates.test.mjs` criada e passando
-- [ ] Gate check passes: `npm run test:unit`
+- [x] Template HTML implementa a paleta do Radar (`#05070f`, `#0b1120`, `#1e2941`, `#2f6bff`)
+- [x] Links de cada lote apontam para `${siteUrl}/lote/${slug}`
+- [x] Link geral de visualização do alerta aponta para `${siteUrl}/alertas?alertId=${alertId}`
+- [x] Versão plain text estruturada gerada em conjunto
+- [x] Sanitização com `escapeHtml` contra XSS e injeção
+- [x] Suíte de testes unitários dedicada `test/unit/notifications/alert-email.templates.test.mjs` criada e passando
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 44 testes passam sem erros (+4 novos no módulo de template)
 
 **Tests**: unit
 **Gate**: quick
