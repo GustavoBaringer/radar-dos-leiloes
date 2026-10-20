@@ -13,8 +13,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
       - run: npm run build:backend
+      - run: npm run typecheck
       - run: npm run test:compiled
       - run: npm run test:isolated
       - run: npm ci

@@ -96,8 +96,8 @@ test('e-mail agrupa 10 lotes, protege HTML e mantém texto simples', async () =>
   });
   assert.deepEqual(result, { enviados: 1, pendentes: 0 });
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].subject, 'Radar: Encontramos 10 novos lotes para o seu alerta "<SUV>"');
-  assert.equal((sent[0].html.match(/<li>/g) ?? []).length, 10);
+  assert.equal(sent[0].subject, 'Radar: 10 novos lotes encontrados para "<SUV>"');
+  assert.equal((sent[0].html.match(/Ver lote no Radar/g) ?? []).length, 10);
   assert(!sent[0].html.includes('<script>'));
   assert(!sent[0].html.includes('javascript:'));
   assert.match(sent[0].html, /&lt;SUV&gt;/);
