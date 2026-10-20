@@ -15,10 +15,10 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 1 / T2 complete -> starting T3
-- **Completed**: T1, T2
-- **In-progress**: Iniciar T3 (enriquecer dados dos lotes casados no AlertsRepository com campos de slug)
-- **Next step**: Implementar T3 em `src/infra/database/repositories/alerts.repository.ts`
+- **Phase / Task**: Phase 2 / T3 complete -> starting T4
+- **Completed**: T1, T2, T3
+- **In-progress**: Iniciar T4 (desenvolver template de e-mail de alerta com Design System do Radar)
+- **Next step**: Implementar `src/infra/notifications/alert-email.templates.ts`
 - **Blockers**: none
-- **Uncommitted files**: `src/application/services/accounts/accounts.service.ts`, `test/unit/accounts/accounts.service.test.mjs`, `.specs/*`
+- **Uncommitted files**: `src/domain/alerts/alert-types.ts`, `src/infra/database/repositories/alerts.repository.ts`, `test/unit/notifications/alerts.repository.test.mjs`, `.specs/*`
 - **Branch**: feat/alertas-email-template

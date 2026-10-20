@@ -22,4 +22,8 @@ export interface Disparo {
   lotUrl: string | null;
   bid: number | null;
   source: string;
+  slug?: string;
+  photoUrl?: string | null;
+  city?: string | null;
+  state?: string | null;
 }

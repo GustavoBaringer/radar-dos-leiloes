@@ -2,6 +2,7 @@ import { query } from '../query.js';
 import { VENCIDO } from '../queries/lot-status.js';
 import { parseQuery, termoComoRegex } from '../../../core/normalize.js';
 import type { Alerta, Disparo } from '../../../domain/alerts/alert-types.js';
+import { slugDoLote } from '../../../domain/lots/slug.js';
 export type { Alerta, Disparo } from '../../../domain/alerts/alert-types.js';
 
 /**
@@ -141,7 +142,7 @@ export async function avaliarAlertas(lotIds: number[], queryFn: typeof query = q
      * todo disparo passa, venha da coleta ou de qualquer outro gatilho.
      */
     const achados = await queryFn<any>(
-      `SELECT id, title_raw, lot_url, source_id, COALESCE(current_bid, min_bid) AS bid
+      `SELECT id, title_raw, title_display, brand, model, year_model, doc_type, photos, city, state, lot_url, source_id, COALESCE(current_bid, min_bid) AS bid
          FROM lots
         WHERE id = ANY($1::bigint[])
           AND first_seen_at >= $2::timestamptz
@@ -163,6 +164,17 @@ export async function avaliarAlertas(lotIds: number[], queryFn: typeof query = q
     const novos = new Set(inseridos.map((l) => Number(l.lot_id)));
     for (const l of achados) {
       if (!novos.has(Number(l.id))) continue;
+      const slug = slugDoLote({
+        id: l.id,
+        brand: l.brand,
+        model: l.model,
+        year_model: l.year_model,
+        doc_type: l.doc_type,
+        source_id: l.source_id,
+        title_display: l.title_display,
+        title_raw: l.title_raw,
+      });
+      const photoUrl = Array.isArray(l.photos) && l.photos.length > 0 ? l.photos[0] : null;
       disparos.push({
         alertId: a.id,
         ownerId: Number(a.owner_id),
@@ -170,10 +182,14 @@ export async function avaliarAlertas(lotIds: number[], queryFn: typeof query = q
         channels: a.channels,
         email: a.email,
         lotId: Number(l.id),
-        title: l.title_raw,
+        title: l.title_display || l.title_raw,
         lotUrl: l.lot_url,
         bid: l.bid,
         source: l.source_id,
+        slug,
+        photoUrl,
+        city: l.city ?? null,
+        state: l.state ?? null,
       });
     }
     await queryFn('UPDATE alerts SET last_run_at = now() WHERE id = $1', [a.id]);

@@ -135,11 +135,11 @@ Validates both frontend and backend proofs.
 
 **Done when**:
 
-- [ ] Consulta de lotes casados retorna campos necessários para o slug canônico
-- [ ] Objeto `Disparo` recebe o slug do lote gerado via `slugDoLote`
-- [ ] Nenhum lote duplicado ou com query inválida
-- [ ] Gate check passes: `npm run test:integration`
-- [ ] Test count: testes passam sem erros
+- [x] Consulta de lotes casados retorna campos necessários para o slug canônico
+- [x] Objeto `Disparo` recebe o slug do lote gerado via `slugDoLote`
+- [x] Nenhum lote duplicado ou com query inválida
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 40 testes passam sem erros (+1 novo cobrindo o repositório)
 
 **Tests**: integration
 **Gate**: full
