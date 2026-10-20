@@ -15,10 +15,11 @@
 ## Handoff
 
 - **Feature**: alertas-email-template
-- **Phase / Task**: Phase 4 / T6 complete -> starting T7
-- **Completed**: T1, T2, T3, T4, T5, T6
-- **In-progress**: Iniciar T7 (validação full-stack e testes e2e de ponta a ponta)
-- **Next step**: Atualizar `test/e2e/accounts/accounts-http.test.mjs` para testar fluxo completo de alerta e notificação
+- **Phase / Task**: Phase 4 / T7 complete -> Feature Verified & Complete
+- **Completed**: T1, T2, T3, T4, T5, T6, T7
+- **In-progress**: Feature concluída e aprovada pelo Verifier independente
+- **Next step**: Merge da branch `feat/alertas-email-template` quando autorizado pelo usuário
 - **Blockers**: none
-- **Uncommitted files**: `app-busca/src/components/DialogoAlerta.tsx`, `app-busca/src/App.tsx`, `.specs/*`
+- **Uncommitted files**: none
 - **Branch**: feat/alertas-email-template
+- **Verdict**: PASS (7/7 ACs, 3/3 sensor, 0 erros de tipo, 100/100 testes passaram)
