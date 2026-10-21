@@ -5,14 +5,14 @@ Visão dos principais processos e dependências externas. O backend Nest/Fastify
 ```mermaid
 flowchart LR
   U[Usuário] -->|HTTPS| B[Navegador]
-  B -->|HTTP(S) / WS ou WSS conforme ambiente| API[Backend NestJS + Fastify<br/>SSR, frontend e API]
+  B -->|"HTTP(S) / WS ou WSS conforme ambiente"| API["Backend NestJS + Fastify<br/>SSR, frontend e API"]
   API -->|OIDC / PKCE| IDP[Keycloak]
   API -->|SQL via Prisma e queries SQL| PG[(PostgreSQL)]
   API -->|filas, locks e eventos| R[(Redis / BullMQ)]
   CLI[CLI e scripts de coleta manual] -->|código compartilhado| C[Conectores]
   W[Worker Node.js / BullMQ] -->|jobs e locks| R
   W -->|usa| C
-  C -->|HTTP(S)| S[Sites dos leiloeiros]
+  C -->|"HTTP(S)"| S[Sites dos leiloeiros]
   W -->|persistência SQL| PG
   CLI -->|persistência SQL| PG
 ```
