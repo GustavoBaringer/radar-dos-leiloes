@@ -30,18 +30,34 @@ import { CollectionCancellationError, throwIfCancelled } from '../infra/collecti
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const POR_PAGINA = 10;
-const CAKE_TENANTS = new Set(['leiloesfederal.com.br', 'prosperarleiloes.com.br']);
+const CAKE_TENANTS = new Set(['leiloesfederal.com.br', 'prosperarleiloes.com.br', 'jussiaraleiloes.com']);
+
+export const CONFIRMED_TENANTS = new Set([
+  'duxleiloes.com.br',
+  'arremateleiloesjudiciais.com.br',
+  'jussiaraleiloes.com',
+  'prosperarleiloes.com.br',
+  'leiloesfederal.com.br',
+  'nasarleiloes.com.br',
+]);
 
 function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 async function tenants(limite: number, tenant?: string, execute: typeof query = query): Promise<string[]> {
+  const normTenant = tenant?.toLowerCase().replace(/^www\./, '').replace(/\.$/, '').trim();
   const rows = await execute<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leiloar' AND http_status=200 AND has_lots IS NOT FALSE
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
-  const escolhidos = await dueTenants({ sourceId: 'leiloar', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  let candidates = rows.map((r) => r.domain);
+  if (normTenant && CONFIRMED_TENANTS.has(normTenant)) {
+    if (!candidates.some((c) => c.toLowerCase().replace(/^www\./, '').replace(/\.$/, '') === normTenant)) {
+      candidates = [...candidates, normTenant];
+    }
+  }
+  const escolhidos = await dueTenants({ sourceId: 'leiloar', candidates, limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
   if (!tenant) return escolhidos;
   const apenas = filterTenantPopulation(escolhidos, tenant);
   if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leiloar`);
@@ -216,7 +232,7 @@ export async function collectCakeTenant(host: string, limit: number, request: (u
   if (!CAKE_TENANTS.has(normalized)) throw new Error(`tenant CakePHP não revisado: ${host}`);
   const lots: CanonicalLot[] = [], seen = new Set<string>(), notes: string[] = [];
   let fetched = 0, skipped = 0, httpStatus = 0;
-  const path = normalized === 'prosperarleiloes.com.br' ? '/externo/' : '/';
+  const path = normalized === 'leiloesfederal.com.br' ? '/' : '/externo/';
   const get = async (url: string) => {
     throwIfCancelled();
     const response = await request(url, normalized);
@@ -230,21 +246,85 @@ export async function collectCakeTenant(host: string, limit: number, request: (u
   try {
     const home = await get(`https://${host}${path}`);
     const pages: Array<{ url: string; body: string }> = [];
-    if (normalized === 'leiloesfederal.com.br') {
-      const $home = cheerio.load(home.body);
-      const events = [...new Set($home('a[href]').map((_, a) => {
-        const href = $home(a).attr('href');
-        if (!href) return null;
+    const visitedUrls = new Set<string>([home.url]);
+    const $home = cheerio.load(home.body);
+    const events: string[] = [];
+    $home('a[href]').each((_, a) => {
+      const href = $home(a).attr('href');
+      if (!href) return;
+      try {
         const link = new URL(href, home.url);
-        return link.hostname.toLowerCase().replace(/^www\./, '') === normalized && /^\/leilao\/\d+(?:\/|$)/.test(link.pathname) ? link.href : null;
-      }).get().filter((item): item is string => item != null))];
-      for (const event of events) {
-        if (lots.length >= limit) break;
+        if (link.hostname.toLowerCase().replace(/^www\./, '') === normalized &&
+            /^\/(?:externo\/)?leilao\/\d+(?:\/|$)/.test(link.pathname)) {
+          if (!visitedUrls.has(link.href)) {
+            visitedUrls.add(link.href);
+            events.push(link.href);
+          }
+        }
+      } catch {}
+    });
+
+    let budgetReached = false;
+    for (const event of events) {
+      if (lots.length >= limit) {
+        budgetReached = true;
+        break;
+      }
+      throwIfCancelled();
+      try {
         const result = await get(event);
         pages.push({ url: result.url, body: result.body });
+        const $ev = cheerio.load(result.body);
+        const eventPages: string[] = [];
+        $ev('.pagination a[href], a[href*="page:"]').each((_, a) => {
+          const href = $ev(a).attr('href');
+          if (!href) return;
+          try {
+            const link = new URL(href, result.url);
+            if (link.hostname.toLowerCase().replace(/^www\./, '') === normalized) {
+              if (!visitedUrls.has(link.href)) {
+                visitedUrls.add(link.href);
+                eventPages.push(link.href);
+              }
+            }
+          } catch {}
+        });
+        const pageQueue: string[] = [...eventPages];
+        while (pageQueue.length > 0) {
+          if (lots.length >= limit) {
+            budgetReached = true;
+            break;
+          }
+          throwIfCancelled();
+          const evPage = pageQueue.shift()!;
+          try {
+            const evRes = await get(evPage);
+            pages.push({ url: evRes.url, body: evRes.body });
+            const $sub = cheerio.load(evRes.body);
+            $sub('.pagination a[href], a[href*="page:"]').each((_, a) => {
+              const href = $sub(a).attr('href');
+              if (!href) return;
+              try {
+                const link = new URL(href, evRes.url);
+                if (link.hostname.toLowerCase().replace(/^www\./, '') === normalized) {
+                  if (!visitedUrls.has(link.href)) {
+                    visitedUrls.add(link.href);
+                    pageQueue.push(link.href);
+                  }
+                }
+              } catch {}
+            });
+          } catch (err) {
+            if (err instanceof CollectionCancellationError || err instanceof TenantScopeError) throw err;
+            notes.push(`falha na paginação (${evPage}): ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      } catch (err) {
+        if (err instanceof CollectionCancellationError || err instanceof TenantScopeError) throw err;
+        notes.push(`falha no evento (${event}): ${err instanceof Error ? err.message : String(err)}`);
       }
-      pages.push({ url: home.url, body: home.body });
-    } else pages.push({ url: home.url, body: home.body });
+    }
+    pages.push({ url: home.url, body: home.body });
 
     for (const page of pages) {
       throwIfCancelled();
@@ -252,7 +332,12 @@ export async function collectCakeTenant(host: string, limit: number, request: (u
         fetched++;
         if (seen.has(card.id)) { skipped++; continue; }
         seen.add(card.id);
-        if (lots.length >= limit || looksLikePart(card.title)) { skipped++; continue; }
+        if (lots.length >= limit) {
+          budgetReached = true;
+          skipped++;
+          continue;
+        }
+        if (looksLikePart(card.title)) { skipped++; continue; }
         const classified = classifyAsset(card.title, card.category ?? '');
         const assetType = card.machine ? 'veiculo' : classified.assetType;
         if (assetType === 'outro') { skipped++; continue; }
@@ -280,10 +365,14 @@ export async function collectCakeTenant(host: string, limit: number, request: (u
         });
       }
     }
+    if (budgetReached) {
+      notes.push('teto de budget atingido; catálogo truncado');
+    }
     if (normalized === 'prosperarleiloes.com.br') notes.push('denominador do catálogo não publicado; cobertura parcial');
     else notes.push('catálogo parcial: apenas home pública e eventos nela vinculados; total geral não observado');
     return { lots, fetched, skipped, httpStatus, note: notes.length ? notes.join('; ') : undefined };
   } catch (error) {
+    throwIfCancelled();
     if (error instanceof CollectionCancellationError || error instanceof TenantScopeError) throw error;
     observer?.failure('network');
     return { lots, fetched, skipped, httpStatus, note: `catálogo parcial: ${error instanceof Error ? error.message : String(error)}` };

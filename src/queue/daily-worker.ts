@@ -15,7 +15,7 @@ import { DAILY_SITES, dailySite, dailyScheduleItems } from './daily-coverage.js'
 import { makeRedis, REDIS_URL, type CollectJob } from './runtime.js';
 
 export const DAILY_QUEUE = 'collect-daily-sites';
-const browserSources = new Set(['caixa', 'vipleiloes', 'leiloesbrasilpublic']);
+const browserSources = new Set(['caixa', 'vipleiloes', 'leiloesbrasilpublic', 'superbid']);
 
 export function dailyConnector(domain: string, lookup = getConnector, enabled = async (source: string) => {
   const rows = await query<{ enabled: boolean }>('SELECT enabled FROM sources WHERE id=$1', [source]);

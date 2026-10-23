@@ -3,7 +3,7 @@ import { fetchJson, fetchText } from './http.js';
 import type { Connector, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, classifyAsset, fold } from '../core/normalize.js';
-import { throwIfCancelled } from '../infra/collection/collection-cancellation.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 import * as campos from '../core/campos.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -280,9 +280,10 @@ async function coletarArremate(limit: number): Promise<{ lots: CanonicalLot[]; f
 /** Tenants cujo contrato Roisoft foi medido por resposta pública da própria API. */
 export const ROISOFT_HOSTS = new Set([
   'caiapoleiloes.com.br', 'leiloesbrasil.com.br', 'sancarleiloes.com.br', 'leiloeiroeduardo.com.br',
+  'teleselimaleiloes.com.br', 'liraleiloes.com.br',
 ]);
 
-async function coletarRoiSoft(limit: number, soHost?: string): Promise<{ lots: CanonicalLot[]; fetched: number; status: number; note?: string }> {
+export async function coletarRoiSoft(limit: number, soHost?: string, buscarJson: typeof fetchJson = fetchJson): Promise<{ lots: CanonicalLot[]; fetched: number; status: number; note?: string }> {
   // O Norte Leilões saiu daqui: a API dele exige POST + Origin/Referer (GET
   // devolve 403 medido em 13/10/2026) e hoje tem coletor próprio (coletarNorte).
   // Contrato Roisoft medido em 13/10/2026 nas 4 homes (mesma meta Author=Roisoft,
@@ -294,40 +295,68 @@ async function coletarRoiSoft(limit: number, soHost?: string): Promise<{ lots: C
     { host: 'leiloesbrasil.com.br', site: 'https://www.leiloesbrasil.com.br', api: 'https://www.leiloesbrasil.com.br', nome: 'Leilões Brasil' },
     { host: 'sancarleiloes.com.br', site: 'https://www.sancarleiloes.com.br', api: 'https://www.sancarleiloes.com.br', nome: 'Sancar Leilões' },
     { host: 'leiloeiroeduardo.com.br', site: 'https://www.leiloeiroeduardo.com.br', api: 'https://www.leiloeiroeduardo.com.br', nome: 'Leiloeiro Eduardo' },
-  ].filter(t => !soHost || t.host === soHost);
+    { host: 'teleselimaleiloes.com.br', site: 'https://www.teleselimaleiloes.com.br', api: 'https://www.teleselimaleiloes.com.br', nome: 'Teles & Lima Leilões' },
+    { host: 'liraleiloes.com.br', site: 'https://www.liraleiloes.com.br', api: 'https://www.liraleiloes.com.br', nome: 'Lira Leilões' },
+  ].filter(t => soHost ? t.host === soHost : t.host !== 'leiloesbrasil.com.br');
   const lots: CanonicalLot[] = [];
   let fetched = 0, status = 0;
   const parciales: string[] = [];
   for (const t of tenants) {
     if (lots.length >= limit) break;
+    throwIfCancelled();
     // Sem this.ponto de parada explícito, a paginação nunca terminaria; o teto
     // é de 40 páginas porque nenhum tenant medido passou de 6.
     const MAX_PAGINAS = 40;
     let pagina = 1;
     let pageCount = 1;
     let itensVistos = 0;
+    let teveFalha = false;
     do {
       if (lots.length >= limit) break;
+      throwIfCancelled();
       let r;
       try {
-        r = await fetchJson<any>(`${t.api}/lotes/listar-dados?pagina=${pagina}&porPagina=40&filters=false&api=true`, {
+        r = await buscarJson<any>(`${t.api}/lotes/listar-dados?pagina=${pagina}&porPagina=40&filters=false&api=true`, {
           headers: { 'user-agent': UA, referer: `${t.site}/` }, gapMs: 1100,
         });
-      } catch {
+      } catch (err) {
+        throwIfCancelled();
+        if (err instanceof CollectionCancellationError) throw err;
         parciales.push(`${t.host}: pagina ${pagina} falhou`);
+        teveFalha = true;
         break;
       }
+      throwIfCancelled();
       status = r.status;
-      const itens = Array.isArray(r.data?.dados) ? r.data.dados : [];
-      const pag = r.data?.dadosPaginacao ?? {};
-      pageCount = Number(pag.pageCount ?? 1) || 1;
+      if (r.status !== 200) {
+        parciales.push(`${t.host}: HTTP ${r.status} na pagina ${pagina}`);
+        teveFalha = true;
+        break;
+      }
+      if (!r.data || typeof r.data !== 'object' || !Array.isArray(r.data.dados)) {
+        parciales.push(`${t.host}: schema invalido na pagina ${pagina}`);
+        teveFalha = true;
+        break;
+      }
+      const pag = r.data.dadosPaginacao;
+      const rawPageCount = pag && typeof pag === 'object' && pag.pageCount != null ? Number(pag.pageCount) : null;
+      if (rawPageCount === null || !Number.isFinite(rawPageCount) || rawPageCount < 0) {
+        parciales.push(`${t.host}: schema invalido ou paginacao ausente na pagina ${pagina}`);
+        teveFalha = true;
+        break;
+      }
+      const itens = r.data.dados;
+      pageCount = rawPageCount;
       fetched += itens.length;
       itensVistos += itens.length;
-      if (!itens.length && pagina <= pageCount) parciales.push(`${t.host}: pagina ${pagina} de ${pageCount} veio vazia`);
+      if (!itens.length && pageCount > 0 && pagina <= pageCount) {
+        parciales.push(`${t.host}: pagina ${pagina} de ${pageCount} veio vazia`);
+      }
       for (const l of itens) {
         if (lots.length >= limit) break;
-        const id = String(l.LEL_ID ?? '').trim();
-        const titulo = String(l.titulo ?? l.descricao ?? '').trim();
+        throwIfCancelled();
+        const id = String(l?.LEL_ID ?? '').trim();
+        const titulo = String(l?.titulo ?? l?.descricao ?? '').trim();
         if (!id || !titulo) continue;
         const foto = l.fotos?.[0]?.imgUrl_285x220 ?? l.fotos?.[0]?.imgUrl ?? l.imgUrl_285x220 ?? l.imgUrl ?? null;
         const url = l.urlLote && String(l.urlLote).startsWith('http') ? String(l.urlLote) : `${t.site}/lote/${id}`;
@@ -341,8 +370,9 @@ async function coletarRoiSoft(limit: number, soHost?: string): Promise<{ lots: C
         if (lot) lots.push(lot);
       }
       pagina += 1;
+      throwIfCancelled();
     } while (pagina <= pageCount && pagina <= MAX_PAGINAS);
-    if (itensVistos === 0) parciales.push(`${t.host}: API respondeu sem nenhum lote no momento`);
+    if (!teveFalha && itensVistos === 0) parciales.push(`${t.host}: API respondeu sem nenhum lote no momento`);
     else if (lots.length >= limit) parciales.push(`${t.host}: limite ${limit} atingido em ${itensVistos} itens lidos`);
     else if (pagina > MAX_PAGINAS) parciales.push(`${t.host}: parou no teto de ${MAX_PAGINAS} páginas`);
   }

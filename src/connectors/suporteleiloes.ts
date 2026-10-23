@@ -14,7 +14,7 @@ import * as cheerio from 'cheerio';
 import { fetchText, fetchTenantText, TenantScopeError } from './http.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
-import type { Connector, CollectResult } from './types.js';
+import type { Connector, CollectResult, CollectOptions } from './types.js';
 import * as campos from '../core/campos.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
 import { classifyAsset, classifySeller } from '../core/normalize.js';
@@ -44,6 +44,7 @@ const num = (v: unknown): number | null => {
  */
 const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes.leilao.br', 'e-leiloeiro.leilao.br', 'magalhaesleiloes.com.br']);
 export const FOLLOWUP_TENANTS = new Set([
+  'buenoleiloes.com.br',
   'leiloespb.com.br', 'colossoleiloes.com.br', 'atlanticoleiloes.com.br', 'marcotulioleiloes.com.br',
   'vlleiloes.com.br', 'leiloesmonteiro.com.br', 'maglianoleiloes.com.br',
   // Contrato v1 atual: `/leiloes` não enumera os cards; o crawler público lê
@@ -52,10 +53,10 @@ export const FOLLOWUP_TENANTS = new Set([
   'renannerisleiloeiro.com.br', 'portoleiloes.com.br', 'leilaobrasil.com.br',
 ]);
 
-async function eligibleTenants(limite: number, tenant?: string): Promise<string[]> {
+async function eligibleTenants(limite: number, tenant?: string, lookup: typeof query = query): Promise<string[]> {
   const explicitos = String(process.env.SUPORTELEILOES_DOMAINS ?? '').trim();
   const discovered = explicitos ? explicitos.split(',').map((d) => d.trim())
-    : [...FOLLOWUP_TENANTS, ...(await query<{ domain: string }>(`SELECT domain FROM discovered_sites WHERE platform='suporte-leiloes' AND http_status=200 AND has_lots IS NOT FALSE ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`)).map(r => r.domain)];
+    : [...FOLLOWUP_TENANTS, ...(await lookup<{ domain: string }>(`SELECT domain FROM discovered_sites WHERE platform='suporte-leiloes' AND http_status=200 AND has_lots IS NOT FALSE ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`)).map(r => r.domain)];
   const candidates = [...new Set(discovered)].filter((d) => d && !FORA.has(d));
   const due = await dueTenants({ sourceId: 'suporteleiloes', candidates, limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
   if (!tenant) return due;
@@ -202,11 +203,12 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
       if (triedUrls.has(url)) continue;
       triedUrls.add(url);
       throwIfCancelled();
-      if (/\b(treino|treinamento|teste|demo)\b/i.test(decodeURIComponent(url))) { skipped++; continue; }
+      if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(decodeURIComponent(url))) { skipped++; continue; }
       const response = await get(url); fetched++;
       if (!response || response.status !== 200) { skipped++; partial = true; continue; }
       const lot = parseSuporteOferta(response.body, normalized, url) ?? parseSuporteDetalhe(response.body, normalized, url, candidateCategories.get(url));
       if (!lot || (assetTypes?.length && !assetTypes.includes(String(lot.assetType)))) { skipped++; partial = true; continue; }
+      if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(lot.titleRaw)) { skipped++; continue; }
       const identity = await lookupExisting?.(lot.lotUrl ?? url, lot.externalId);
       if (identity && typeof identity === 'object') { skipped++; partial = true; continue; }
       if (identity) lot.externalId = identity;
@@ -230,19 +232,25 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
       const $ = cheerio.load(response.body);
       const eventText = `${$('title').text()} ${$('h1,h2').text()}`.toLowerCase();
       const eventPage = /\/eventos\/leilao\/|^\/leiloes\/\d+/.test(path);
-      const training = /\b(treino|treinamento|teste|demo)\b/.test(eventText) || (eventPage && eventoEncerrado(response.body));
+      const training = /\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(eventText) || (eventPage && eventoEncerrado(response.body));
       if (!training) {
         for (const card of lerCards(response.body, host)) {
           if (new URL(card.url).hostname === new URL(pageOrigin).hostname) {
+            if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(card.titulo) || /\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(card.url)) {
+              continue;
+            }
             candidateUrls.add(card.url);
             if (card.categoria) candidateCategories.set(card.url, card.categoria);
           }
         }
-        for (const url of ofertaLinks(response.body, host)) candidateUrls.add(url);
+        for (const url of ofertaLinks(response.body, host)) {
+          if (!/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(url)) candidateUrls.add(url);
+        }
         $('a[href]').each((_, a) => {
           const href = $(a).attr('href'); if (!href) return;
           const target = new URL(href, pageUrl);
           if (target.hostname !== new URL(pageOrigin).hostname) return;
+          if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(target.href)) return;
           const p = target.pathname;
           if (/\/eventos\/leilao\//.test(p) && !/\/lote\/\d+/.test(p)) pageQueue.push(`${p}${target.search}`);
           else if (/\/eventos\/leilao\/.+\/lote\/\d+/.test(p) || /\/oferta\/leilao\//.test(p)) candidateUrls.add(target.href);
@@ -569,7 +577,12 @@ export const suporteleiloes: Connector = {
       'White-label multi-tenant, duas gerações de front (v1 Laravel implementada, v2 Next.js pendente). A coluna platform tem falso positivo: superbid.net. Validar assinatura antes de coletar.',
   },
 
-  async collect({ limit, assetTypes, observer, tenant }, request: typeof fetchText = fetchText): Promise<CollectResult> {
+  async collect(
+    { limit, assetTypes, observer, tenant }: CollectOptions,
+    io: typeof fetchText | { fetchText?: typeof fetchText; query?: typeof query } = fetchText,
+  ): Promise<CollectResult> {
+    const request = typeof io === 'function' ? io : (io.fetchText ?? fetchText);
+    const dbQuery = typeof io === 'object' && io.query ? io.query : query;
     if (tenant && normalizeHost(tenant) === WEB_HOST) {
       throw new Error('WebLeilões bloqueado: identidade dos 68 SKUs sobrescritos ainda não reconciliada; coleta/persistência suspensa.');
     }
@@ -579,11 +592,11 @@ export const suporteleiloes: Connector = {
     let status = 0;
     const notes: string[] = [];
 
-    for (const host of await eligibleTenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60), tenant)) {
+    for (const host of await eligibleTenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60), tenant, dbQuery)) {
       if (lots.length >= limit) break;
       const normalized = normalizeHost(host);
       const lookupExisting = async (lotUrl: string, proposedId: string) => {
-        const rows = await query<{ external_id: string; same_url: boolean }>(`SELECT external_id,
+        const rows = await dbQuery<{ external_id: string; same_url: boolean }>(`SELECT external_id,
             lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
             lower(regexp_replace($2, '^https?://(www\\.)?', '')) AS same_url
           FROM lots WHERE source_id=$1 AND (

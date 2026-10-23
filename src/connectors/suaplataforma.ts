@@ -117,8 +117,22 @@ function tituloImprestavel(t: string): boolean {
   return t.length < 6 || /^[\d\s.\-]+$/.test(t) || /^(simulador|teste|lote)$/i.test(t);
 }
 
+function isDemo(l: any): boolean {
+  const lote = String(l?.Lote ?? '');
+  const leilao = String(l?.Leilao ?? '');
+  const url = String(l?.URLlote ?? '');
+  const texto = `${lote} ${leilao} ${url}`;
+  return (
+    /\b(?:simulador|simula[cç][aã]o|treinamento|homologa[cç][aã]o)\b/i.test(texto) ||
+    /\b(?:leil[aã]o|lote)\s+(?:de\s+)?teste\b/i.test(texto) ||
+    /\bteste\b/i.test(lote) ||
+    /\bteste\b/i.test(leilao)
+  );
+}
+
 function mapLot(l: any, host: string): CanonicalLot | null {
   const id = l?.ID_Leiloes_Lote;
+  if (!id || isDemo(l)) return null;
   let titulo = String(l?.Lote ?? '').trim();
   if (tituloImprestavel(titulo)) {
     const slug = (() => {
@@ -213,6 +227,14 @@ function mapLot(l: any, host: string): CanonicalLot | null {
 }
 
 /** Tenants: os domínios que a descoberta marcou como desta plataforma. */
+const TENANT_ALIASES: Record<string, string> = {
+  'tezaleiloes.com.br': 'teza.com.br',
+};
+
+const REVIEWED_TENANTS = new Set([
+  'teza.com.br',
+]);
+
 function raizDomain(value: string): string {
   if (typeof value !== 'string' || !value || value.length > 253 || /[^\x21-\x7e]/.test(value) || /[/:@?#\\]/.test(value)) {
     throw new Error('Invalid tenant domain');
@@ -223,8 +245,13 @@ function raizDomain(value: string): string {
   return host;
 }
 
+function resolveTenantDomain(value: string): string {
+  const root = raizDomain(value);
+  return TENANT_ALIASES[root] ?? root;
+}
+
 async function tenants(limite: number, tenant: string | undefined, lookup: (sql: string, params?: any[]) => Promise<any[]>): Promise<string[]> {
-  const requestedRoot = tenant === undefined ? undefined : raizDomain(tenant);
+  const requestedRoot = tenant === undefined ? undefined : resolveTenantDomain(tenant);
   const explicitos = String(process.env.SUAPLATAFORMA_DOMAINS ?? '').trim();
   const rows = explicitos
     ? explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((domain) => ({ domain }))
@@ -236,6 +263,10 @@ async function tenants(limite: number, tenant: string | undefined, lookup: (sql:
   // O host serve em www.; o domínio pelado devolve 301, e POST que segue
   // redirect degrada para GET — a resposta viria 200 e vazia.
   const population = rows.map((r) => `www.${raizDomain(r.domain)}`);
+  for (const reviewed of REVIEWED_TENANTS) {
+    const host = `www.${reviewed}`;
+    if (!population.includes(host)) population.push(host);
+  }
   if (requestedRoot !== undefined) {
     const match = population.find((host) => raizDomain(host) === requestedRoot);
     if (!match) throw new Error(`single-tenant '${tenant}' fora da população elegível de suaplataforma`);
@@ -255,16 +286,28 @@ export async function collectSuaPlataforma(
   let fetched = 0;
   let skipped = 0;
   let httpStatus = 0;
+  const allNotes: string[] = [];
 
   for (const host of await tenants(Number(process.env.SUAPLATAFORMA_TENANTS ?? 40), tenant, io.query)) {
+    throwIfCancelled();
     if (lots.length >= limit) break;
     const attempt = await observer?.start(raizDomain(host));
     const antes = lots.length, fetchedAntes = fetched, skippedAntes = skipped;
     let truncated = false;
+    let totalObservado: number | null = null;
+    const tenantNotes: string[] = [];
+
     try {
-      for (let pagina = 1; pagina <= 40; pagina++) {
+      let totalPaginas = 40;
+      let paginasNecessarias = 1;
+      for (let pagina = 1; pagina <= totalPaginas; pagina++) {
         throwIfCancelled();
-        if (lots.length >= limit) { truncated = true; break; }
+        if (lots.length >= limit) {
+          truncated = true;
+          tenantNotes.push(`limite de ${limit} lotes atingido`);
+          break;
+        }
+
         let r;
         try {
           r = await io.fetchJson(`https://${host}/ApiEngine/GetLotes/${pagina}/${PAGINA}`, {
@@ -275,45 +318,110 @@ export async function collectSuaPlataforma(
           if (error instanceof CollectionCancellationError) throw error;
           throwIfCancelled();
           attempt?.failure('network');
+          truncated = true;
+          tenantNotes.push(`falha de rede na página ${pagina} de ${host}`);
           break;
         }
+
+        throwIfCancelled();
         attempt?.response(r.status);
         httpStatus = r.status;
-        if (r.status !== 200) break;
+        if (r.status !== 200) {
+          attempt?.failure('network');
+          truncated = true;
+          tenantNotes.push(`HTTP ${r.status} na página ${pagina} de ${host}`);
+          break;
+        }
+
         const data = r.data;
         if (!data || !Array.isArray(data.Lotes) || !Number.isSafeInteger(data.CountTotal) || data.CountTotal < 0) {
           attempt?.failure('parser');
+          truncated = true;
+          tenantNotes.push(`schema inválido em ${host}: CountTotal/Lotes ausentes ou malformados`);
           break;
         }
+
+        const total = Number(data.CountTotal);
+        totalObservado = total;
+        paginasNecessarias = Math.max(1, Math.ceil(total / PAGINA));
+        totalPaginas = Math.min(40, paginasNecessarias);
+
         const itens: any[] = data.Lotes;
-        if (!itens.length) break;
+        const tenantFetchedAntes = fetched - fetchedAntes;
+        if (!itens.length) {
+          if (total > 0 && tenantFetchedAntes < total) {
+            truncated = true;
+            tenantNotes.push(`página ${pagina} vazia em ${host} com ${tenantFetchedAntes}/${total} coletados`);
+          }
+          break;
+        }
+
         fetched += itens.length;
 
-        let ativosNaPagina = 0;
         for (const it of itens) {
           throwIfCancelled();
-          if (lots.length >= limit) { truncated = true; break; }
-          const ativo = ATIVOS.has(statusDe(String(it?.GetLoteRealTime?.[0]?.Lote_SubStatus_Label ?? '')));
-          if (ativo) ativosNaPagina++;
+          if (lots.length >= limit) {
+            truncated = true;
+            tenantNotes.push(`limite de ${limit} lotes atingido`);
+            break;
+          }
           const m = mapLot(it, host);
           if (m && (!assetTypes || assetTypes.includes(m.assetType as string))) lots.push(m);
           else skipped++;
         }
+
         if (truncated) break;
-        if (lots.length >= limit) { truncated = true; break; }
-        // ponytail: assumes active lots sort before terminal lots; full history scans need an API sort/filter contract.
-        if (!ativosNaPagina || itens.length < PAGINA) break;
-        if (pagina === 40 && pagina * PAGINA < data.CountTotal) truncated = true;
+        if (lots.length >= limit) {
+          truncated = true;
+          tenantNotes.push(`limite de ${limit} lotes atingido`);
+          break;
+        }
+
+        const tenantFetched = fetched - fetchedAntes;
+        if (itens.length < PAGINA) {
+          if (tenantFetched < total) {
+            truncated = true;
+            tenantNotes.push(`página ${pagina} retornou apenas ${itens.length} itens mas total observado é ${total}`);
+          }
+          break;
+        }
+
+        if (pagina === 40 && paginasNecessarias > 40) {
+          truncated = true;
+          tenantNotes.push(`teto de 40 páginas atingido; total observado é ${total}`);
+          break;
+        }
+
+        if (pagina >= totalPaginas) break;
+      }
+
+      const tenantFetchedFinal = fetched - fetchedAntes;
+      if (totalObservado !== null && totalObservado > 0 && tenantFetchedFinal < totalObservado && !truncated) {
+        truncated = true;
+        tenantNotes.push(`coletados ${tenantFetchedFinal} de ${totalObservado} observados`);
       }
     } catch (error) {
-      if (error instanceof CollectionCancellationError) attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
-      else attempt?.failure('parser');
+      if (error instanceof CollectionCancellationError) {
+        attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+        tenantNotes.push(`cancelamento por ${error.kind}`);
+      } else {
+        attempt?.failure('parser');
+        tenantNotes.push(`falha: ${error instanceof Error ? error.message : String(error)}`);
+      }
       throw error;
     } finally {
-      await attempt?.finish({ fetched: fetched - fetchedAntes, skipped: skipped - skippedAntes, returned: lots.length - antes, truncated });
+      await attempt?.finish({
+        fetched: fetched - fetchedAntes,
+        skipped: skipped - skippedAntes,
+        returned: lots.length - antes,
+        truncated,
+      });
+      if (tenantNotes.length) allNotes.push(...tenantNotes);
     }
   }
-  return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+
+  const note = allNotes.length ? allNotes.join('; ') : undefined;
+  return { lots: lots.slice(0, limit), fetched, skipped, httpStatus, ...(note ? { note } : {}) };
 }
 
 export const suaplataforma: Connector = {

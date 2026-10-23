@@ -1,11 +1,31 @@
 import { fetchText, fetchTenantText } from './http.js';
 import * as cheerio from 'cheerio';
-import type { Connector, CollectResult } from './types.js';
+import type { Connector, CollectResult, CollectOptions } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
-import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
+import { parseTitle, classifySeller, looksLikePart, looksLikeCollectible, classifyAsset, classifyProperty } from '../core/normalize.js';
 import { query } from '../core/db.js';
 import { dueTenants, filterTenantPopulation } from './tenant-scheduler.js';
+
+const MAQUINA_TITULO = /\b(empilhadeira|trator(?:es)?|retroescavadeira|escavadeira|motoniveladora|p[aá]\s*carregadeira|carregadeira|colheitadeira|betoneira|rolo\s*compactador|bobcat)\b/i;
+
+export function classifyLeilotechAsset(title: string, categoria?: string | null): {
+  assetType: CanonicalLot['assetType'];
+  vehicleType: CanonicalLot['vehicleType'];
+  propertyType: CanonicalLot['propertyType'];
+} {
+  const isImovel = /im[óo]vel|apartamento|casa|sobrado|terreno|sala\s+comercial|barrac[ãa]o|fra[çc][ãa]o\s+ideal|vaga\s+de\s+garagem/i.test(
+    `${categoria ?? ''} ${title}`,
+  );
+  const isMaquina = !isImovel && MAQUINA_TITULO.test(`${categoria ?? ''} ${title}`);
+  const parsed = parseTitle(title);
+  const isVeiculo = !isImovel && (isMaquina || /ve[íi]culo/i.test(categoria ?? '') || Boolean(parsed.brand));
+
+  const assetType: CanonicalLot['assetType'] = isImovel ? 'imovel' : isVeiculo ? 'veiculo' : 'outro';
+  const vehicleType = isMaquina ? 'maquina' : isVeiculo ? (classifyAsset(title).vehicleType ?? 'carro') : null;
+  const propertyType = isImovel ? classifyProperty(title, categoria ?? 'imovel') : null;
+  return { assetType, vehicleType, propertyType };
+}
 
 /**
  * LEILOTECH keeps the discovered-tenant parser; ArremataBem uses a separate
@@ -32,11 +52,12 @@ function leiloeiroDoHost(host: string): string {
   return host.replace(/^www\./, '').replace(/\.(com\.br|com|lel\.br|leilao\.br)$/i, '').replace(/leiloes?/gi, ' Leilões ').replace(/[-_.]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-async function tenants(limite: number, tenant?: string): Promise<string[]> {
-  const rows = await query<{ domain: string }>(
+async function tenants(limite: number, tenant?: string, lookup: typeof query = query): Promise<string[]> {
+  const rows = await lookup<{ domain: string }>(
     `SELECT domain FROM discovered_sites WHERE platform='leilotech' AND http_status=200 ORDER BY domain`,
   );
-  const escolhidos = await dueTenants({ sourceId: 'leilotech', candidates: [...DOCX_LEILOTECH_TENANTS, ...rows.map((r) => r.domain)], limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
+  const candidates = [...new Set([...DOCX_LEILOTECH_TENANTS, ...rows.map((r) => r.domain)])];
+  const escolhidos = await dueTenants({ sourceId: 'leilotech', candidates, limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
   if (!tenant) return escolhidos;
   const apenas = filterTenantPopulation(escolhidos, tenant);
   if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leilotech`);
@@ -91,14 +112,20 @@ export const leilotech: Connector = {
     siteUrl: 'https://topoleiloes.com.br',
     notes: '1 tenant conhecido, catálogo pequeno. Detalhe do lote (não a listagem) tem status/categoria/avaliação num <dl>. Sem campo de lance.',
   },
-  async collect({ limit, observer, tenant }): Promise<CollectResult> {
+  async collect(
+    { limit, observer, tenant }: CollectOptions,
+    io: { fetchText?: typeof fetchText; fetchTenantText?: typeof fetchTenantText; query?: typeof query } = {},
+  ): Promise<CollectResult> {
+    const fetch = io.fetchText ?? fetchText;
+    const fetchTenant = io.fetchTenantText ?? fetchTenantText;
+    const dbQuery = io.query ?? query;
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
     let arremataPartial = false;
 
-    const dominios = await tenants(Number(process.env.LEILOTECH_TENANTS ?? 5), tenant);
+    const dominios = await tenants(Number(process.env.LEILOTECH_TENANTS ?? 5), tenant, dbQuery);
 
     for (const host of dominios) {
       if (lots.length >= limit) break;
@@ -112,8 +139,8 @@ export const leilotech: Connector = {
       let r;
       try {
         r = arremata
-          ? await fetchTenantText(`https://${host}/agenda`, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
-          : await fetchText(`https://${host}/agenda`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+          ? await fetchTenant(`https://${host}/agenda`, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
+          : await fetch(`https://${host}/agenda`, { headers: { 'user-agent': UA }, gapMs: 1100 });
       } catch {
         attempt?.failure('network');
         continue;
@@ -138,15 +165,15 @@ export const leilotech: Connector = {
 
       for (const l of links) {
         if (lots.length >= limit) { truncated = true; break; }
-        if (!l.title || looksLikePart(l.title)) {
+        if (!l.title || looksLikePart(l.title) || looksLikeCollectible(l.title) || /\b(pe[cç]as?|partes?|sucatas?)\b/i.test(l.title)) {
           skipped++;
           continue;
         }
         let dr;
         try {
           dr = arremata
-            ? await fetchTenantText(l.url, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
-            : await fetchText(l.url, { headers: { 'user-agent': UA }, gapMs: 1100 });
+            ? await fetchTenant(l.url, normalizedHost, { headers: { 'user-agent': UA }, gapMs: 1100 })
+            : await fetch(l.url, { headers: { 'user-agent': UA }, gapMs: 1100 });
         } catch {
           attempt?.failure('network');
           skipped++;
@@ -162,30 +189,22 @@ export const leilotech: Connector = {
         const local = campos.localDeTexto(l.title);
         const foto = dr.body.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? null;
 
+        const classification = classifyLeilotechAsset(l.title, dl.categoria);
         lots.push({
           sourceId: 'leilotech',
           externalId: arremata ? `${normalizedHost}:${l.id}` : `${host}:${l.id}`,
           lotUrl: dr.url ?? l.url,
           auctioneerName: leiloeiroDoHost(host),
           titleRaw: l.title,
-          brand: parsed.brand,
-          model: parsed.model,
-          version: parsed.version,
-          yearMake: parsed.yearMake,
-          yearModel: parsed.yearModel,
+          brand: classification.assetType === 'imovel' ? null : parsed.brand,
+          model: classification.assetType === 'imovel' ? null : parsed.model,
+          version: classification.assetType === 'imovel' ? null : parsed.version,
+          yearMake: classification.assetType === 'imovel' ? null : parsed.yearMake,
+          yearModel: classification.assetType === 'imovel' ? null : parsed.yearModel,
           sourceCategory: dl.categoria ?? null,
-          // "Categoria" no <dl> vem vazia ou genérica na maioria dos lotes
-          // medidos (endereço claramente imóvel, categoria="outro" mesmo
-          // assim) — o título discrimina melhor: marca reconhecida por
-          // parseTitle é sinal forte de veículo, palavra de imóvel no título
-          // vale mais que o campo da fonte.
-          assetType: /im[óo]vel|apartamento|casa|sobrado|terreno|sala\s+comercial|barrac[ãa]o|fra[çc][ãa]o\s+ideal|vaga\s+de\s+garagem/i.test(
-            `${dl.categoria ?? ''} ${l.title}`,
-          )
-            ? 'imovel'
-            : /ve[íi]culo/i.test(dl.categoria ?? '') || parsed.brand
-              ? 'veiculo'
-              : 'outro',
+          assetType: classification.assetType,
+          vehicleType: classification.vehicleType,
+          propertyType: classification.propertyType,
           closingModel: 'sequencial',
           auctionStartUtc: null,
           auctionEndUtc: null,

@@ -36,9 +36,9 @@ const DIVERSOS_TENANTS = new Set([
   'italoleiloes.com', 'snleiloes.com.br', 'construbemleiloes.com.br',
   'sydneyleiloes.com.br', 'patiorochaleiloes.com.br',
 ]);
-// Construbem has a verified SOLEON contract but no discovered_sites row yet;
-// the manual tenant CLI's host guard fences this explicitly reviewed host.
-const MANUAL_TENANTS = new Set(['construbemleiloes.com.br']);
+// Construbem and Hammer have verified SOLEON contracts but no discovered_sites row yet (Hammer is misclassified as casa-de-leiloes);
+// the manual tenant CLI's host guard fences these explicitly reviewed hosts.
+const MANUAL_TENANTS = new Set(['construbemleiloes.com.br', 'hammer.lel.br']);
 
 const MAQUINA_TITULO = /\b(compressor(?:es)?|m[aá]quina(?:s)?|equipamento(?:s)? industriais?|gerador(?:es)?|transformador(?:es)?|caldeira(?:s)?|retroescavadeira|escavadeira|empilhadeira|colheitadeira|motoniveladora|carregadeira|betoneira|trator(?:es)?)\b/i;
 const IMOVEL_SINAL = /\b(im[oó]vel|apartamento|casa|sobrado|terreno|fazenda|s[ií]tio|ch[aá]cara|sala comercial|galp[aã]o|pr[eé]dio|vaga de garagem)\b/i;
@@ -305,12 +305,13 @@ export async function collectSoleon(
       let truncated = false;
       try {
         const normalizedHost = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+        const httpHost = normalizedHost === 'hammer.lel.br' ? 'www.hammer.lel.br' : host;
         const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost) || DIVERSOS_TENANTS.has(normalizedHost)
           ? ROTAS_CATEGORIAS
           : ROTAS_CATEGORIAS.slice(0, 2)).map((path) => ({ path, page: 1, done: false }));
         if (['ccjleiloes.com.br', 'colodeteleiloes.com.br', 'leilaopernambuco.com.br'].includes(normalizedHost)) {
           try {
-            const home = await fetch(`https://${host}/`, { gapMs: 1100 });
+            const home = await fetch(`https://${httpHost}/`, { gapMs: 1100 });
             attempt?.response(home.status);
             httpStatus = home.status;
             if (home.status === 200) {
@@ -345,7 +346,7 @@ export async function collectSoleon(
             try {
              const eventUrl = categoria.eventUrl;
              const eventPages = categoria.eventPages;
-             res = await fetch(eventUrl ? eventPages?.[categoria.page - 1] ?? eventUrl : `https://${host}${categoria.path}${categoria.path.includes('?') ? '&' : '?'}page=${categoria.page}`, { gapMs: 1100 });
+             res = await fetch(eventUrl ? eventPages?.[categoria.page - 1] ?? eventUrl : `https://${httpHost}${categoria.path}${categoria.path.includes('?') ? '&' : '?'}page=${categoria.page}`, { gapMs: 1100 });
             } catch {
               throwIfCancelled();
               attempt?.failure('network');
@@ -443,7 +444,7 @@ export async function collectSoleon(
           let home;
           try {
             throwIfCancelled();
-            home = await fetch(`https://${host}/`, { gapMs: 1100 });
+            home = await fetch(`https://${httpHost}/`, { gapMs: 1100 });
             throwIfCancelled();
           } catch (error) {
             throwIfCancelled();

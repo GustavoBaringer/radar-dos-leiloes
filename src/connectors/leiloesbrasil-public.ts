@@ -3,7 +3,9 @@ import { comNavegador } from './navegador.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import { looksLikeCollectible, looksLikePart, classifySeller } from '../core/normalize.js';
 import * as campos from '../core/campos.js';
-import type { Connector, CollectResult } from './types.js';
+import type { Connector, CollectResult, CollectOptions } from './types.js';
+import { throwIfCancelled } from '../infra/collection/collection-cancellation.js';
+import { query } from '../core/db.js';
 
 const HOST = 'www.leiloesbrasil.com.br';
 const BASE = `https://${HOST}`;
@@ -16,6 +18,68 @@ interface Candidate {
   dateText: string;
   eventTitle: string;
   lotNumber: string;
+}
+
+export function catalogEndpointForCategory(category: string): string {
+  return category === 'veiculos' ? '/lotes/listar-dados' : `/lotes/listar-${category}-dados`;
+}
+
+export function matchesCatalogResponse(url: string, category: string, method = 'POST'): boolean {
+  if (method.toUpperCase() !== 'POST') return false;
+  const path = category === 'veiculos'
+    ? /\/lotes\/listar(?:-veiculos)?-dados(?:\?|$)/
+    : new RegExp(`\\/lotes\\/listar-${category}-dados(?:\\?|$)`);
+  return path.test(url);
+}
+
+export function nextCatalogPage(
+  current: number | null | undefined,
+  availableRels: string[],
+  visitedPages?: Set<number>,
+): number | null {
+  if (current == null || !Number.isInteger(current) || current < 1) {
+    throw new Error(`Esquema inesperado de paginação: página atual inválida (${current})`);
+  }
+  const visited = visitedPages ?? new Set<number>();
+  const candidates: number[] = [];
+  for (const rel of availableRels) {
+    const trimmed = rel?.trim() ?? '';
+    if (/^\d+$/.test(trimmed)) {
+      const pageNum = Number(trimmed);
+      if (pageNum > current) {
+        if (visited.has(pageNum)) {
+          throw new Error(`Loop de paginação detectado: página ${pageNum} já visitada`);
+        }
+        candidates.push(pageNum);
+      }
+    }
+  }
+  if (!candidates.length) return null;
+  return Math.min(...candidates);
+}
+
+export function extractPaginationFromDom(
+  html: string,
+  visitedPages?: Set<number>,
+): { current: number; next: number | null } {
+  const $ = cheerio.load(html);
+  const selected = $('a.pagina-selecionada').first();
+  const relLinks = $('a.js_paginacao[rel]');
+  if (!selected.length && !relLinks.length) {
+    return { current: 1, next: null };
+  }
+  const selectedText = selected.text().trim();
+  const current = Number(selectedText);
+  if (!Number.isInteger(current) || current < 1) {
+    throw new Error(`Esquema inesperado de paginação: seletor de página atual ausente ou inválido ("${selectedText}")`);
+  }
+  const rels: string[] = [];
+  relLinks.each((_, el) => {
+    const rel = $(el).attr('rel');
+    if (rel) rels.push(rel);
+  });
+  const next = nextCatalogPage(current, rels, visitedPages);
+  return { current, next };
 }
 
 export function parseBrazilianMoney(value: string | null | undefined): number | null {
@@ -87,16 +151,19 @@ export function parseCatalogResponse(raw: string, category: string): Candidate[]
 }
 
 export function parseDetail(html: string, candidate: Candidate, now = Date.now()): CanonicalLot | null {
-  const title = (html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1]
-    ?? html.match(/<meta[^>]+(?:name|property)=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1])
+  const title = (html.match(/<meta[^>]+(?:name|property)=["']og:title["'][^>]+content=["']([^"']+)/i)?.[1]
+    ?? html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1])
     ?.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
-  const stateText = html.match(/id=["']pregao-detalhe["'][^>]*>([\s\S]*?)<\//i)?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const stateText = (
+    html.match(/id=["']pregao-detalhe["'][^>]*>([\s\S]*?)<\//i)?.[1]
+    ?? html.match(/Situa[çc][ãa]o\s+Lote:[\s\S]*?<b[^>]*>([\s\S]*?)<\/b>/i)?.[1]
+  )?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!title || !stateText) throw new Error(`Unknown Leiloes Brasil lot detail schema (${candidate.id})`);
   const statusText = stateText.toLocaleLowerCase('pt-BR');
   let status: LotStatus;
   if (/vendid|arrematad/.test(statusText)) status = 'vendido';
   else if (/encerrad|cancelad|suspens/.test(statusText)) status = 'encerrado';
-  else if (/liberado|aberto|em andamento/.test(statusText)) status = 'aberto';
+  else if (/liberado|aberto|em andamento|placar|ao vivo/.test(statusText)) status = 'aberto';
   else if (/aguardando|em breve/.test(statusText)) status = 'agendado';
   else throw new Error(`Unknown Leiloes Brasil lot status (${candidate.id}): ${stateText}`);
   if (status === 'encerrado' || status === 'vendido') return null;
@@ -137,27 +204,99 @@ export function parseDetail(html: string, candidate: Candidate, now = Date.now()
   };
 }
 
+export type BrasilLotLookup = (
+  lotUrl: string,
+  candidateId: string,
+) => Promise<
+  | { action: 'reuse'; sourceId: string; externalId: string }
+  | { action: 'skip'; reason: string }
+  | { action: 'insert_new'; externalId: string }
+>;
+
+export async function defaultBrasilLookup(
+  lotUrl: string,
+  candidateId: string,
+  dbQuery: typeof query = query,
+): Promise<
+  | { action: 'reuse'; sourceId: string; externalId: string }
+  | { action: 'skip'; reason: string }
+  | { action: 'insert_new'; externalId: string }
+> {
+  const urlRows = await dbQuery<{ id: number; source_id: string; external_id: string; lot_url: string }>(
+    `SELECT id, source_id, external_id, lot_url
+       FROM lots
+      WHERE lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
+            lower(regexp_replace($1, '^https?://(www\\.)?', ''))
+      ORDER BY id ASC`,
+    [lotUrl],
+  );
+
+  if (urlRows.length > 1) {
+    return {
+      action: 'skip',
+      reason: `múltiplos registros existentes para URL ${lotUrl}; pulado até limpeza manual`,
+    };
+  }
+
+  if (urlRows.length === 1) {
+    return {
+      action: 'reuse',
+      sourceId: urlRows[0].source_id,
+      externalId: urlRows[0].external_id,
+    };
+  }
+
+  const proposedApex = `leiloesbrasil.com.br:${candidateId}`;
+  const proposedWww = `www.leiloesbrasil.com.br:${candidateId}`;
+  const idRows = await dbQuery<{ id: number; source_id: string; external_id: string; lot_url: string }>(
+    `SELECT id, source_id, external_id, lot_url
+       FROM lots
+      WHERE external_id IN ($1, $2)
+      LIMIT 1`,
+    [proposedApex, proposedWww],
+  );
+
+  if (idRows.length > 0) {
+    return {
+      action: 'skip',
+      reason: `colisão de external_id (${idRows[0].external_id}) com outra URL existente (${idRows[0].lot_url})`,
+    };
+  }
+
+  return {
+    action: 'insert_new',
+    externalId: proposedWww,
+  };
+}
+
 export const leiloesbrasilPublic: Connector = {
   def: {
     id: 'leiloesbrasilpublic', name: 'Leilões Brasil (catálogo público)', platform: 'Leilões Brasil',
     method: 'html', tier: 3, siteUrl: BASE,
     notes: 'Catálogo público acessado pelo Chromium comum; seis categorias públicas, paginação oficial e detalhe dos lotes.',
   },
-  async collect({ limit, tenant, observer }): Promise<CollectResult> {
+  async collect(
+    { limit, tenant, observer }: CollectOptions,
+    io: { query?: typeof query; lookup?: BrasilLotLookup } = {},
+  ): Promise<CollectResult> {
     const hostname = tenant?.toLowerCase().replace(/\.$/, '');
     if (hostname && hostname !== HOST && hostname !== 'leiloesbrasil.com.br') throw new Error(`Tenant inválido para leiloesbrasilpublic: ${tenant}`);
     if (!Number.isSafeInteger(limit) || limit < 1) throw new Error('limit deve ser um inteiro positivo');
     const attempt = await observer?.start(HOST);
+    const lookup: BrasilLotLookup = io.lookup ?? ((url, id) => defaultBrasilLookup(url, id, io.query ?? query));
     let fetched = 0, skipped = 0, httpStatus: number | undefined;
     let truncated = false;
     let returned = 0;
+    const partialReasons = new Set<string>();
     try {
       const lots = await comNavegador(`${BASE}/veiculos`, async (page) => {
         const output: CanonicalLot[] = [];
         const seen = new Set<string>();
         for (const category of CATEGORIES) {
+          throwIfCancelled();
           if (output.length >= limit) { truncated = true; break; }
-          const firstPageResponse = page.waitForResponse((r) => r.url().includes('/lotes/listar-dados') && r.request().method() === 'POST', { timeout: 30000 }).catch(() => null);
+          const visitedPages = new Set<number>();
+          const firstPageResponse = page.waitForResponse((r) => matchesCatalogResponse(r.url(), category, r.request().method()), { timeout: 30000 }).catch(() => null);
           const response = await page.goto(`${BASE}/${category}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
           httpStatus = response?.status() ?? undefined;
           if (httpStatus) attempt?.response(httpStatus);
@@ -167,49 +306,116 @@ export const leiloesbrasilPublic: Connector = {
           httpStatus = catalogResponse.status();
           attempt?.response(httpStatus);
           if (httpStatus !== 200) throw new Error(`HTTP ${httpStatus} no catálogo /${category}`);
-          await page.waitForFunction(() => !!document.querySelector('tr.js_lote, a.js_paginacao[rel]') || /lotes encontrados/i.test(document.body.innerText), null, { timeout: 20000 });
+          await page.waitForFunction(() => !!document.querySelector('tr.js_lote, a.js_paginacao[rel]') || /lotes encontrados|nenhum lote/i.test(document.body.innerText), null, { timeout: 20000 });
           while (true) {
+            throwIfCancelled();
             const rows = parseCatalogResponse(await catalogResponse.text(), category);
             for (const data of rows) {
+              throwIfCancelled();
               fetched++;
               const candidate = candidateFromRow(data);
               if (!candidate || seen.has(candidate.id)) { skipped++; continue; }
               seen.add(candidate.id);
               if (output.length >= limit) { truncated = true; break; }
               const detail = await page.evaluate(async (id) => {
-                const response = await fetch(`/lote/${id}`);
-                return { status: response.status, html: await response.text() };
+                const res = await fetch(`/lote/${id}`);
+                return { status: res.status, html: await res.text() };
               }, candidate.id);
               attempt?.response(detail.status);
               if (detail.status !== 200) { skipped++; continue; }
               const html = detail.html;
               const parsed = parseDetail(html, candidate);
-              if (parsed) output.push(parsed);
-              else skipped++;
+              if (parsed) {
+                const targetLotUrl = parsed.lotUrl ?? `${BASE}/lote/${candidate.id}`;
+                const lookupRes = await lookup(targetLotUrl, candidate.id);
+                if (lookupRes.action === 'skip') {
+                  partialReasons.add(lookupRes.reason);
+                  skipped++;
+                  continue;
+                }
+                if (lookupRes.action === 'reuse') {
+                  parsed.sourceId = lookupRes.sourceId;
+                  parsed.externalId = lookupRes.externalId;
+                } else {
+                  parsed.externalId = lookupRes.externalId;
+                }
+                output.push(parsed);
+              } else {
+                skipped++;
+              }
             }
             if (truncated || output.length >= limit) {
               truncated ||= (await page.locator('a.js_paginacao[rel]').count()) > 0 || CATEGORIES.indexOf(category as typeof CATEGORIES[number]) < CATEGORIES.length - 1;
               break;
             }
-            const next = page.locator('a.js_paginacao[rel]').last();
-            if (!(await next.count())) break;
-            const target = await next.getAttribute('rel');
-            const current = await page.locator('a.pagina-selecionada').innerText().catch(() => '');
-            if (!target || target === current) break;
-            const nextPageResponse = page.waitForResponse((r) => r.url().includes('/lotes/listar-dados') && r.request().method() === 'POST', { timeout: 30000 }).catch(() => null);
-            await next.click();
-            await page.waitForFunction((previous) => document.querySelector('a.pagina-selecionada')?.textContent?.trim() !== previous, current, { timeout: 20000 });
+
+            const paginationInfo = await page.evaluate((visitedArr: number[]) => {
+              const selected = document.querySelector('a.pagina-selecionada');
+              const relLinks = Array.from(document.querySelectorAll('a.js_paginacao[rel]'));
+              if (!selected && !relLinks.length) {
+                return { current: 1, next: null };
+              }
+              const selectedText = selected?.textContent?.trim() ?? '';
+              const current = Number(selectedText);
+              if (!Number.isInteger(current) || current < 1) {
+                return { error: `invalid_current_page: "${selectedText}"` };
+              }
+              const visited = new Set(visitedArr);
+              visited.add(current);
+              const candidates: number[] = [];
+              for (const a of relLinks) {
+                const rel = a.getAttribute('rel')?.trim() ?? '';
+                if (/^\d+$/.test(rel)) {
+                  const pNum = Number(rel);
+                  if (pNum > current) {
+                    if (visited.has(pNum)) return { error: `loop_detected: página ${pNum} já visitada` };
+                    candidates.push(pNum);
+                  }
+                }
+              }
+              if (!candidates.length) return { current, next: null };
+              return { current, next: Math.min(...candidates) };
+            }, [...visitedPages]);
+
+            if ('error' in paginationInfo) {
+              throw new Error(`Esquema inesperado de paginação em /${category}: ${paginationInfo.error}`);
+            }
+
+            visitedPages.add(paginationInfo.current);
+            if (paginationInfo.next === null) {
+              break;
+            }
+
+            const next = paginationInfo.next;
+            visitedPages.add(next);
+            const nextSelector = `a.js_paginacao[rel="${next}"]`;
+            const nextLocator = page.locator(nextSelector).first();
+            if (!(await nextLocator.count())) break;
+
+            const nextPageResponse = page.waitForResponse((r) => matchesCatalogResponse(r.url(), category, r.request().method()), { timeout: 30000 }).catch(() => null);
+            await nextLocator.click();
+            await page.waitForFunction((expected) => document.querySelector('a.pagina-selecionada')?.textContent?.trim() === String(expected), next, { timeout: 20000 });
             catalogResponse = await nextPageResponse;
-            if (!catalogResponse) throw new Error(`No catalog response for page ${target} in /${category}`);
+            if (!catalogResponse) throw new Error(`No catalog response for page ${next} in /${category}`);
             httpStatus = catalogResponse.status();
             attempt?.response(httpStatus);
-            if (httpStatus !== 200) throw new Error(`HTTP ${httpStatus} na página ${target} de /${category}`);
+            if (httpStatus !== 200) throw new Error(`HTTP ${httpStatus} na página ${next} de /${category}`);
           }
         }
         return output;
       });
       returned = lots.length;
-      return { lots, fetched, skipped, httpStatus, note: truncated ? 'limite atingido; catálogo parcial' : undefined };
+      return {
+        lots,
+        fetched,
+        skipped,
+        httpStatus,
+        note: partialReasons.size
+          ? [...partialReasons].join('; ')
+          : truncated
+            ? 'limite atingido; catálogo parcial'
+            : undefined,
+      };
     } catch (error) {
       attempt?.failure('parser');
       throw error;
