@@ -700,6 +700,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "jsilvaleiloes.com.br",
+    "sourceId": "vlance",
+    "required120": false
+  },
+  {
     "domain": "jussiaraleiloes.com",
     "sourceId": "leiloar",
     "required120": false
@@ -823,6 +828,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "domain": "leiloes-sc.com.br",
     "sourceId": "htmlagenda",
     "required120": true
+  },
+  {
+    "domain": "leiloesaguiar.com.br",
+    "sourceId": "soleon",
+    "required120": false
   },
   {
     "domain": "leiloesbraga.lel.br",
@@ -1125,6 +1135,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "norteleiloes.com.br",
+    "sourceId": "docxhtml",
+    "required120": false
+  },
+  {
     "domain": "nossoleilao.com.br",
     "sourceId": "soleon",
     "required120": true
@@ -1205,6 +1220,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "pimentelleiloes.com.br",
+    "sourceId": "soleon",
+    "required120": false
+  },
+  {
     "domain": "planaltoleiloes.com.br",
     "sourceId": "vlance",
     "required120": false
@@ -1217,6 +1237,16 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "portaldosleiloes.com.br",
     "sourceId": "portalpublic",
+    "required120": false
+  },
+  {
+    "domain": "portalzuk.com.br",
+    "sourceId": "portalzuk",
+    "required120": false
+  },
+  {
+    "domain": "portelaleiloes.com.br",
+    "sourceId": "soleon",
     "required120": false
   },
   {
@@ -1273,6 +1303,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "domain": "rechleiloes.com.br",
     "sourceId": "soleon",
     "required120": true
+  },
+  {
+    "domain": "reisleiloes.com.br",
+    "sourceId": "suaplataforma",
+    "required120": false
   },
   {
     "domain": "renannerisleiloeiro.com.br",
@@ -1467,6 +1502,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "thaisqueirozleiloeira.com.br",
     "sourceId": "leiloesbr",
+    "required120": false
+  },
+  {
+    "domain": "thaisteixeiraleiloes.com.br",
+    "sourceId": "vlance",
     "required120": false
   },
   {
