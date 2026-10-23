@@ -91,6 +91,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "amazonasleiloes.com.br",
+    "sourceId": "suaplataforma",
+    "required120": false
+  },
+  {
     "domain": "analucialeiloeira.com.br",
     "sourceId": "msis",
     "required120": false
@@ -782,6 +787,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "leilaopernambuco.com.br",
     "sourceId": "soleon",
+    "required120": false
+  },
+  {
+    "domain": "leilo.com.br",
+    "sourceId": "leilo",
     "required120": false
   },
   {

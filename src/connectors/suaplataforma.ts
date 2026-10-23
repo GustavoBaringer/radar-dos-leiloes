@@ -231,8 +231,9 @@ const TENANT_ALIASES: Record<string, string> = {
   'tezaleiloes.com.br': 'teza.com.br',
 };
 
-const REVIEWED_TENANTS = new Set([
+export const REVIEWED_TENANTS = new Set([
   'teza.com.br',
+  'amazonasleiloes.com.br',
 ]);
 
 function raizDomain(value: string): string {
@@ -250,16 +251,49 @@ function resolveTenantDomain(value: string): string {
   return TENANT_ALIASES[root] ?? root;
 }
 
-async function tenants(limite: number, tenant: string | undefined, lookup: (sql: string, params?: any[]) => Promise<any[]>): Promise<string[]> {
+export async function tenants(
+  limiteOrTenant: number | string = 40,
+  tenantOrLookup?: string | ((sql: string, params?: any[]) => Promise<any[]>),
+  lookup: (sql: string, params?: any[]) => Promise<any[]> = query,
+): Promise<string[]> {
+  let limite = 40;
+  let tenant: string | undefined;
+  let effectiveLookup = lookup;
+
+  if (typeof limiteOrTenant === 'string') {
+    tenant = limiteOrTenant;
+    if (typeof tenantOrLookup === 'function') {
+      effectiveLookup = tenantOrLookup;
+    }
+  } else {
+    limite = limiteOrTenant;
+    if (typeof tenantOrLookup === 'string') {
+      tenant = tenantOrLookup;
+    } else if (typeof tenantOrLookup === 'function') {
+      effectiveLookup = tenantOrLookup;
+    }
+  }
+
   const requestedRoot = tenant === undefined ? undefined : resolveTenantDomain(tenant);
   const explicitos = String(process.env.SUAPLATAFORMA_DOMAINS ?? '').trim();
-  const rows = explicitos
-    ? explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((domain) => ({ domain }))
-    : await lookup(
-    `SELECT domain FROM discovered_sites
-      WHERE platform = 'sua-plataforma' AND http_status = 200
-      ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
-  );
+  let rows: any[];
+  if (explicitos) {
+    rows = explicitos.split(',').map((d) => d.trim()).filter(Boolean).map((domain) => ({ domain }));
+  } else {
+    try {
+      rows = await effectiveLookup(
+        `SELECT domain FROM discovered_sites
+          WHERE platform = 'sua-plataforma' AND http_status = 200
+          ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
+      );
+    } catch (err) {
+      if (effectiveLookup === query) {
+        rows = [];
+      } else {
+        throw err;
+      }
+    }
+  }
   // O host serve em www.; o domínio pelado devolve 301, e POST que segue
   // redirect degrada para GET — a resposta viria 200 e vazia.
   const population = rows.map((r) => `www.${raizDomain(r.domain)}`);
@@ -278,17 +312,19 @@ async function tenants(limite: number, tenant: string | undefined, lookup: (sql:
 export async function collectSuaPlataforma(
   { limit, assetTypes, observer, tenant }: CollectOptions,
   io: {
-    fetchJson: (url: string, opts?: FetchOpts) => Promise<{ status: number; data: any; raw: string }>;
-    query: (sql: string, params?: any[]) => Promise<any[]>;
-  } = { fetchJson, query },
+    fetchJson?: (url: string, opts?: FetchOpts) => Promise<{ status: number; data: any; raw: string }>;
+    query?: (sql: string, params?: any[]) => Promise<any[]>;
+  } = {},
 ): Promise<CollectResult> {
+  const effectiveFetchJson = io.fetchJson ?? fetchJson;
+  const effectiveQuery = io.query ?? query;
   const lots: CanonicalLot[] = [];
   let fetched = 0;
   let skipped = 0;
   let httpStatus = 0;
   const allNotes: string[] = [];
 
-  for (const host of await tenants(Number(process.env.SUAPLATAFORMA_TENANTS ?? 40), tenant, io.query)) {
+  for (const host of await tenants(Number(process.env.SUAPLATAFORMA_TENANTS ?? 40), tenant, effectiveQuery)) {
     throwIfCancelled();
     if (lots.length >= limit) break;
     const attempt = await observer?.start(raizDomain(host));
@@ -310,7 +346,7 @@ export async function collectSuaPlataforma(
 
         let r;
         try {
-          r = await io.fetchJson(`https://${host}/ApiEngine/GetLotes/${pagina}/${PAGINA}`, {
+          r = await effectiveFetchJson(`https://${host}/ApiEngine/GetLotes/${pagina}/${PAGINA}`, {
             method: 'POST', gapMs: 1100, timeoutMs: 60000,
             headers: { 'content-type': 'application/json', referer: `https://${host}/busca` }, body: '{}',
           });
