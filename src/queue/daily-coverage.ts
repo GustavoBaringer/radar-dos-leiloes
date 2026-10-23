@@ -137,6 +137,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "asamileiloes.com.br",
+    "sourceId": "superbid",
+    "required120": false
+  },
+  {
     "domain": "atlanticoleiloes.com.br",
     "sourceId": "suporteleiloes",
     "required120": false
@@ -363,6 +368,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "deonizialeiloes.com.br",
+    "sourceId": "vlance",
+    "required120": false
+  },
+  {
     "domain": "depaulaonline.com.br",
     "sourceId": "suporteleiloes",
     "required120": false
@@ -521,6 +531,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "gabrielleiloeiro.com.br",
     "sourceId": "msis",
+    "required120": false
+  },
+  {
+    "domain": "galvanileiloes.com.br",
+    "sourceId": "vlance",
     "required120": false
   },
   {
@@ -880,6 +895,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "leiloesrionegro.com.br",
+    "sourceId": "bomvalor",
+    "required120": false
+  },
+  {
     "domain": "leiloesrn.com.br",
     "sourceId": "soleon",
     "required120": true
@@ -1037,6 +1057,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "maximoleiloes.com.br",
     "sourceId": "soleon",
+    "required120": false
+  },
+  {
+    "domain": "maycosantos.lel.br",
+    "sourceId": "maycosantos",
     "required120": false
   },
   {

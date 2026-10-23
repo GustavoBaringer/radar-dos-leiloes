@@ -18,7 +18,7 @@ import { fetchText } from './http.js';
 import * as campos from '../core/campos.js';
 import { query } from '../core/db.js';
 import type { CanonicalLot, AssetType, LotStatus } from '../core/types.js';
-import type { Connector, CollectResult } from './types.js';
+import type { Connector, CollectResult, CollectOptions } from './types.js';
 import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
@@ -27,7 +27,14 @@ const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
  * Tenants que de fato acrescentam catálogo, em ordem de cobertura gulosa medida.
  * É dado, não constante: reavaliar periodicamente rodando os 11 e comparando ids.
  */
-const TENANTS_PADRAO = ['leiloei.com', 'multleiloes.com', 'paulotolentino.com.br', 'martinsleiloes.com.br', 'costanetoleiloeiro.com.br'];
+export const TENANTS_PADRAO = [
+  'leiloei.com',
+  'multleiloes.com',
+  'paulotolentino.com.br',
+  'martinsleiloes.com.br',
+  'costanetoleiloeiro.com.br',
+  'leiloesrionegro.com.br',
+];
 
 const SEGMENTO: Record<string, AssetType> = { veiculos: 'veiculo', imoveis: 'imovel' };
 
@@ -80,7 +87,7 @@ function leiloeiroUnico(leilao: any): string | null {
   return campos.nomeDeLeiloeiro(leilao?.leiloeiros?.[ids[0]]?.nm);
 }
 
-function lerSharedData(html: string): any | null {
+export function lerSharedData(html: string): any | null {
   const i = html.indexOf('sharedData');
   if (i < 0) return null;
   const abre = html.indexOf('{', i);
@@ -113,7 +120,7 @@ function lerSharedData(html: string): any | null {
 }
 
 /** Lotes da listagem: o atributo `data-lote` traz o array inteiro da página. */
-function lerListagem(html: string): any[] {
+export function lerListagem(html: string): any[] {
   const m = /id="info-lote-mapa"[^>]*data-lote="([^"]+)"/.exec(html);
   if (!m) return [];
   const texto = m[1]
@@ -132,7 +139,7 @@ function lerListagem(html: string): any[] {
 
 const idDoSlug = (slug: string): string | null => /-(\d+)$/.exec(String(slug ?? ''))?.[1] ?? null;
 
-function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
+export function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
   const slug = String(item?.nm_slug ?? '');
   const id = idDoSlug(slug);
   const titulo = String(item?.nm_titulo ?? detalhe?.nm_titulo ?? '').trim();
@@ -214,7 +221,7 @@ function mapLot(item: any, detalhe: any, host: string): CanonicalLot | null {
   } as CanonicalLot;
 }
 
-async function tenants(tenant?: string): Promise<string[]> {
+export async function tenants(tenant?: string): Promise<string[]> {
   if (tenant !== undefined) {
     const domain = tenant.replace(/^www\./, '').toLowerCase();
     if (!TENANTS_PADRAO.includes(domain)) throw new Error(`Unreviewed Bomvalor tenant: ${tenant}`);
@@ -236,7 +243,11 @@ async function tenants(tenant?: string): Promise<string[]> {
   return rotateTenants(candidates, Number(process.env.BOMVALOR_TENANT_BATCH ?? candidates.length));
 }
 
-export const bomvalor: Connector = {
+export interface BomvalorConnector extends Connector {
+  collect(opts: CollectOptions, fetch?: typeof fetchText): Promise<CollectResult>;
+}
+
+export const bomvalor: BomvalorConnector = {
   def: {
     id: 'bomvalor',
     name: 'Bom Valor',
@@ -248,7 +259,10 @@ export const bomvalor: Connector = {
       'Marketplace único com fachadas por leiloeiro: 5 tenants cobrem 100% do catálogo, os outros 6 não acrescentam nada. Listagem traz o acervo num atributo; preço e data exigem o detalhe.',
   },
 
-  async collect({ limit, assetTypes, tenant }): Promise<CollectResult> {
+  async collect(
+    { limit, assetTypes, tenant }: CollectOptions,
+    fetch: typeof fetchText = fetchText,
+  ): Promise<CollectResult> {
     throwIfCancelled();
     const lots: CanonicalLot[] = [];
     let fetched = 0;
@@ -259,57 +273,60 @@ export const bomvalor: Connector = {
     for (const host of await tenants(tenant)) {
       if (lots.length >= limit) break;
       throwIfCancelled();
-      let r;
-      try {
-        // Uma requisição traz o catálogo inteiro do tenant. Medido: 3,9 a 5,0 MB
-        // e 43 a 56 segundos — por isso o timeout é generoso.
-        r = await fetchText(`https://${host}/busca?perPage=1000&page=1`, {
-          headers: { 'user-agent': UA },
-          gapMs: 1100,
-          timeoutMs: 120000,
-        });
-      } catch (error) {
-        if (error instanceof CollectionCancellationError) throw error;
-        continue;
-      }
-      status = r.status;
-      if (r.status !== 200) continue;
 
-      const itens = lerListagem(r.body);
-      fetched += itens.length;
-
-      for (const it of itens) {
-        if (lots.length >= limit) break;
+      for (let pagina = 1; lots.length < limit; pagina++) {
         throwIfCancelled();
-        const slug = String(it?.nm_slug ?? '');
-        const id = idDoSlug(slug);
-        // O id é global: o mesmo lote aparece em várias fachadas e só a primeira conta.
-        if (!id || vistos.has(id)) continue;
-        const seg = SEGMENTO[slug.split('/')[0]] ?? null;
-        if (!seg || (assetTypes && !assetTypes.includes(seg))) {
-          skipped++;
-          continue;
-        }
-        vistos.add(id);
-
-        // Preço, data e status só existem no detalhe — a listagem não os traz. Sem
-        // isto o lote entraria sem prazo e sem valor, que é o que o produto vende.
-        let detalhe: any = null;
+        let r;
         try {
-          const d = await fetchText(`https://${host}/${slug.replace(/^\/+/, '')}`, {
+          r = await fetch(`https://${host}/busca?perPage=50&page=${pagina}`, {
             headers: { 'user-agent': UA },
             gapMs: 1100,
             timeoutMs: 45000,
           });
-          if (d.status === 200) detalhe = lerSharedData(d.body)?.lote ?? null;
         } catch (error) {
-          // cancelamento corta o laço; sem detalhe o lote ainda entra com o que a listagem deu
           if (error instanceof CollectionCancellationError) throw error;
+          break;
         }
+        status = r.status;
+        if (r.status !== 200) break;
 
-        const m = mapLot(it, detalhe, host);
-        if (m) lots.push(m);
-        else skipped++;
+        const itens = lerListagem(r.body);
+        if (!itens.length) break;
+        fetched += itens.length;
+
+        for (const it of itens) {
+          if (lots.length >= limit) break;
+          throwIfCancelled();
+          const slug = String(it?.nm_slug ?? '');
+          const id = idDoSlug(slug);
+          // O id é global: o mesmo lote aparece em várias fachadas e só a primeira conta.
+          if (!id || vistos.has(id)) continue;
+          const seg = SEGMENTO[slug.split('/')[0]] ?? null;
+          if (!seg || (assetTypes && !assetTypes.includes(seg))) {
+            skipped++;
+            continue;
+          }
+          vistos.add(id);
+
+          // Preço, data e status só existem no detalhe — a listagem não os traz. Sem
+          // isto o lote entraria sem prazo e sem valor, que é o que o produto vende.
+          let detalhe: any = null;
+          try {
+            const d = await fetch(`https://${host}/${slug.replace(/^\/+/, '')}`, {
+              headers: { 'user-agent': UA },
+              gapMs: 1100,
+              timeoutMs: 45000,
+            });
+            if (d.status === 200) detalhe = lerSharedData(d.body)?.lote ?? null;
+          } catch (error) {
+            // cancelamento corta o laço; sem detalhe o lote ainda entra com o que a listagem deu
+            if (error instanceof CollectionCancellationError) throw error;
+          }
+
+          const m = mapLot(it, detalhe, host);
+          if (m) lots.push(m);
+          else skipped++;
+        }
       }
     }
 
