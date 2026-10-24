@@ -1,9 +1,11 @@
-import { fetchText } from './http.js';
-import type { Connector, CollectResult } from './types.js';
+import { fetchText, fetchTenantText, TenantScopeError } from './http.js';
+import type { Connector, CollectOptions, CollectResult } from './types.js';
 import type { CanonicalLot, LotStatus } from '../core/types.js';
 import * as campos from '../core/campos.js';
 import { parseTitle, classifySeller, looksLikePart } from '../core/normalize.js';
 import { query } from '../core/db.js';
+import { filterTenantPopulation } from './tenant-scheduler.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 /**
  * LEILOVIA — plataforma white-label ASP.NET, achada em 22/09 a partir de 3
@@ -28,18 +30,21 @@ import { query } from '../core/db.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const DOMINIOS_BASE = ['vialeiloes.com.br', 'reginaaudeleiloes.com.br', 'rpleiloes.com.br'];
-const EVENTOS_POR_TENANT = 8;
 
-async function tenants(limite: number): Promise<string[]> {
-  const rows = await query<{ domain: string }>(
+async function tenants(limite: number, tenant?: string, lookup: typeof query = query): Promise<string[]> {
+  const rows = await lookup<{ domain: string }>(
     `SELECT domain FROM discovered_sites
       WHERE (platform = 'leilovia' OR domain = ANY($2::text[]))
         AND http_status = 200
       ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain
       LIMIT $1`,
-    [limite, DOMINIOS_BASE],
+    [tenant ? Number.MAX_SAFE_INTEGER : limite, DOMINIOS_BASE],
   );
-  return [...new Set([...DOMINIOS_BASE, ...rows.map((r) => r.domain)])];
+  const candidates = [...new Set([...DOMINIOS_BASE, ...rows.map((r) => r.domain)])];
+  if (!tenant) return candidates;
+  const only = filterTenantPopulation(candidates, tenant);
+  if (!only.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de leilovia`);
+  return only;
 }
 
 function leiloeiroDoHost(host: string): string {
@@ -66,6 +71,33 @@ function statusDe(v: string): LotStatus {
 function dinheiro(v?: string | null): number | null {
   const n = Number(String(v ?? '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
   return isFinite(n) && n > 0 ? n : null;
+}
+
+function textoSemHtml(value: string): string {
+  return value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&')
+    .replace(/&aacute;/gi, 'á').replace(/&atilde;/gi, 'ã').replace(/&ccedil;/gi, 'ç')
+    .replace(/&oacute;/gi, 'ó').replace(/&ecirc;/gi, 'ê').replace(/&iacute;/gi, 'í')
+    .replace(/&uacute;/gi, 'ú').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s+/g, ' ').trim();
+}
+
+function isDemoText(value: string): boolean {
+  const folded = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return /\b(?:testes?|simulador|simulacao|simulados?|simuladas?|treino|treinamento|demonstracao)\b/i.test(folded);
+}
+
+function eventDescription(html: string): string {
+  const heading = html.match(/<h3\b[^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? '';
+  const activeAssets = html.match(/Ativos disponíveis nesse leilão:\s*<\/p>([\s\S]{0,500}?)(?:<br\s*\/?\s*>|<a\b)/i)?.[1] ?? '';
+  return textoSemHtml(`${heading} ${activeAssets}`);
+}
+
+function normalizedUrl(value: string): string {
+  const url = new URL(value);
+  url.hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) url.port = '';
+  url.hash = '';
+  return `${url.origin}${url.pathname.replace(/\/$/, '')}${url.search}`;
 }
 
 /**
@@ -130,58 +162,134 @@ function lerCards(html: string, baseUrl: string): Card[] {
   return out;
 }
 
-export const leilovia: Connector = {
-  def: {
-    id: 'leilovia',
-    name: 'Plataforma Leilovia',
-    platform: 'Leilovia',
-    method: 'html',
-    tier: 3,
-    siteUrl: 'https://www.leilovia.com.br',
-    notes: 'White-label ASP.NET multi-tenant; catálogo em /leiloes.aspx e detalhe em /leilao/<slug>/<id>. Data de encerramento é do leilão, não do lote.',
-  },
-  async collect({ limit }): Promise<CollectResult> {
+export function parseLeiloviaCards(html: string, baseUrl: string): Card[] {
+  return lerCards(html, baseUrl);
+}
+
+export async function collectLeilovia({ limit, tenant }: CollectOptions, io: { fetchText?: typeof fetchText; fetchTenantText?: typeof fetchTenantText; query?: typeof query } = {}): Promise<CollectResult> {
+    const fetch = io.fetchText ?? fetchText;
+    const fetchTenant = io.fetchTenantText ?? fetchTenantText;
+    const lookup = io.query ?? query;
     const lots: CanonicalLot[] = [];
     let fetched = 0;
     let skipped = 0;
     let httpStatus = 0;
+    const notes: string[] = [];
+    const seenLots = new Set<string>();
+    const seenLotUrls = new Set<string>();
 
-    for (const host of await tenants(Number(process.env.LEILOVIA_TENANTS ?? 80))) {
-      if (lots.length >= limit) break;
+    for (const host of await tenants(Number(process.env.LEILOVIA_TENANTS ?? 80), tenant, lookup)) {
+      throwIfCancelled();
+      if (lots.length >= limit) {
+        notes.push(`limite ${limit} atingido antes do tenant ${host}`);
+        break;
+      }
       const baseUrl = `https://${host}`;
       let r;
       try {
-        r = await fetchText(`${baseUrl}/leiloes.aspx`, { headers: { 'user-agent': UA }, gapMs: 1100 });
-      } catch {
+        r = tenant
+          ? await fetchTenant(`${baseUrl}/leiloes.aspx`, host, { headers: { 'user-agent': UA }, gapMs: 1100 })
+          : await fetch(`${baseUrl}/leiloes.aspx`, { headers: { 'user-agent': UA }, gapMs: 1100 });
+        throwIfCancelled();
+      } catch (error) {
+        if (error instanceof TenantScopeError || error instanceof CollectionCancellationError) throw error;
+        throwIfCancelled();
+        notes.push(`falha no catálogo ${baseUrl}/leiloes.aspx: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       httpStatus = r.status;
-      if (r.status !== 200) continue;
+      if (r.status !== 200) {
+        notes.push(`catálogo ${baseUrl}/leiloes.aspx respondeu HTTP ${r.status}`);
+        continue;
+      }
 
-      const eventos = [...new Set([...r.body.matchAll(/href='(\/leilao\/[^']+\/\d+)'/g)].map((m) => m[1]))].slice(
-        0,
-        EVENTOS_POR_TENANT,
-      );
+      const eventos: string[] = [];
+      const vistosEventos = new Set<string>();
+      for (const match of r.body.matchAll(/href=["']([^"']+)["']/g)) {
+        let url: URL;
+        try { url = new URL(match[1], `${baseUrl}/`); } catch { continue; }
+        if (!/^https?:$/.test(url.protocol) || !/^\/leilao\/.*\/\d+\/?$/.test(url.pathname)) continue;
+        if (url.hostname.toLowerCase().replace(/^www\./, '') !== host.toLowerCase().replace(/^www\./, '')) {
+          throw new TenantScopeError(`evento fora do tenant solicitado: ${host}`);
+        }
+        const key = normalizedUrl(url.href);
+        if (vistosEventos.has(key)) continue;
+        vistosEventos.add(key);
+        eventos.push(url.href);
+      }
+      if (!eventos.length) notes.push(`nenhum evento observável no catálogo ${baseUrl}/leiloes.aspx`);
+      if (/(?:[?&](?:page|pagina|pag)=\d+|class=["'][^"']*(?:pagin|pager))/i.test(r.body)) {
+        notes.push(`paginação do catálogo não percorrida em ${baseUrl}/leiloes.aspx`);
+      }
 
-      for (const caminho of eventos) {
-        if (lots.length >= limit) break;
+      let limitReached = false;
+      for (let eventIndex = 0; eventIndex < eventos.length; eventIndex++) {
+        throwIfCancelled();
+        const eventUrl = eventos[eventIndex];
+        if (lots.length >= limit) {
+          notes.push(`limite ${limit} atingido; ${eventos.length - eventIndex} eventos observados não percorridos em ${host}`);
+          limitReached = true;
+          break;
+        }
         let er;
         try {
-          er = await fetchText(`${baseUrl}${caminho}`, { headers: { 'user-agent': UA }, gapMs: 1100 });
-        } catch {
+          er = tenant
+            ? await fetchTenant(eventUrl, host, { headers: { 'user-agent': UA }, gapMs: 1100 })
+            : await fetch(eventUrl, { headers: { 'user-agent': UA }, gapMs: 1100 });
+          throwIfCancelled();
+        } catch (error) {
+          if (error instanceof TenantScopeError || error instanceof CollectionCancellationError) throw error;
+          throwIfCancelled();
+          notes.push(`falha no evento ${eventUrl}: ${error instanceof Error ? error.message : String(error)}`);
           continue;
         }
-        if (er.status !== 200) continue;
+        httpStatus = er.status;
+        if (er.status !== 200) {
+          notes.push(`evento ${eventUrl} respondeu HTTP ${er.status}`);
+          continue;
+        }
+        if (/(?:[?&](?:page|pagina|pag)=\d+|class=["'][^"']*(?:pagin|pager))/i.test(er.body)) {
+          notes.push(`paginação do evento não percorrida em ${eventUrl}`);
+        }
 
         const encerramento = dataBr(er.body.match(/Encerramento previsto:[\s\S]{0,150}?(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2})/)?.[1]);
+        const demoEvent = isDemoText(`${eventUrl} ${eventDescription(er.body)}`);
+        const rawCardCount = er.body.split('class="lote-lista"').length - 1;
         const cards = lerCards(er.body, baseUrl);
-        if (!cards.length) continue;
-        fetched += cards.length;
+        if (cards.some((card) => {
+          const url = new URL(card.url);
+          return !/^https?:$/.test(url.protocol) || url.hostname.toLowerCase().replace(/^www\./, '') !== host.toLowerCase().replace(/^www\./, '');
+        })) {
+          throw new TenantScopeError(`lote fora do tenant solicitado: ${host}`);
+        }
+        fetched += rawCardCount;
+        if (cards.length < rawCardCount) {
+          const missed = rawCardCount - cards.length;
+          skipped += missed;
+          notes.push(`${missed} card(s) sem URL/ID parseável em ${eventUrl}`);
+        }
+        if (!cards.length) {
+          notes.push(`nenhum card parseável no evento ${eventUrl}`);
+          continue;
+        }
 
         for (const c of cards) {
-          if (lots.length >= limit) break;
-          if (!c.titulo || looksLikePart(c.titulo)) {
+          throwIfCancelled();
+          const lotKey = `${host}:${c.id}`;
+          const urlKey = normalizedUrl(c.url);
+          if (seenLots.has(lotKey) || seenLotUrls.has(urlKey)) {
             skipped++;
+            continue;
+          }
+          seenLots.add(lotKey);
+          seenLotUrls.add(urlKey);
+          if (demoEvent || isDemoText(c.titulo) || !c.titulo || looksLikePart(c.titulo)) {
+            skipped++;
+            continue;
+          }
+          if (lots.length >= limit) {
+            skipped++;
+            limitReached = true;
             continue;
           }
           const parsed = parseTitle(c.titulo);
@@ -200,7 +308,7 @@ export const leilovia: Connector = {
             yearMake: parsed.yearMake,
             yearModel: parsed.yearModel,
             sourceCategory: c.categoria || null,
-            assetType: /im[óo]vel/i.test(c.categoria)
+            assetType: /im[óo]vel|terrenos?\b/i.test(c.categoria)
               ? 'imovel'
               : /ve[íi]culo|motocicleta|moto\b|caminh[ãa]o|[oô]nibus/i.test(c.categoria)
                 ? 'veiculo'
@@ -220,8 +328,26 @@ export const leilovia: Connector = {
             raw: { tenant: host, statusTexto: c.status },
           });
         }
+        if (limitReached) {
+          const remainingEvents = eventos.length - eventIndex - 1;
+          notes.push(`limite ${limit} atingido em ${eventUrl}; ${remainingEvents} eventos observados não percorridos em ${host}`);
+          break;
+        }
       }
     }
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus };
+    const note = notes.length ? `cobertura parcial: ${[...new Set(notes)].join('; ')}` : undefined;
+    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus, ...(note ? { note } : {}) };
+}
+
+export const leilovia: Connector = {
+  def: {
+    id: 'leilovia',
+    name: 'Plataforma Leilovia',
+    platform: 'Leilovia',
+    method: 'html',
+    tier: 3,
+    siteUrl: 'https://www.leilovia.com.br',
+    notes: 'White-label ASP.NET multi-tenant; catálogo em /leiloes.aspx e detalhe em /leilao/<slug>/<id>. Data de encerramento é do leilão, não do lote.',
   },
+  collect: collectLeilovia,
 };

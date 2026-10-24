@@ -116,6 +116,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "araujoleiloes.com.br",
+    "sourceId": "soleon",
+    "required120": false
+  },
+  {
     "domain": "argleiloes.com.br",
     "sourceId": "soleon",
     "required120": false
@@ -252,6 +257,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "canaldeleiloes.net",
+    "sourceId": "leiloar",
+    "required120": false
+  },
+  {
     "domain": "capitalvalorleiloes.com.br",
     "sourceId": "vlance",
     "required120": false
@@ -267,6 +277,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "casadeleiloes.com.br",
+    "sourceId": "casadeleiloes",
+    "required120": false
+  },
+  {
     "domain": "cassianoleiloes.com.br",
     "sourceId": "soleon",
     "required120": true
@@ -274,6 +289,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "ccjleiloes.com.br",
     "sourceId": "soleon",
+    "required120": false
+  },
+  {
+    "domain": "ceciliadelzeirleiloes.com.br",
+    "sourceId": "leilaopro",
     "required120": false
   },
   {
@@ -634,6 +654,16 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "hcleiloes.com.br",
+    "sourceId": "leilovia",
+    "required120": false
+  },
+  {
+    "domain": "hoppeleiloes.com.br",
+    "sourceId": "superbid",
+    "required120": false
+  },
+  {
     "domain": "ibecleiloes.com.br",
     "sourceId": "suporteleiloes",
     "required120": true
@@ -920,6 +950,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "leiloesonlinems.com.br",
+    "sourceId": "leilovia",
+    "required120": false
+  },
+  {
     "domain": "leiloespb.com.br",
     "sourceId": "suporteleiloes",
     "required120": false
@@ -998,6 +1033,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "domain": "lutheroleiloes.com.br",
     "sourceId": "htmlagenda",
     "required120": true
+  },
+  {
+    "domain": "machadoleiloeiro.com.br",
+    "sourceId": "soleon",
+    "required120": false
   },
   {
     "domain": "machadoleiloes.com.br",
@@ -1325,6 +1365,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "reginaaudeleiloes.com.br",
+    "sourceId": "leilovia",
+    "required120": false
+  },
+  {
     "domain": "reisleiloes.com.br",
     "sourceId": "suaplataforma",
     "required120": false
@@ -1388,6 +1433,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "domain": "rogerserafimleiloes.com.br",
     "sourceId": "htmlagenda",
     "required120": true
+  },
+  {
+    "domain": "rpleiloes.com.br",
+    "sourceId": "leilovia",
+    "required120": false
   },
   {
     "domain": "rymerleiloes.com.br",
@@ -1467,6 +1517,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "silveiraleiloes.com.br",
     "sourceId": "suaplataforma",
+    "required120": false
+  },
+  {
+    "domain": "simonleiloes.com.br",
+    "sourceId": "simonleiloes",
     "required120": false
   },
   {
@@ -1560,6 +1615,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "tulioleiloes.com.br",
+    "sourceId": "leilotech",
+    "required120": false
+  },
+  {
     "domain": "unileiloes.com.br",
     "sourceId": "suporteleiloes",
     "required120": false
@@ -1597,6 +1657,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "veratostesleiloes.com.br",
     "sourceId": "leiloesbr",
+    "required120": false
+  },
+  {
+    "domain": "vialeiloes.com.br",
+    "sourceId": "leilovia",
     "required120": false
   },
   {

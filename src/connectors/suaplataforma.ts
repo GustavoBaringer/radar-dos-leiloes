@@ -135,6 +135,9 @@ function mapLot(l: any, host: string): CanonicalLot | null {
   if (!id || isDemo(l)) return null;
   let titulo = String(l?.Lote ?? '').trim();
   if (tituloImprestavel(titulo)) {
+    // Select's event label (e.g. a court/auction name) is not a lot title.
+    // Detail pages confirmed do not expose a better title for these records.
+    if (host === 'www.selectleiloes.com.br') return null;
     const slug = (() => {
       try {
         const m = l.URLlote?.match(/\/lote\/([^/]+)/);
@@ -402,6 +405,9 @@ export async function collectSuaPlataforma(
             break;
           }
           const m = mapLot(it, host);
+          if (!m && host === 'www.selectleiloes.com.br' && tituloImprestavel(String(it?.Lote ?? '').trim())) {
+            tenantNotes.push(`Select: lote ${String(it?.ID_Leiloes_Lote ?? '')} sem título descritivo; descartado`);
+          }
           if (m && (!assetTypes || assetTypes.includes(m.assetType as string))) lots.push(m);
           else skipped++;
         }

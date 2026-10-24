@@ -165,6 +165,11 @@ export const SUPERBID_TENANTS: Record<string, SuperbidTenantConfig> = {
     host: 'www.asamileiloes.com.br',
     name: 'Asami Leilões',
   },
+  'hoppeleiloes.com.br': {
+    storeId: 16194,
+    host: 'www.hoppeleiloes.com.br',
+    name: 'Hoppe Leilões',
+  },
 };
 
 export function resolveSuperbidTenant(tenant: string): SuperbidTenantConfig {

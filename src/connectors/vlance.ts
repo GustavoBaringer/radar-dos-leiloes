@@ -72,6 +72,24 @@ const DOCX_VLANCE_TENANTS = [
   'www.deonizialeiloes.com.br',
 ];
 
+// Tenant reviewed from its public identity and first-party V-Lance client:
+// www.carloferrarileiloes.com.br loads /v3/js/vlance/lotes/container.js and
+// exposes the /core/api/get-lotes contract (see block16-carlo-* evidence).
+// This is a site-specific review, not a claim that Carlo came from the DOCX list.
+const REVIEWED_VLANCE_TENANTS = ['www.carloferrarileiloes.com.br'];
+
+/** Add only reviewed tenants, then apply the same strict single-tenant gate. */
+export function selectVlanceTenants(candidates: readonly string[], tenant?: string): string[] {
+  const population = [...candidates];
+  for (const host of [...DOCX_VLANCE_TENANTS, ...REVIEWED_VLANCE_TENANTS, 'api.leiloesjudiciais.com.br'].reverse()) {
+    if (!population.includes(host)) population.unshift(host);
+  }
+  if (!tenant) return population;
+  const selected = filterTenantPopulation(population, tenant);
+  if (!selected.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de vlance`);
+  return selected;
+}
+
 function texto(html?: string | null): string {
   return String(html ?? '')
     .replace(/<[^>]+>/g, ' ')
@@ -224,16 +242,7 @@ async function tenants(limite: number, tenant?: string): Promise<string[]> {
        ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`,
   );
   const lista = await dueTenants({ sourceId: 'vlance', candidates: rows.map((r) => r.domain), limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
-  // MEDIDO: no Serrano a API mora em `api.`, não no host do site — `www` devolve
-  // 404 e o domínio sem prefixo devolve 301. O catálogo tem só os tenants menores,
-  // então o maior entra explicitamente.
-  for (const host of [...DOCX_VLANCE_TENANTS, 'api.leiloesjudiciais.com.br'].reverse()) {
-    if (!lista.includes(host)) lista.unshift(host);
-  }
-  if (!tenant) return lista;
-  const apenas = filterTenantPopulation(lista, tenant);
-  if (!apenas.length) throw new Error(`single-tenant '${tenant}' fora da população elegível de vlance`);
-  return apenas;
+  return selectVlanceTenants(lista, tenant);
 }
 
 export const vlance: Connector = {

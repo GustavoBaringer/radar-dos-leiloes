@@ -50,7 +50,7 @@ export const FOLLOWUP_TENANTS = new Set([
   'vlleiloes.com.br', 'leiloesmonteiro.com.br', 'maglianoleiloes.com.br',
   // Contrato v1 atual: `/leiloes` não enumera os cards; o crawler público lê
   // também `/buscador`, onde os lotes são publicados.
-  'buaizleiloes.com.br', 'esleiloes.com.br', 'suedpeterleiloes.com.br', 'emleilao.com.br',
+  'buaizleiloes.com.br', 'esleiloes.com.br', 'suedpeterleiloes.com.br', 'emleilao.com.br', 'marcaleiloes.com.br',
   'renannerisleiloeiro.com.br', 'portoleiloes.com.br', 'leilaobrasil.com.br',
 ]);
 
@@ -183,7 +183,7 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
   request: typeof fetchTenantText = fetchTenantText, lookupExisting?: (lotUrl: string, proposedId: string) => Promise<string | null | { collision: true }>) {
   const normalized = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
   const attempt = await observer?.start(normalized);
-  const lots: CanonicalLot[] = [], seen = new Set<string>(), candidateUrls = new Set<string>(), candidateCategories = new Map<string, string>(), triedUrls = new Set<string>();
+  const lots: CanonicalLot[] = [], seen = new Set<string>(), candidateUrls = new Set<string>(), candidateCategories = new Map<string, string>(), candidateStatusTexts = new Map<string, string>(), triedUrls = new Set<string>();
   const pageQueue = ['/', '/agenda', '/buscador', '/leiloes'];
   const pages = new Set<string>();
   let fetched = 0, skipped = 0, lastStatus = 0, partial = false;
@@ -212,8 +212,37 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
       if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(decodeURIComponent(url))) { skipped++; continue; }
       const response = await get(url); fetched++;
       if (!response || response.status !== 200) { skipped++; partial = true; continue; }
-      const lot = parseSuporteOferta(response.body, normalized, url) ?? parseSuporteDetalhe(response.body, normalized, url, candidateCategories.get(url));
-      if (!lot || (assetTypes?.length && !assetTypes.includes(String(lot.assetType)))) { skipped++; partial = true; continue; }
+      let detailBody = response.body;
+      let assetTitle = '';
+      if (normalized === 'marcaleiloes.com.br') {
+        const $detail = cheerio.load(response.body);
+        assetTitle = $detail('.section-lote .row1-lote h1').first().text().replace(/\s+/g, ' ').trim();
+        const itemPayload = /\bvar\s+lote\s*=\s*(\{[\s\S]*?\})\s*;/.exec(response.body)?.[1];
+        if (!assetTitle || !itemPayload) { skipped++; partial = true; continue; }
+        try {
+          // Set the actual visible lot title before parser classification; `lote.descricao` is the event/court heading.
+          const item = JSON.parse(itemPayload);
+          item.titulo = assetTitle;
+          detailBody = response.body.replace(/\bvar\s+lote\s*=\s*(\{[\s\S]*?\})\s*;/, () => `var lote = ${JSON.stringify(item)};`);
+        } catch {
+          // One tenant's broken embedded payload is a partial item, not a failed tenant scan.
+          skipped++; partial = true; continue;
+        }
+      }
+      const lot = parseSuporteOferta(detailBody, normalized, url) ?? parseSuporteDetalhe(detailBody, normalized, url, candidateCategories.get(url));
+      if (!lot) { skipped++; partial = true; continue; }
+      if (normalized === 'marcaleiloes.com.br') {
+        if (assetTitle) {
+          lot.titleRaw = assetTitle;
+          if (lot.raw && typeof lot.raw === 'object') lot.raw = { ...lot.raw, sourceTitle: assetTitle };
+        }
+        const detailStatus = String(lot.raw && typeof lot.raw === 'object' ? (lot.raw as Record<string, unknown>).statusString ?? '' : '').toLowerCase();
+        if (/vendid|arrematad/.test(detailStatus)) lot.status = 'vendido';
+        else if (/encerrad|cancelad|suspens|desert/.test(detailStatus)) lot.status = 'encerrado';
+        if (lot.status !== 'encerrado' && lot.status !== 'vendido'
+          && /\b(?:abertura em breve|lances? em breve|agendad[oa]s?)\b/i.test(candidateStatusTexts.get(url) ?? '')) lot.status = 'agendado';
+      }
+      if (assetTypes?.length && !assetTypes.includes(String(lot.assetType))) { skipped++; partial = true; continue; }
       if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(lot.titleRaw)) { skipped++; continue; }
       const identity = await lookupExisting?.(lot.lotUrl ?? url, lot.externalId);
       if (identity && typeof identity === 'object') { skipped++; partial = true; continue; }
@@ -247,6 +276,7 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
             }
             candidateUrls.add(card.url);
             if (card.categoria) candidateCategories.set(card.url, card.categoria);
+            if (normalized === 'marcaleiloes.com.br') candidateStatusTexts.set(card.url, $('.lote-main.bem-index-' + card.id + ' .strong-status').first().text().trim());
           }
         }
         for (const url of ofertaLinks(response.body, host)) {
@@ -265,7 +295,7 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
             && (/\/eventos\/leilao\/|^\/leiloes\/\d+/.test(p) || p === '/buscador')) pageQueue.push(`${p}${target.search}`);
         });
       }
-      await drainLots();
+      if (normalized !== 'marcaleiloes.com.br' || path === '/buscador') await drainLots();
     }
     await drainLots();
     if (pageQueue.length || [...candidateUrls].some((url) => !triedUrls.has(url))) partial = true;
@@ -607,15 +637,17 @@ export const suporteleiloes: Connector = {
       const normalized = normalizeHost(host);
       if (IDENTIDADE_PENDENTE.has(normalized)) continue;
       const lookupExisting = async (lotUrl: string, proposedId: string) => {
+        const marcaNumericAlias = normalized === 'marcaleiloes.com.br' ? /:([0-9]+)$/.exec(proposedId)?.[1] : undefined;
         const rows = await dbQuery<{ external_id: string; same_url: boolean }>(`SELECT external_id,
-            lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
-            lower(regexp_replace($2, '^https?://(www\\.)?', '')) AS same_url
+            lower(regexp_replace(regexp_replace(lot_url, '^https?://(www\\.)?', ''), '/+$', '')) =
+            lower(regexp_replace(regexp_replace($2, '^https?://(www\\.)?', ''), '/+$', '')) AS same_url
           FROM lots WHERE source_id=$1 AND (
-            lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
-              lower(regexp_replace($2, '^https?://(www\\.)?', '')) OR external_id=$3
-          ) ORDER BY same_url DESC, id LIMIT 1`, ['suporteleiloes', lotUrl, proposedId]);
+            lower(regexp_replace(regexp_replace(lot_url, '^https?://(www\\.)?', ''), '/+$', '')) =
+              lower(regexp_replace(regexp_replace($2, '^https?://(www\\.)?', ''), '/+$', '')) OR external_id=ANY($3::text[])
+          )`, ['suporteleiloes', lotUrl, marcaNumericAlias ? [proposedId, marcaNumericAlias] : [proposedId]]);
         if (!rows.length) return null;
-        return rows[0].same_url ? rows[0].external_id : { collision: true as const };
+        if (rows.length !== 1 || !rows[0].same_url) return { collision: true as const };
+        return rows[0].external_id;
       };
       const result = normalized === WEB_HOST
         ? await collectWebLeiloes(host, limit - lots.length, observer, fetchTenantText, assetTypes)
