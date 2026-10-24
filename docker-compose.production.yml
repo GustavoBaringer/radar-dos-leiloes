@@ -85,15 +85,29 @@ services:
         [ "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED}" = 1 ] || { echo "ANTIBOT_ORIGIN_PROTECTION_CONFIRMED must be 1" >&2; exit 1; }
         npx prisma migrate deploy
         if [ "$${ONBOARDING_MODE}" = "staging" ]; then
-          node -e 'import("./dist/src/infra/database/repositories/onboarding-admission.repository.js").then(async m => {
-            const p = (await import("./dist/src/infra/database/prisma.service.js")).PrismaService.getInstance();
-            const r = new m.OnboardingAdmissionRepository(p);
-            const pol = await r.readPolicy();
-            if (pol.mode !== "staging") {
-              await r.initializeBaseline({ issuer: process.env.OIDC_ISSUER, userIds: [] });
-              console.log("Staging admission baseline initialized.");
+          node --input-type=module -e '
+            let p;
+            try {
+              const { PrismaService } = await import("./dist/src/infra/database/prisma.service.js");
+              const { OnboardingAdmissionRepository } = await import("./dist/src/infra/database/repositories/onboarding-admission.repository.js");
+              p = PrismaService.getInstance();
+              const r = new OnboardingAdmissionRepository(p);
+              const pol = await r.readPolicy();
+              if (pol.mode !== "staging") {
+                if (await p.users.count() !== 0) throw new Error("Existing users require reviewed staging baseline");
+                await r.initializeBaseline({ issuer: process.env.OIDC_ISSUER, userIds: [] });
+              }
+              await r.assertInitialized(process.env.OIDC_ISSUER);
+            } catch {
+              console.error("Staging admission initialization failed; refusing startup.");
+              process.exitCode = 1;
+            } finally {
+              if (p) try { await p.$$disconnect(); } catch {
+                console.error("Staging admission database disconnect failed.");
+                process.exitCode = 1;
+              }
             }
-          }).catch(console.error);'
+          '
         fi
         exec node dist/src/main.js
     environment:
