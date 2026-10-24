@@ -463,6 +463,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "faleiloes.com.br",
+    "sourceId": "soleon",
+    "required120": false
+  },
+  {
     "domain": "falleirosleiloes.com.br",
     "sourceId": "suaplataforma",
     "required120": false
@@ -800,6 +805,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": false
   },
   {
+    "domain": "leiloariasmart.com.br",
+    "sourceId": "docxhtml",
+    "required120": false
+  },
+  {
     "domain": "leiloeiraerikamaciel.com.br",
     "sourceId": "vlance",
     "required120": false
@@ -1070,6 +1080,11 @@ export const DAILY_SITES: readonly DailySite[] = [
     "required120": true
   },
   {
+    "domain": "matogrossoleiloes.com.br",
+    "sourceId": "vlance",
+    "required120": false
+  },
+  {
     "domain": "mauriciomarizleiloes.com.br",
     "sourceId": "suporteleiloes",
     "required120": false
@@ -1212,6 +1227,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "peixotoleiloes.com.br",
     "sourceId": "suaplataforma",
+    "required120": false
+  },
+  {
+    "domain": "perinileiloes.com.br",
+    "sourceId": "vlance",
     "required120": false
   },
   {
@@ -1587,6 +1607,11 @@ export const DAILY_SITES: readonly DailySite[] = [
   {
     "domain": "viannaleiloes.com.br",
     "sourceId": "msis",
+    "required120": false
+  },
+  {
+    "domain": "victordortaleiloes.com.br",
+    "sourceId": "soleon",
     "required120": false
   },
   {

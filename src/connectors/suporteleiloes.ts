@@ -43,6 +43,7 @@ const num = (v: unknown): number | null => {
  * A assinatura real é o CDN compartilhado no HTML da home.
  */
 const FORA = new Set(['superbid.net', 'mercadoleiloes.com.br', 'confiancaleiloes.leilao.br', 'e-leiloeiro.leilao.br', 'magalhaesleiloes.com.br']);
+const IDENTIDADE_PENDENTE = new Set(['kleiberleiloes.com.br', 'lumussaleiloes.com.br']);
 export const FOLLOWUP_TENANTS = new Set([
   'buenoleiloes.com.br',
   'leiloespb.com.br', 'colossoleiloes.com.br', 'atlanticoleiloes.com.br', 'marcotulioleiloes.com.br',
@@ -57,7 +58,7 @@ async function eligibleTenants(limite: number, tenant?: string, lookup: typeof q
   const explicitos = String(process.env.SUPORTELEILOES_DOMAINS ?? '').trim();
   const discovered = explicitos ? explicitos.split(',').map((d) => d.trim())
     : [...FOLLOWUP_TENANTS, ...(await lookup<{ domain: string }>(`SELECT domain FROM discovered_sites WHERE platform='suporte-leiloes' AND http_status=200 AND has_lots IS NOT FALSE ORDER BY has_lots DESC NULLS LAST, auctioneers DESC, domain`)).map(r => r.domain)];
-  const candidates = [...new Set(discovered)].filter((d) => d && !FORA.has(d));
+  const candidates = [...new Set(discovered)].filter((d) => d && !FORA.has(normalizeHost(d)) && !IDENTIDADE_PENDENTE.has(normalizeHost(d)));
   const due = await dueTenants({ sourceId: 'suporteleiloes', candidates, limit: tenant ? Number.MAX_SAFE_INTEGER : limite, track: process.env.TENANT_LEDGER_ENABLED === '1' });
   if (!tenant) return due;
   const selected = filterTenantPopulation(due, tenant);
@@ -179,7 +180,7 @@ export async function collectSuporteTenant(host: string, limit: number, assetTyp
 
 /** Discover event and lot links from the tenant's public pages; IDs are always page-derived. */
 export async function collectDiscoveredTenant(host: string, limit: number, assetTypes?: string[], observer?: import('../domain/collection/tenant-attempts.js').TenantObserver,
-  request: typeof fetchText = fetchText, lookupExisting?: (lotUrl: string, proposedId: string) => Promise<string | null | { collision: true }>) {
+  request: typeof fetchTenantText = fetchTenantText, lookupExisting?: (lotUrl: string, proposedId: string) => Promise<string | null | { collision: true }>) {
   const normalized = host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
   const attempt = await observer?.start(normalized);
   const lots: CanonicalLot[] = [], seen = new Set<string>(), candidateUrls = new Set<string>(), candidateCategories = new Map<string, string>(), triedUrls = new Set<string>();
@@ -189,10 +190,15 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
   const get = async (url: string) => {
     throwIfCancelled();
     try {
-      const r = await request(url, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 30000 });
+      const r = await request(url, normalized, { headers: { 'user-agent': UA }, gapMs: 1100, timeoutMs: 30000 });
+      const finalUrl = new URL(r.url ?? url);
+      if (!['http:', 'https:'].includes(finalUrl.protocol) || normalizeHost(finalUrl.hostname) !== normalized) {
+        throw new TenantScopeError(`redirect fora do tenant: ${url} -> ${finalUrl.href}`);
+      }
+      r.url = finalUrl.href;
       lastStatus = r.status; attempt?.response(r.status); return r;
     } catch (error) {
-      if (error instanceof CollectionCancellationError) throw error;
+      if (error instanceof CollectionCancellationError || error instanceof TenantScopeError) throw error;
       attempt?.failure('network'); partial = true; return null;
     }
   };
@@ -235,7 +241,7 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
       const training = /\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(eventText) || (eventPage && eventoEncerrado(response.body));
       if (!training) {
         for (const card of lerCards(response.body, host)) {
-          if (new URL(card.url).hostname === new URL(pageOrigin).hostname) {
+          if (normalizeHost(new URL(card.url).hostname) === normalizeHost(new URL(pageOrigin).hostname)) {
             if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(card.titulo) || /\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(card.url)) {
               continue;
             }
@@ -244,18 +250,19 @@ export async function collectDiscoveredTenant(host: string, limit: number, asset
           }
         }
         for (const url of ofertaLinks(response.body, host)) {
-          if (!/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(url)) candidateUrls.add(url);
+          if (normalizeHost(new URL(url).hostname) === normalized && !/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(url)) candidateUrls.add(url);
         }
         $('a[href]').each((_, a) => {
           const href = $(a).attr('href'); if (!href) return;
           const target = new URL(href, pageUrl);
-          if (target.hostname !== new URL(pageOrigin).hostname) return;
+          if (normalizeHost(target.hostname) !== normalizeHost(new URL(pageOrigin).hostname)) return;
           if (/\b(treino|treinamento|teste|demo|simula[çc][ãa]o|simulado)\b/i.test(target.href)) return;
           const p = target.pathname;
           if (/\/eventos\/leilao\//.test(p) && !/\/lote\/\d+/.test(p)) pageQueue.push(`${p}${target.search}`);
           else if (/\/eventos\/leilao\/.+\/lote\/\d+/.test(p) || /\/oferta\/leilao\//.test(p)) candidateUrls.add(target.href);
           else if (/^\/leiloes\/\d+/.test(p)) pageQueue.push(`${p}${target.search}`);
-          else if (/page=\d+/.test(target.search) && /\/eventos\/leilao\/|^\/leiloes\/\d+/.test(p)) pageQueue.push(`${p}${target.search}`);
+          else if (/^\d+$/.test(target.searchParams.get('page') ?? '') && !(p === '/buscador' && target.searchParams.get('page') === '1')
+            && (/\/eventos\/leilao\/|^\/leiloes\/\d+/.test(p) || p === '/buscador')) pageQueue.push(`${p}${target.search}`);
         });
       }
       await drainLots();
@@ -579,10 +586,13 @@ export const suporteleiloes: Connector = {
 
   async collect(
     { limit, assetTypes, observer, tenant }: CollectOptions,
-    io: typeof fetchText | { fetchText?: typeof fetchText; query?: typeof query } = fetchText,
+    io: typeof fetchText | { fetchText?: typeof fetchText; fetchTenantText?: typeof fetchTenantText; query?: typeof query } = fetchText,
   ): Promise<CollectResult> {
     const request = typeof io === 'function' ? io : (io.fetchText ?? fetchText);
     const dbQuery = typeof io === 'object' && io.query ? io.query : query;
+    if (tenant && IDENTIDADE_PENDENTE.has(normalizeHost(tenant))) {
+      throw new Error(`tenant bloqueado: identidade de ${normalizeHost(tenant)} com Lumus/Kleiber espelhados ainda não reconciliada; coleta/persistência suspensa.`);
+    }
     if (tenant && normalizeHost(tenant) === WEB_HOST) {
       throw new Error('WebLeilões bloqueado: identidade dos 68 SKUs sobrescritos ainda não reconciliada; coleta/persistência suspensa.');
     }
@@ -595,6 +605,7 @@ export const suporteleiloes: Connector = {
     for (const host of await eligibleTenants(Number(process.env.SUPORTELEILOES_TENANTS ?? 60), tenant, dbQuery)) {
       if (lots.length >= limit) break;
       const normalized = normalizeHost(host);
+      if (IDENTIDADE_PENDENTE.has(normalized)) continue;
       const lookupExisting = async (lotUrl: string, proposedId: string) => {
         const rows = await dbQuery<{ external_id: string; same_url: boolean }>(`SELECT external_id,
             lower(regexp_replace(lot_url, '^https?://(www\\.)?', '')) =
@@ -609,7 +620,8 @@ export const suporteleiloes: Connector = {
       const result = normalized === WEB_HOST
         ? await collectWebLeiloes(host, limit - lots.length, observer, fetchTenantText, assetTypes)
           : FOLLOWUP_TENANTS.has(normalized)
-          ? await collectDiscoveredTenant(host, limit - lots.length, assetTypes, observer, request, lookupExisting)
+          ? await collectDiscoveredTenant(host, limit - lots.length, assetTypes, observer,
+            typeof io === 'object' && io.fetchTenantText ? io.fetchTenantText : fetchTenantText, lookupExisting)
           : await collectSuporteTenant(host, limit - lots.length, assetTypes, observer, request);
       lots.push(...result.lots);
       fetched += result.fetched;
