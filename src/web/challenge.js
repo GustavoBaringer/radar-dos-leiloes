@@ -34,7 +34,7 @@
     var tokenValue = null, resolver = null, rejecter = null, widgetId = null, dead = false;
     function fail() { if (rejecter) { rejecter(new Error('challenge_unavailable')); resolver = rejecter = null; } }
     widgetId = ts.render(container, {
-      sitekey: cfg.siteKey, action: action, execution: 'execute',
+      sitekey: cfg.siteKey, action: action, execution: 'execute', 'response-field': false,
       callback: function (token) { tokenValue = token; if (resolver) { resolver(token); resolver = rejecter = null; } },
       'expired-callback': function () { tokenValue = null; fail(); },
       'timeout-callback': fail,
