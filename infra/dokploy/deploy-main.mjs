@@ -60,22 +60,26 @@ const deployKeys = [
   'ASAAS_API_KEY', 'ASAAS_WEBHOOK_TOKEN', 'ASAAS_CHECKOUT_RETURN_URL',
   'SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
 ];
-const prodEnvPath = join(runtime, 'production.env');
-if (existsSync(prodEnvPath)) {
-  let prodEnv = readFileSync(prodEnvPath, 'utf8');
-  for (const key of deployKeys) {
-    if (process.env[key] !== undefined && process.env[key] !== '') {
-      const rx = new RegExp(`^${key}=.*$`, 'm');
-      if (rx.test(prodEnv)) prodEnv = prodEnv.replace(rx, `${key}=${process.env[key]}`);
-      else prodEnv += `\n${key}=${process.env[key]}`;
-    }
+// Dokploy writes the saved environment to the checkout's .env; only the web service receives these keys.
+const dokployEnv = new Map();
+const dokployEnvPath = join(root, '.env');
+if (existsSync(dokployEnvPath)) {
+  for (const line of readFileSync(dokployEnvPath, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (m) dokployEnv.set(m[1], m[2].replace(/^(['"])(.*)\1$/, '$2'));
   }
-  if (!/^NEST_BOOTSTRAP=/m.test(prodEnv)) prodEnv += '\nNEST_BOOTSTRAP=1';
-  if (!/^ONBOARDING_MODE=/m.test(prodEnv)) prodEnv += '\nONBOARDING_MODE=staging';
-  if (/^NODE_ENV=/m.test(prodEnv)) prodEnv = prodEnv.replace(/^NODE_ENV=.*$/m, 'NODE_ENV=staging');
-  else prodEnv += '\nNODE_ENV=staging';
-  writeFileSync(prodEnvPath, prodEnv.trim() + '\n', { mode: 0o600 });
 }
+const webEnv = new Map();
+for (const key of deployKeys) {
+  const value = dokployEnv.get(key) ?? process.env[key];
+  if (value !== undefined && value !== '') webEnv.set(key, value);
+}
+webEnv.set('NODE_ENV', 'staging');
+webEnv.set('ONBOARDING_MODE', 'staging');
+webEnv.set('NEST_BOOTSTRAP', '1');
+webEnv.set('RADAR_PUBLIC_DEPLOYMENT', 'true');
+const webEnvFile = join(runtime, 'web.env');
+writeFileSync(webEnvFile, [...webEnv].map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
 const liveWeb = inspect('radar-stack-m9wohj-web-1');
 const envFile = join(release, 'candidate.env');
 const candidate = `radar-candidate-${revision.slice(0, 12)}`;
@@ -84,13 +88,8 @@ for (const entry of (liveWeb.Config?.Env ?? [])) {
   const i = entry.indexOf('=');
   if (i > 0) candidateEnvMap.set(entry.slice(0, i), entry.slice(i + 1));
 }
-for (const key of deployKeys) {
-  if (process.env[key] !== undefined && process.env[key] !== '') candidateEnvMap.set(key, process.env[key]);
-}
+for (const [key, value] of webEnv) candidateEnvMap.set(key, value);
 candidateEnvMap.set('IMAGE_METRICS_DIR', '/tmp/image-metrics');
-candidateEnvMap.set('NODE_ENV', 'staging');
-candidateEnvMap.set('ONBOARDING_MODE', 'staging');
-candidateEnvMap.set('NEST_BOOTSTRAP', '1');
 // Secret environment exists only in a private temporary file; never echo it.
 writeFileSync(envFile, Array.from(candidateEnvMap.entries()).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
 try {
@@ -131,8 +130,14 @@ if (!nextWeb.includes(`image: ${webId}`)) throw Error('Web image replacement fai
 if (!nextWeb.includes('      IMAGE_METRICS_DIR:')) nextWeb = nextWeb.replace('      ANTIBOT_MODE: enforce', '      ANTIBOT_MODE: enforce\n      IMAGE_METRICS_DIR: /app/image-metrics');
 if (!nextWeb.includes(`${metricsDir}:/app/image-metrics`)) nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(\n    networks:)/,
   `$1\n    volumes:\n    - ${metricsDir}:/app/image-metrics$2`);
-if (!nextWeb.includes('production.env')) nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(\n    networks:)/,
-  `$1\n    env_file:\n    - production.env$2`);
+// Explicit web environment entries override env_file, so drop the keys web.env now owns.
+nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(?=\n  [A-Za-z0-9_-]+:\n|\n[A-Za-z]|$)/, block => {
+  let web = block;
+  for (const key of webEnv.keys()) web = web.replace(new RegExp(`\\n      ${key}: [^\\n]*`, 'g'), '');
+  if (!web.includes('web.env')) web = web.replace(/(\n    networks:)/, `\n    env_file:\n    - web.env$1`);
+  return web;
+});
+if (!nextWeb.includes('- web.env')) throw Error('Web env_file injection failed');
 const nextWorker = beforeWorker.replace(/(\n    image:) [^\n]+/, `$1 ${workerId}`);
 if (!nextWorker.includes(`image: ${workerId}`)) throw Error('Worker image replacement failed');
 const queuePrefix = 'import {Queue} from "bullmq";import {makeRedis} from "./dist/src/queue/runtime.js";import {collectQueue,refreshQueue,discoverQueue} from "./dist/src/queue/queues.js";const dailyQueue=new Queue("collect-daily-sites",{connection:makeRedis()});const queues=[collectQueue,refreshQueue,discoverQueue,dailyQueue];';
