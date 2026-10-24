@@ -130,6 +130,8 @@ if (!nextWeb.includes(`image: ${webId}`)) throw Error('Web image replacement fai
 if (!nextWeb.includes('      IMAGE_METRICS_DIR:')) nextWeb = nextWeb.replace('      ANTIBOT_MODE: enforce', '      ANTIBOT_MODE: enforce\n      IMAGE_METRICS_DIR: /app/image-metrics');
 if (!nextWeb.includes(`${metricsDir}:/app/image-metrics`)) nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(\n    networks:)/,
   `$1\n    volumes:\n    - ${metricsDir}:/app/image-metrics$2`);
+// Switch server entrypoint from legacy server.js to NestJS native host main.js
+nextWeb = nextWeb.replace('exec node dist/src/server.js', 'exec node dist/src/main.js');
 // Explicit web environment entries override env_file, so drop the keys web.env now owns.
 nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(?=\n  [A-Za-z0-9_-]+:\n|\n[A-Za-z]|$)/, block => {
   let web = block;
@@ -157,7 +159,12 @@ try {
   activationStarted = true;
   writeFileSync(webFile, nextWeb); writeFileSync(workerFile, nextWorker);
   for (const file of [webFile, workerFile]) docker(['compose', '--env-file', join(runtime, 'production.env'), '-f', file, 'config', '--quiet']);
-  compose('radar-stack-m9wohj', webFile, 'web'); await health('radar-stack-m9wohj-web-1');
+  compose('radar-stack-m9wohj', webFile, 'web');
+  try { await health('radar-stack-m9wohj-web-1'); }
+  catch (err) {
+    try { console.error('=== PROMOTED WEB LOGS ===\n' + docker(['logs', '--tail', '100', 'radar-stack-m9wohj-web-1'], true)); } catch {}
+    throw err;
+  }
   compose('radar-workers', workerFile, 'worker'); await health('radar-worker');
   for (const name of ['radar-stack-m9wohj-web-1', 'radar-worker']) {
     if (inspect(name).Config.Labels['org.opencontainers.image.revision'] !== revision) throw Error('Running revision differs from main');
