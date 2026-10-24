@@ -83,6 +83,18 @@ services:
         : "$${ANTIBOT_TRUST_PROXY_CIDRS:?Set verified narrow proxy CIDRs}"
         : "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:?Confirm origin protection before start}"
         [ "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED}" = 1 ] || { echo "ANTIBOT_ORIGIN_PROTECTION_CONFIRMED must be 1" >&2; exit 1; }
+        npx prisma migrate deploy
+        if [ "$${ONBOARDING_MODE}" = "staging" ]; then
+          node -e 'import("./dist/src/infra/database/repositories/onboarding-admission.repository.js").then(async m => {
+            const p = (await import("./dist/src/infra/database/prisma.service.js")).PrismaService.getInstance();
+            const r = new m.OnboardingAdmissionRepository(p);
+            const pol = await r.readPolicy();
+            if (pol.mode !== "staging") {
+              await r.initializeBaseline({ issuer: process.env.OIDC_ISSUER, userIds: [] });
+              console.log("Staging admission baseline initialized.");
+            }
+          }).catch(console.error);'
+        fi
         exec node dist/src/main.js
     environment:
       NODE_ENV: ${RADAR_RUNTIME_ENV:-production}
