@@ -72,7 +72,8 @@ if (existsSync(prodEnvPath)) {
   }
   if (!/^NEST_BOOTSTRAP=/m.test(prodEnv)) prodEnv += '\nNEST_BOOTSTRAP=1';
   if (!/^ONBOARDING_MODE=/m.test(prodEnv)) prodEnv += '\nONBOARDING_MODE=staging';
-  if (/^NODE_ENV=production/m.test(prodEnv)) prodEnv = prodEnv.replace(/^NODE_ENV=production/m, 'NODE_ENV=staging');
+  if (/^NODE_ENV=/m.test(prodEnv)) prodEnv = prodEnv.replace(/^NODE_ENV=.*$/m, 'NODE_ENV=staging');
+  else prodEnv += '\nNODE_ENV=staging';
   writeFileSync(prodEnvPath, prodEnv.trim() + '\n', { mode: 0o600 });
 }
 const liveWeb = inspect('radar-stack-m9wohj-web-1');
@@ -87,8 +88,8 @@ for (const key of deployKeys) {
   if (process.env[key] !== undefined && process.env[key] !== '') candidateEnvMap.set(key, process.env[key]);
 }
 candidateEnvMap.set('IMAGE_METRICS_DIR', '/tmp/image-metrics');
-candidateEnvMap.set('NODE_ENV', process.env.NODE_ENV || 'staging');
-candidateEnvMap.set('ONBOARDING_MODE', process.env.ONBOARDING_MODE || 'staging');
+candidateEnvMap.set('NODE_ENV', 'staging');
+candidateEnvMap.set('ONBOARDING_MODE', 'staging');
 candidateEnvMap.set('NEST_BOOTSTRAP', '1');
 // Secret environment exists only in a private temporary file; never echo it.
 writeFileSync(envFile, Array.from(candidateEnvMap.entries()).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
@@ -110,6 +111,12 @@ try {
     assert.equal((await fetch('http://127.0.0.1:4500/api/security/metrics')).status,401);
     console.log('candidate: landing, 130 image requests without minute quota, admin protection passed');
   `]);
+} catch (err) {
+  try {
+    const logs = docker(['logs', '--tail', '100', candidate], true);
+    console.error('=== CANDIDATE ERROR LOGS ===\n' + logs);
+  } catch {}
+  throw err;
 } finally {
   docker(['rm', '-f', candidate]);
   unlinkSync(envFile);
