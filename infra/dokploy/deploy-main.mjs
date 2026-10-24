@@ -51,11 +51,47 @@ docker(['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
     try { const page=await browser.newPage(); await page.goto('about:blank'); console.log('worker Chromium smoke passed'); }
     finally { await browser.close(); }
   `]);
+const deployKeys = [
+  'NODE_ENV', 'NEST_BOOTSTRAP', 'RADAR_RUNTIME_ENV', 'RADAR_PUBLIC_DEPLOYMENT',
+  'ONBOARDING_ENABLED', 'ONBOARDING_MODE', 'ONBOARDING_ALLOWED_EMAILS', 'ONBOARDING_PUBLIC_BASE_URL',
+  'ONBOARDING_TOKEN_KEY', 'ONBOARDING_ACTIVATION_ENABLED', 'ONBOARDING_ACTIVATION_HTTP_ENABLED',
+  'ONBOARDING_DISPATCH_ENABLED', 'ONBOARDING_CHECKOUT_EMAIL_ENABLED', 'ONBOARDING_ACTIVATION_EMAIL_ENABLED',
+  'ASAAS_CHECKOUT_ENABLED', 'ASAAS_WEBHOOK_ENABLED', 'ASAAS_PAYMENT_PROCESSING_ENABLED',
+  'ASAAS_API_KEY', 'ASAAS_WEBHOOK_TOKEN', 'ASAAS_CHECKOUT_RETURN_URL',
+  'SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+];
+const prodEnvPath = join(runtime, 'production.env');
+if (existsSync(prodEnvPath)) {
+  let prodEnv = readFileSync(prodEnvPath, 'utf8');
+  for (const key of deployKeys) {
+    if (process.env[key] !== undefined && process.env[key] !== '') {
+      const rx = new RegExp(`^${key}=.*$`, 'm');
+      if (rx.test(prodEnv)) prodEnv = prodEnv.replace(rx, `${key}=${process.env[key]}`);
+      else prodEnv += `\n${key}=${process.env[key]}`;
+    }
+  }
+  if (!/^NEST_BOOTSTRAP=/m.test(prodEnv)) prodEnv += '\nNEST_BOOTSTRAP=1';
+  if (!/^ONBOARDING_MODE=/m.test(prodEnv)) prodEnv += '\nONBOARDING_MODE=staging';
+  if (/^NODE_ENV=production/m.test(prodEnv)) prodEnv = prodEnv.replace(/^NODE_ENV=production/m, 'NODE_ENV=staging');
+  writeFileSync(prodEnvPath, prodEnv.trim() + '\n', { mode: 0o600 });
+}
 const liveWeb = inspect('radar-stack-m9wohj-web-1');
 const envFile = join(release, 'candidate.env');
 const candidate = `radar-candidate-${revision.slice(0, 12)}`;
+const candidateEnvMap = new Map();
+for (const entry of (liveWeb.Config?.Env ?? [])) {
+  const i = entry.indexOf('=');
+  if (i > 0) candidateEnvMap.set(entry.slice(0, i), entry.slice(i + 1));
+}
+for (const key of deployKeys) {
+  if (process.env[key] !== undefined && process.env[key] !== '') candidateEnvMap.set(key, process.env[key]);
+}
+candidateEnvMap.set('IMAGE_METRICS_DIR', '/tmp/image-metrics');
+candidateEnvMap.set('NODE_ENV', process.env.NODE_ENV || 'staging');
+candidateEnvMap.set('ONBOARDING_MODE', process.env.ONBOARDING_MODE || 'staging');
+candidateEnvMap.set('NEST_BOOTSTRAP', '1');
 // Secret environment exists only in a private temporary file; never echo it.
-writeFileSync(envFile, liveWeb.Config.Env.filter(e => !e.startsWith('IMAGE_METRICS_DIR=')).join('\n') + '\nIMAGE_METRICS_DIR=/tmp/image-metrics\n', { mode: 0o600 });
+writeFileSync(envFile, Array.from(candidateEnvMap.entries()).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
 try {
   docker(['create', '--name', candidate, '--env-file', envFile, '--network', 'radar-stack-m9wohj_backend',
     '--memory', '768m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
@@ -88,6 +124,8 @@ if (!nextWeb.includes(`image: ${webId}`)) throw Error('Web image replacement fai
 if (!nextWeb.includes('      IMAGE_METRICS_DIR:')) nextWeb = nextWeb.replace('      ANTIBOT_MODE: enforce', '      ANTIBOT_MODE: enforce\n      IMAGE_METRICS_DIR: /app/image-metrics');
 if (!nextWeb.includes(`${metricsDir}:/app/image-metrics`)) nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(\n    networks:)/,
   `$1\n    volumes:\n    - ${metricsDir}:/app/image-metrics$2`);
+if (!nextWeb.includes('production.env')) nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(\n    networks:)/,
+  `$1\n    env_file:\n    - production.env$2`);
 const nextWorker = beforeWorker.replace(/(\n    image:) [^\n]+/, `$1 ${workerId}`);
 if (!nextWorker.includes(`image: ${workerId}`)) throw Error('Worker image replacement failed');
 const queuePrefix = 'import {Queue} from "bullmq";import {makeRedis} from "./dist/src/queue/runtime.js";import {collectQueue,refreshQueue,discoverQueue} from "./dist/src/queue/queues.js";const dailyQueue=new Queue("collect-daily-sites",{connection:makeRedis()});const queues=[collectQueue,refreshQueue,discoverQueue,dailyQueue];';

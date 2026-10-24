@@ -25,7 +25,9 @@ COPY app-busca/ ./
 RUN npm run build && npm prune --omit=dev
 
 FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production
+ENV NODE_ENV=staging
+ENV NEST_BOOTSTRAP=1
+ENV ONBOARDING_MODE=staging
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
@@ -39,7 +41,7 @@ COPY --chown=node:node data/geo ./data/geo
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 4500
-CMD ["node", "dist/src/server.js"]
+CMD ["node", "dist/src/main.js"]
 
 # Worker publishes the same revision with its browser runtime and dependencies.
 FROM runtime AS worker
