@@ -165,10 +165,75 @@ export const SUPERBID_TENANTS: Record<string, SuperbidTenantConfig> = {
     host: 'www.asamileiloes.com.br',
     name: 'Asami Leilões',
   },
+  'schererleiloes.com.br': {
+    storeId: 16182,
+    host: 'www.schererleiloes.com.br',
+    name: 'Scherer Leilões',
+  },
   'hoppeleiloes.com.br': {
     storeId: 16194,
     host: 'www.hoppeleiloes.com.br',
     name: 'Hoppe Leilões',
+  },
+  'andreluizleiloes.com.br': {
+    storeId: 16059,
+    host: 'www.andreluizleiloes.com.br',
+    name: 'André Luiz Leilões',
+  },
+  'presottoleiloes.com.br': {
+    storeId: 16247,
+    host: 'www.presottoleiloes.com.br',
+    name: 'Camila Presotto Leilões',
+  },
+  'bzleiloes.com.br': {
+    storeId: 16361,
+    host: 'www.bzleiloes.com.br',
+    name: 'BZ Leilões',
+  },
+  'milanileiloes.com.br': {
+    storeId: 16208,
+    host: 'www.milanileiloes.com.br',
+    name: 'Milani Leilões',
+  },
+  'sperancaleiloes.com.br': {
+    storeId: 16179,
+    host: 'www.sperancaleiloes.com.br',
+    name: 'Sperança Leilões',
+  },
+  'jeremyleiloes.com.br': {
+    storeId: 16306,
+    host: 'www.jeremyleiloes.com.br',
+    name: 'Jeremy Leilões',
+  },
+  'monzonleiloes.com.br': {
+    storeId: 16183,
+    host: 'www.monzonleiloes.com.br',
+    name: 'Monzon Leilões',
+  },
+  'jmfleiloes.com.br': {
+    storeId: 16060,
+    host: 'www.jmfleiloes.com.br',
+    name: 'João Vitor Martins Ferreira',
+  },
+  'eckertleiloes.com.br': {
+    storeId: 16063,
+    host: 'www.eckertleiloes.com.br',
+    name: 'Eckert Leilões',
+  },
+  'tadashileiloes.com.br': {
+    storeId: 16430,
+    host: 'www.tadashileiloes.com.br',
+    name: 'Tadashi Leilões',
+  },
+  'kronberg.lel.br': {
+    storeId: 16189,
+    host: 'www.kronberg.lel.br',
+    name: 'Pedro Kronberg Leilões',
+  },
+  'rmoyses.com.br': {
+    storeId: 2141,
+    host: 'www.rmoyses.com.br',
+    name: 'RMoysés Leilões',
   },
 };
 
