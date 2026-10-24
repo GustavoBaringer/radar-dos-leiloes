@@ -309,7 +309,7 @@ export async function collectSoleon(
         const categorias: CategoryPage[] = (['focoleiloes.com.br', 'ccjleiloes.com.br'].includes(normalizedHost) || DIVERSOS_TENANTS.has(normalizedHost)
           ? ROTAS_CATEGORIAS
           : ROTAS_CATEGORIAS.slice(0, 2)).map((path) => ({ path, page: 1, done: false }));
-        if (['ccjleiloes.com.br', 'colodeteleiloes.com.br', 'leilaopernambuco.com.br'].includes(normalizedHost)) {
+        if (['ccjleiloes.com.br', 'leilaopernambuco.com.br'].includes(normalizedHost)) {
           try {
             const home = await fetch(`https://${httpHost}/`, { gapMs: 1100 });
             attempt?.response(home.status);

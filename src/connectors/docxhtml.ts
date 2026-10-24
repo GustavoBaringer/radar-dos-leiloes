@@ -616,6 +616,10 @@ export const docxhtml: Connector = {
           ...(r.note ? { note: r.note } : {}),
         };
       }
+      if (tenant === 'leiloariasmart.com.br') {
+        const r = await coletarLeiloariaSmart(limit);
+        return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched - r.lots.length), httpStatus: r.status };
+      }
       if (tenant !== 'leiloeslaraforster.com.br') throw new Error(`Unreviewed docxhtml tenant: ${tenant}`);
       const r = await coletarLaraForster(limit);
       return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched-r.lots.length), httpStatus: r.status };
