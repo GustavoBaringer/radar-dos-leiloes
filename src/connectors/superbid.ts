@@ -1,7 +1,8 @@
 import { comNavegador, getJsonViaNavegador } from './navegador.js';
-import type { Connector, CollectResult } from './types.js';
+import type { Connector, CollectResult, CollectOptions } from './types.js';
 import type { CanonicalLot } from '../core/types.js';
 import { parseTitle, classifySeller, looksLikePart, classifyAsset } from '../core/normalize.js';
+import { CollectionCancellationError, throwIfCancelled } from '../infra/collection/collection-cancellation.js';
 
 const BASE = 'https://offer-query.superbid.net/offers/';
 const HEADERS = { origin: 'https://www.superbid.net', referer: 'https://www.superbid.net/' };
@@ -62,7 +63,14 @@ function toUtc(brt?: string | null, epochMs?: number | null): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function mapOffer(o: any): CanonicalLot | null {
+export function mapOffer(o: any, host?: string, expectedStoreId?: number): CanonicalLot | null {
+  if (expectedStoreId !== undefined) {
+    const storeMatch =
+      o?.store?.id === expectedStoreId ||
+      (Array.isArray(o?.stores) && o.stores.some((s: any) => s?.id === expectedStoreId));
+    if (!storeMatch) return null;
+  }
+
   const product = o.product ?? {};
   const pt = PRODUCT_TYPES[product?.productType?.id];
   const title = product.shortDesc ?? o.offerDescription ?? '';
@@ -97,7 +105,7 @@ function mapOffer(o: any): CanonicalLot | null {
   return {
     sourceId: 'superbid',
     externalId: String(o.id),
-    lotUrl: `https://www.superbid.net/oferta/${o.id}`,
+    lotUrl: host ? `https://${host}/oferta/${o.id}` : `https://www.superbid.net/oferta/${o.id}`,
     titleRaw: title,
     brand: parsed.brand,
     model: parsed.model,
@@ -125,7 +133,7 @@ function mapOffer(o: any): CanonicalLot | null {
     appraisal: Number(detail.releaseValue) || null,
     feesPct: Number(o.commercialCondition?.auctioneerCommissionPercent) || null,
     auctioneerName: o.auction?.auctioneer ?? null,
-    auctioneerReg: null,
+    auctioneerReg: o.auction?.registry ?? null,
     sellerName,
     sellerType: classifySeller(sellerName) as any,
     // A fonte já manda "Campo Grande - MS" no campo city; sem tirar o sufixo
@@ -140,6 +148,255 @@ function mapOffer(o: any): CanonicalLot | null {
   };
 }
 
+export interface SuperbidTenantConfig {
+  storeId: number;
+  host: string;
+  name: string;
+}
+
+export const SUPERBID_TENANTS: Record<string, SuperbidTenantConfig> = {
+  'mgrleiloes.com.br': {
+    storeId: 16061,
+    host: 'www.mgrleiloes.com.br',
+    name: 'MGR Leilões',
+  },
+  'asamileiloes.com.br': {
+    storeId: 16082,
+    host: 'www.asamileiloes.com.br',
+    name: 'Asami Leilões',
+  },
+  'schererleiloes.com.br': {
+    storeId: 16182,
+    host: 'www.schererleiloes.com.br',
+    name: 'Scherer Leilões',
+  },
+  'hoppeleiloes.com.br': {
+    storeId: 16194,
+    host: 'www.hoppeleiloes.com.br',
+    name: 'Hoppe Leilões',
+  },
+  'andreluizleiloes.com.br': {
+    storeId: 16059,
+    host: 'www.andreluizleiloes.com.br',
+    name: 'André Luiz Leilões',
+  },
+  'presottoleiloes.com.br': {
+    storeId: 16247,
+    host: 'www.presottoleiloes.com.br',
+    name: 'Camila Presotto Leilões',
+  },
+  'bzleiloes.com.br': {
+    storeId: 16361,
+    host: 'www.bzleiloes.com.br',
+    name: 'BZ Leilões',
+  },
+  'milanileiloes.com.br': {
+    storeId: 16208,
+    host: 'www.milanileiloes.com.br',
+    name: 'Milani Leilões',
+  },
+  'sperancaleiloes.com.br': {
+    storeId: 16179,
+    host: 'www.sperancaleiloes.com.br',
+    name: 'Sperança Leilões',
+  },
+  'jeremyleiloes.com.br': {
+    storeId: 16306,
+    host: 'www.jeremyleiloes.com.br',
+    name: 'Jeremy Leilões',
+  },
+  'monzonleiloes.com.br': {
+    storeId: 16183,
+    host: 'www.monzonleiloes.com.br',
+    name: 'Monzon Leilões',
+  },
+  'jmfleiloes.com.br': {
+    storeId: 16060,
+    host: 'www.jmfleiloes.com.br',
+    name: 'João Vitor Martins Ferreira',
+  },
+  'eckertleiloes.com.br': {
+    storeId: 16063,
+    host: 'www.eckertleiloes.com.br',
+    name: 'Eckert Leilões',
+  },
+  'tadashileiloes.com.br': {
+    storeId: 16430,
+    host: 'www.tadashileiloes.com.br',
+    name: 'Tadashi Leilões',
+  },
+  'kronberg.lel.br': {
+    storeId: 16189,
+    host: 'www.kronberg.lel.br',
+    name: 'Pedro Kronberg Leilões',
+  },
+  'rmoyses.com.br': {
+    storeId: 2141,
+    host: 'www.rmoyses.com.br',
+    name: 'RMoysés Leilões',
+  },
+};
+
+export function resolveSuperbidTenant(tenant: string): SuperbidTenantConfig {
+  const norm = tenant.toLowerCase().replace(/^www\./, '').replace(/\.$/, '').trim();
+  const config = SUPERBID_TENANTS[norm];
+  if (!config) {
+    throw new Error(`single-tenant '${tenant}' não mapeado para storeId de Superbid`);
+  }
+  return config;
+}
+
+export async function collectSuperbid(
+  { limit, assetTypes, tenant, observer }: CollectOptions,
+  io: {
+    comNavegador: typeof comNavegador;
+    getJsonViaNavegador: typeof getJsonViaNavegador;
+  } = { comNavegador, getJsonViaNavegador },
+): Promise<CollectResult> {
+  if (tenant) {
+    const config = resolveSuperbidTenant(tenant);
+    const attempt = await observer?.start(tenant.toLowerCase().replace(/^www\./, '').replace(/\.$/, ''));
+    const lots: CanonicalLot[] = [];
+    let fetched = 0;
+    let skipped = 0;
+    let status = 0;
+    const pageSize = 50;
+    let truncated = false;
+    const notes: string[] = [];
+    const seenIds = new Set<string>();
+
+    try {
+      await io.comNavegador(`https://${config.host}`, async (page) => {
+        let totalObservado: number | null = null;
+        for (let pagina = 1; lots.length < limit; pagina++) {
+          throwIfCancelled();
+          const queryFilter = encodeURIComponent(`stores.id:${config.storeId}`);
+          const url =
+            `${BASE}?filter=${queryFilter}&locale=pt_BR&orderBy=endDate:asc&pageNumber=${pagina}&pageSize=${pageSize}` +
+            `&portalId=[2,15]&preOrderBy=orderByFirstOpenedOffers&requestOrigin=store&searchType=opened&timeZoneId=America%2FSao_Paulo`;
+          const { status: st, data } = await io.getJsonViaNavegador<any>(page, url, {
+            origin: `https://${config.host}`,
+            referer: `https://${config.host}/`,
+          });
+          throwIfCancelled();
+          status = st;
+          attempt?.response(st);
+          if (st !== 200) {
+            attempt?.failure('network');
+            truncated = true;
+            notes.push(`HTTP ${st} na página ${pagina}`);
+            break;
+          }
+          if (!data || !Array.isArray(data.offers)) {
+            attempt?.failure('parser');
+            truncated = true;
+            notes.push(`schema inválido: resposta sem offers array`);
+            break;
+          }
+          if (typeof data.total === 'number') {
+            totalObservado = data.total;
+          }
+          const offers: any[] = data.offers;
+          if (!offers.length) break;
+          fetched += offers.length;
+
+          let newIdsOnPage = 0;
+          for (const o of offers) {
+            throwIfCancelled();
+            const idStr = String(o.id);
+            if (seenIds.has(idStr)) continue;
+            seenIds.add(idStr);
+            newIdsOnPage++;
+
+            const mapped = mapOffer(o, config.host, config.storeId);
+            if (mapped && (!assetTypes || assetTypes.includes(mapped.assetType as string))) {
+              lots.push(mapped);
+              if (lots.length >= limit) {
+                truncated = true;
+                notes.push(`limite de ${limit} lotes atingido`);
+                break;
+              }
+            } else {
+              skipped++;
+            }
+          }
+
+          // Parada fail-closed se API repetir ofertas de páginas anteriores
+          if (offers.length > 0 && newIdsOnPage === 0) {
+            attempt?.failure('parser');
+            truncated = true;
+            notes.push(`API repetiu ofertas na página ${pagina}; parada fail-closed`);
+            break;
+          }
+
+          if (truncated || offers.length < pageSize) break;
+          if (totalObservado !== null && seenIds.size >= totalObservado) break;
+        }
+
+        if (totalObservado !== null && lots.length < limit && seenIds.size < totalObservado && !truncated) {
+          truncated = true;
+          notes.push(`coletados ${seenIds.size} de ${totalObservado} observados`);
+        }
+      });
+    } catch (error) {
+      if (error instanceof CollectionCancellationError) {
+        attempt?.failure(error.kind === 'deadline' ? 'budget' : 'network');
+        notes.push(`cancelamento por ${error.kind}`);
+      } else {
+        attempt?.failure('network');
+        notes.push(`falha: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      throw error;
+    } finally {
+      await attempt?.finish({ fetched, skipped, returned: lots.length, truncated: truncated || lots.length >= limit });
+    }
+
+    const note = notes.length ? notes.join('; ') : undefined;
+    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status, ...(note ? { note } : {}) };
+  }
+
+  const lots: CanonicalLot[] = [];
+  let fetched = 0;
+  let skipped = 0;
+  let status = 0;
+  const pageSize = 500;
+
+  // Uma fatia por productType: cada uma cabe folgada na janela de 10.000
+  // do índice, e assim nenhuma categoria fica de fora por construção.
+  const querIm = !assetTypes || assetTypes.includes('imovel');
+  const querVe = !assetTypes || assetTypes.includes('veiculo');
+  const tipos = [...(querVe ? TIPOS_VEICULO : []), ...(querIm ? [13] : [])];
+
+  // Cota POR TIPO, não global: com limite único, o tipo 10 (5.819 carros e
+  // motos) consumia a cota inteira e caminhão, ônibus e máquina nunca eram
+  // alcançados — as categorias que o filtro existe justamente para trazer.
+  const cota = Math.max(pageSize, Math.ceil(limit / Math.max(1, tipos.length)));
+
+  await io.comNavegador(ENTRADA, async (page) => {
+    for (const tipo of tipos) {
+      const antes = lots.length;
+      for (let pagina = 1; lots.length - antes < cota && lots.length < limit; pagina++) {
+        const url =
+          `${BASE}?portalId=[2,15]&searchType=opened&orderBy=id:asc&pageSize=${pageSize}&pageNumber=${pagina}` +
+          `&locale=pt_BR&filter=${encodeURIComponent(`product.productType.id:${tipo};`)}`;
+        const { status: st, data } = await io.getJsonViaNavegador<any>(page, url, HEADERS);
+        status = st;
+        const offers: any[] = data?.offers ?? [];
+        if (!offers.length) break;
+        fetched += offers.length;
+        for (const o of offers) {
+          const mapped = mapOffer(o);
+          if (mapped) lots.push(mapped);
+          else skipped++;
+        }
+        if (offers.length < pageSize) break;
+      }
+      if (lots.length >= limit) break;
+    }
+  });
+  return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status };
+}
+
 export const superbid: Connector = {
   def: {
     id: 'superbid',
@@ -148,48 +405,9 @@ export const superbid: Connector = {
     method: 'api',
     tier: 1,
     siteUrl: 'https://www.superbid.net',
-    notes: 'API offer-query; exige searchType=opened e Origin. Teto de 10 mil por consulta. Via Chromium headless desde 22/09 (Cloudflare bloqueia fetch cru).',
+    notes: 'API offer-query; exige searchType=opened e Origin. Teto de 10 mil por consulta. Via Chromium headless desde 22/09 (Cloudflare bloqueia fetch cru). Suporte tenant para MGR Leilões (storeId 16061).',
   },
-  async collect({ limit, assetTypes }): Promise<CollectResult> {
-    const lots: CanonicalLot[] = [];
-    let fetched = 0;
-    let skipped = 0;
-    let status = 0;
-    const pageSize = 500;
-
-    // Uma fatia por productType: cada uma cabe folgada na janela de 10.000
-    // do índice, e assim nenhuma categoria fica de fora por construção.
-    const querIm = !assetTypes || assetTypes.includes('imovel');
-    const querVe = !assetTypes || assetTypes.includes('veiculo');
-    const tipos = [...(querVe ? TIPOS_VEICULO : []), ...(querIm ? [13] : [])];
-
-    // Cota POR TIPO, não global: com limite único, o tipo 10 (5.819 carros e
-    // motos) consumia a cota inteira e caminhão, ônibus e máquina nunca eram
-    // alcançados — as categorias que o filtro existe justamente para trazer.
-    const cota = Math.max(pageSize, Math.ceil(limit / Math.max(1, tipos.length)));
-
-    await comNavegador(ENTRADA, async (page) => {
-      for (const tipo of tipos) {
-        const antes = lots.length;
-        for (let pagina = 1; lots.length - antes < cota && lots.length < limit; pagina++) {
-          const url =
-            `${BASE}?portalId=[2,15]&searchType=opened&orderBy=id:asc&pageSize=${pageSize}&pageNumber=${pagina}` +
-            `&locale=pt_BR&filter=${encodeURIComponent(`product.productType.id:${tipo};`)}`;
-          const { status: st, data } = await getJsonViaNavegador<any>(page, url, HEADERS);
-          status = st;
-          const offers: any[] = data?.offers ?? [];
-          if (!offers.length) break;
-          fetched += offers.length;
-          for (const o of offers) {
-            const mapped = mapOffer(o);
-            if (mapped) lots.push(mapped);
-            else skipped++;
-          }
-          if (offers.length < pageSize) break;
-        }
-        if (lots.length >= limit) break;
-      }
-    });
-    return { lots: lots.slice(0, limit), fetched, skipped, httpStatus: status };
+  async collect(opts: CollectOptions): Promise<CollectResult> {
+    return collectSuperbid(opts);
   },
 };
