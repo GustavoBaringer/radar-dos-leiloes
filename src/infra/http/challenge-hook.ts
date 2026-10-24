@@ -10,6 +10,7 @@ const ACTION_BY_ROUTE: Readonly<Record<string, ChallengeAction>> = {
 export function createChallengeHook(service: Pick<ReturnType<typeof createChallengeService>, 'verify'>) {
   return async (request: any, reply: any): Promise<void> => {
     if (request.method !== 'POST') return;
+    if (request.url?.split('?')[0] === '/api/webhooks/asaas') return;
     const action = ACTION_BY_ROUTE[`${request.method} ${request.routeOptions?.url ?? request.routerPath ?? ''}`];
     if (!action) return;
     const body = request.body;

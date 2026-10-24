@@ -7,7 +7,7 @@ import { configureHttpPlatform, radarHttpAdapterOptions } from '../infra/http/ht
 import type { RadarHttpOptions } from '../infra/http/http-contracts.js';
 import { RADAR_HTTP_CONTEXT } from '../application/modules/http-platform/http-platform.module.js';
 import { RealtimeService } from '../application/services/realtime/realtime.service.js';
-import { configureWebsocketTransport } from '../infra/websocket/websocket-transport.adapter.js';
+import { configureWebsocketTransport, registerWebsocketPlugin } from '../infra/websocket/websocket-transport.adapter.js';
 import { configureSwagger } from '../infra/config/swagger.js';
 import { configurePageAssets } from '../infra/web/page-assets.js';
 
@@ -20,6 +20,7 @@ export async function createRadarApplication(options: RadarHttpOptions): Promise
   try {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
     const context = app.get(RADAR_HTTP_CONTEXT);
+    await registerWebsocketPlugin(app);
     await configureHttpPlatform(app, context);
     await configurePageAssets(app, context);
     await configureWebsocketTransport(app, context, app.get(RealtimeService));

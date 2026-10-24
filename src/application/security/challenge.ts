@@ -19,7 +19,7 @@ export type ChallengeVerification = { ok: true } | { ok: false; kind: 'invalid' 
 export type ChallengeFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export function loadChallengeConfig(env: NodeJS.ProcessEnv): ChallengeConfig {
-  const production = env.NODE_ENV === 'production';
+  const production = env.NODE_ENV === 'production' || env.RADAR_PUBLIC_DEPLOYMENT === 'true';
   const modeValue = env.ANTIBOT_CHALLENGE_MODE;
   if (production && modeValue === undefined) throw new Error('ANTIBOT_CHALLENGE_MODE obrigatório em produção');
   const mode = modeValue === undefined ? 'off' : modeValue;

@@ -2,7 +2,7 @@ import type { AntibotConfig, Mode, Policy, PolicyId } from '../../domain/securit
 
 export const POLICY_IDS: readonly PolicyId[] = [
   'search', 'detail', 'mapa', 'vitrine', 'cadastro', 'espera', 'login',
-  'wsIp', 'wsAccount', 'write',
+  'wsIp', 'wsAccount', 'write', 'webhook',
 ];
 
 export const POLICIES: Readonly<Record<PolicyId, Policy>> = {
@@ -16,6 +16,7 @@ export const POLICIES: Readonly<Record<PolicyId, Policy>> = {
   wsIp: { id: 'wsIp', identity: 'ip', max: 30, windowMs: 60_000 },
   wsAccount: { id: 'wsAccount', identity: 'account', max: 10, windowMs: 60_000 },
   write: { id: 'write', identity: 'account', max: 30, windowMs: 60_000 },
+  webhook: { id: 'webhook', identity: 'ip', max: 60, windowMs: 60_000 },
 };
 
 const strictInteger = (env: NodeJS.ProcessEnv, name: string, fallback: number, min: number, max: number): number => {
@@ -41,7 +42,7 @@ const validRedisUrl = (value: string): string => {
 };
 
 export function loadAntibotConfig(env: NodeJS.ProcessEnv): AntibotConfig {
-  const production = env.NODE_ENV === 'production';
+  const production = env.NODE_ENV === 'production' || env.RADAR_PUBLIC_DEPLOYMENT === 'true';
   const modeValue = env.ANTIBOT_MODE;
   if (production && modeValue === undefined) throw new Error('ANTIBOT_MODE obrigatório em produção');
   const mode: Mode = modeValue === undefined ? 'off' : modeValue === 'off' || modeValue === 'shadow' || modeValue === 'enforce'

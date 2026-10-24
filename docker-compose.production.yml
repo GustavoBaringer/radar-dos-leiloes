@@ -56,7 +56,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks: [backend]
+    networks: [backend, egress]
     mem_limit: 1g
     healthcheck:
       test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '\"UP\"' <&3"]
@@ -74,6 +74,7 @@ services:
       - sh
       - -ec
       - |
+        case "$${NODE_ENV}" in production|staging) ;; *) echo "NODE_ENV must be production or staging" >&2; exit 1 ;; esac
         : "$${APP_SESSAO_SEGREDO:?Set APP_SESSAO_SEGREDO}"
         : "$${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET}"
         : "$${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY}"
@@ -82,9 +83,11 @@ services:
         : "$${ANTIBOT_TRUST_PROXY_CIDRS:?Set verified narrow proxy CIDRs}"
         : "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:?Confirm origin protection before start}"
         [ "$${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED}" = 1 ] || { echo "ANTIBOT_ORIGIN_PROTECTION_CONFIRMED must be 1" >&2; exit 1; }
-        exec node dist/src/server.js
+        exec node dist/src/main.js
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${RADAR_RUNTIME_ENV:-production}
+      NEST_BOOTSTRAP: "1"
+      RADAR_PUBLIC_DEPLOYMENT: "true"
       BIND_HOST: 0.0.0.0
       PORT: "4500"
       SITE_URL: https://radardeleiloes.app.br
@@ -104,6 +107,28 @@ services:
       ENCERRAR_POR_AUSENCIA: "0"
       ANTIBOT_TRUST_PROXY_CIDRS: ${ANTIBOT_TRUST_PROXY_CIDRS:-}
       ANTIBOT_ORIGIN_PROTECTION_CONFIRMED: ${ANTIBOT_ORIGIN_PROTECTION_CONFIRMED:-}
+      ONBOARDING_ENABLED: ${ONBOARDING_ENABLED:-false}
+      ONBOARDING_MODE: ${ONBOARDING_MODE:-}
+      ONBOARDING_ALLOWED_EMAILS: ${ONBOARDING_ALLOWED_EMAILS:-}
+      ONBOARDING_PUBLIC_BASE_URL: ${ONBOARDING_PUBLIC_BASE_URL:-}
+      ONBOARDING_TOKEN_KEY: ${ONBOARDING_TOKEN_KEY:-}
+      ONBOARDING_ACTIVATION_ENABLED: ${ONBOARDING_ACTIVATION_ENABLED:-false}
+      ONBOARDING_ACTIVATION_HTTP_ENABLED: ${ONBOARDING_ACTIVATION_HTTP_ENABLED:-false}
+      ONBOARDING_DISPATCH_ENABLED: ${ONBOARDING_DISPATCH_ENABLED:-false}
+      ONBOARDING_CHECKOUT_EMAIL_ENABLED: ${ONBOARDING_CHECKOUT_EMAIL_ENABLED:-false}
+      ONBOARDING_ACTIVATION_EMAIL_ENABLED: ${ONBOARDING_ACTIVATION_EMAIL_ENABLED:-false}
+      ASAAS_CHECKOUT_ENABLED: ${ASAAS_CHECKOUT_ENABLED:-false}
+      ASAAS_WEBHOOK_ENABLED: ${ASAAS_WEBHOOK_ENABLED:-false}
+      ASAAS_PAYMENT_PROCESSING_ENABLED: ${ASAAS_PAYMENT_PROCESSING_ENABLED:-false}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      ASAAS_CHECKOUT_RETURN_URL: ${ASAAS_CHECKOUT_RETURN_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       postgres:
         condition: service_healthy

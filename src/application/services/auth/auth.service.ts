@@ -41,6 +41,14 @@ export class AuthService {
     return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${origin.secure ? '; Secure' : ''}`;
   }
   private async redis() { return this.context.redisResource('login'); }
+  private async admissionPlan(sub: string): Promise<AuthPlan | null> {
+    try {
+      if (await this.context.allowsOnboardingSubject(sub)) return null;
+      return { status: 403, contentType: 'text/html; charset=utf-8', body: this.loginHtml('', '<div class="erro">Acesso indisponível.</div>') };
+    } catch {
+      return { status: 503, contentType: 'text/html; charset=utf-8', body: this.loginHtml('', '<div class="erro">Serviço temporariamente indisponível.</div>') };
+    }
+  }
   private async attempts(ip: string): Promise<number> {
     try { return Number(await (await this.redis()).get(`login:falha:${ip}`)) || 0; } catch { return 0; }
   }
@@ -70,6 +78,8 @@ export class AuthService {
       await this.failedAttempt(ip);
       return { status: 401, contentType: 'text/html; charset=utf-8', body: this.loginHtml(body.de, '<div class="erro">Usuário ou senha incorretos.</div>') };
     }
+    const admission = await this.admissionPlan(identity.sub);
+    if (admission) return admission;
     const user = await this.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
     const token = criarToken(user.papel, user.sub);
     try { await (await this.redis()).del(`login:falha:${ip}`); } catch { /* Counter cleanup is best effort. */ }
@@ -80,7 +90,7 @@ export class AuthService {
     if (!this.context.oidc.oidcLigado()) return { status: 404, body: { erro: 'OIDC desligado' } };
     try {
       const { url, cookie } = await this.context.oidc.iniciarLogin(this.callbackUri(origin), this.destination(query.de));
-      return { status: 302, location: url, cookies: [`${this.context.oidc.COOKIE_PKCE}=${cookie}; Path=/auth; HttpOnly; SameSite=Lax; Max-Age=600`] };
+      return { status: 302, location: url, cookies: [`${this.context.oidc.COOKIE_PKCE}=${cookie}; Path=/auth; HttpOnly; SameSite=Lax; Max-Age=600${origin.protocol === 'https' && origin.secure ? '; Secure' : ''}`] };
     } catch {
       return { status: 502, contentType: 'text/html; charset=utf-8', body: this.loginHtml('', '<div class="erro">Provedor de identidade indisponível. Use usuário e senha.</div>') };
     }
@@ -99,11 +109,13 @@ export class AuthService {
         code: String(query.code ?? ''), state: String(query.state ?? ''), cookiePkce: input.cookie,
         redirectUri: this.callbackUri(input.origin),
       });
+      const admission = await this.admissionPlan(identity.sub);
+      if (admission) return admission;
       const user = await this.identity.garantirUsuario({ sub: identity.sub, email: identity.email, nome: identity.nome, papel: identity.papel });
       return {
         status: 302, location: this.destination(identity.destino),
         cookies: [this.sessionCookie(input.origin, criarToken(user.papel, user.sub)),
-          `${this.context.oidc.COOKIE_PKCE}=; Path=/auth; Max-Age=0`,
+           `${this.context.oidc.COOKIE_PKCE}=; Path=/auth; Max-Age=0${input.origin.protocol === 'https' && input.origin.secure ? '; Secure' : ''}`,
           `${this.context.oidc.COOKIE_OIDC}=1; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 3600}`],
       };
     } catch (error) {

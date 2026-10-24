@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AccountsController } from '../../controllers/accounts/accounts.controller.js';
+import { OnboardingController } from '../../controllers/onboarding/onboarding.controller.js';
 import { AccountsRepository, ACCOUNTS_QUERY } from '../../../infra/database/repositories/accounts.repository.js';
+import { OnboardingRepository } from '../../../infra/database/repositories/onboarding.repository.js';
+import { PrismaService } from '../../../infra/database/prisma.service.js';
 import { RadarHttpContext } from '../../../infra/http/radar-http-context.js';
 import { ALERT_CANDIDATE_COUNTER, ACCOUNTS_RUNTIME_CONFIG, AccountsService, REGISTRATION_THROTTLE } from '../../services/accounts/accounts.service.js';
+import { loadOnboardingRuntimeConfig, ONBOARDING_SERVICE, OnboardingService } from '../../services/onboarding/onboarding.service.js';
 
 @Module({
-  controllers: [AccountsController],
+  controllers: [AccountsController, OnboardingController],
   providers: [
     AccountsRepository,
     { provide: ACCOUNTS_QUERY, inject: [RadarHttpContext], useFactory: (context: RadarHttpContext) => context.data.query },
@@ -25,6 +29,11 @@ import { ALERT_CANDIDATE_COUNTER, ACCOUNTS_RUNTIME_CONFIG, AccountsService, REGI
         return n > 10;
       },
     }) },
+    { provide: ONBOARDING_SERVICE, inject: [RadarHttpContext], useFactory: (context: RadarHttpContext) => {
+      const config = loadOnboardingRuntimeConfig(context.env);
+      if (!config) return null;
+      return new OnboardingService(new OnboardingRepository(PrismaService.getInstance()), config);
+    } },
     AccountsService,
   ],
 })

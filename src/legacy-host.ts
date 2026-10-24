@@ -39,6 +39,8 @@ import type { Identidade } from './domain/identity/identidade.js';
 import type { CollectJob } from './queue/runtime.js';
 
 export interface LegacyHostDependencies {
+  onboardingAdmission?: Pick<import('./infra/database/repositories/onboarding-admission.repository.js').OnboardingAdmissionRepository,
+    'readPolicy' | 'assertInitialized' | 'allowsSubject' | 'allowsUser'>;
   data: {
     query: typeof DbQuery;
     searchLots: typeof import('./core/repo.js').searchLots;
@@ -93,6 +95,20 @@ export interface LegacyHostOptions {
 }
 
 export async function createLegacyHost({ env, paths, dependencies, excludeLegacyBrands = false }: LegacyHostOptions) {
+  if (env.ONBOARDING_ACTIVATION_ENABLED === 'true') {
+    throw new Error('Activation staging requires the native HTTP host.');
+  }
+  if (dependencies.onboardingAdmission) {
+    const policy = await dependencies.onboardingAdmission.readPolicy();
+    if (policy.mode === 'staging') {
+      const issuer = (env.OIDC_ISSUER ?? '').trim();
+      if (env.NODE_ENV !== 'staging' || env.ONBOARDING_MODE !== 'staging' || !issuer) {
+        throw new Error('Staging admission is unsupported by the legacy host.');
+      }
+      await dependencies.onboardingAdmission.assertInitialized(issuer);
+      throw new Error('Staging admission requires the native HTTP host.');
+    }
+  }
   if (!dependencies.oidc.oidcLigado()) throw new Error('OIDC obrigatório para iniciar o host.');
   const proxyTrustConfig = loadProxyTrustConfig(env);
   const app = Fastify({ logger: false, trustProxy: proxyTrustConfig.trustedProxyCidrs.length ? [...proxyTrustConfig.trustedProxyCidrs] : false, bodyLimit: 16 * 1024 });

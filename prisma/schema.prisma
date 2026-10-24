@@ -100,6 +100,179 @@ model cadastros {
   atualizado_em           DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([status])
+  onboarding_registration onboarding_registrations?
+  checkout_attempts      onboarding_checkout_attempts[]
+  initial_payment        onboarding_initial_payments?
+  activation_intent      onboarding_activation_intents?
+  identity_binding       onboarding_identity_bindings?
+}
+
+model onboarding_registrations {
+  cadastro_id       String      @id @db.Uuid
+  email_verified_at DateTime?   @db.Timestamptz(6)
+  created_at        DateTime    @default(now()) @db.Timestamptz(6)
+  cadastro          cadastros   @relation(fields: [cadastro_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_registrations_cadastro_fk")
+  invitations       onboarding_invitations[]
+}
+
+model onboarding_invitations {
+  id                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cadastro_id          String                    @db.Uuid
+  purpose              String
+  token_hash           String                    @unique(map: "onboarding_invitations_token_hash_uk")
+  expires_at           DateTime                  @db.Timestamptz(6)
+  consumed_at          DateTime?                 @db.Timestamptz(6)
+  created_at           DateTime                  @default(now()) @db.Timestamptz(6)
+  registration         onboarding_registrations @relation(fields: [cadastro_id], references: [cadastro_id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_invitations_registration_fk")
+  email_outbox         onboarding_email_outbox?
+  checkout_attempt     onboarding_checkout_attempts?
+  activation_for       onboarding_initial_payments? @relation("onboarding_initial_payment_activation")
+  activation_intent    onboarding_activation_intents?
+
+  @@index([cadastro_id, purpose], map: "onboarding_invitations_registration_purpose_idx")
+  @@index([expires_at], map: "onboarding_invitations_expires_idx")
+}
+
+model onboarding_email_outbox {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invitation_id    String                 @unique(map: "onboarding_email_outbox_invitation_uk") @db.Uuid
+  encrypted_token  Bytes?                 @db.ByteA
+  available_at     DateTime               @default(now()) @db.Timestamptz(6)
+  attempts         Int                    @default(0)
+  lease_until      DateTime?              @db.Timestamptz(6)
+  sent_at          DateTime?              @db.Timestamptz(6)
+  last_error_sanitized String?
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  invitation       onboarding_invitations @relation(fields: [invitation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_email_outbox_invitation_fk")
+
+  @@index([available_at, lease_until], map: "onboarding_email_outbox_pending_idx", where: raw("(sent_at IS NULL)"))
+}
+
+model onboarding_checkout_attempts {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cadastro_id      String                 @db.Uuid
+  invitation_id    String                 @unique(map: "onboarding_checkout_attempts_invitation_uk") @db.Uuid
+  state            String                 @default("requested")
+  price_cents      Int                    @default(6990)
+  currency         String                 @default("BRL")
+  billing_type     String                 @default("CREDIT_CARD")
+  cycle            String                 @default("MONTHLY")
+  next_due_date    DateTime               @default(dbgenerated("((CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo'::text))::date")) @db.Date
+  checkout_id      String?                @unique(map: "onboarding_checkout_attempts_checkout_id_uk")
+  checkout_link    String?
+  email_sent_at    DateTime?               @db.Timestamptz(6)
+  email_attempts   Int                     @default(0)
+  email_lease_until DateTime?               @db.Timestamptz(6)
+  email_next_attempt_at DateTime?           @db.Timestamptz(6)
+  email_error_code String?
+  safe_error_code  String?
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime               @default(now()) @db.Timestamptz(6)
+  reconciliation_lease_token String?      @db.Uuid
+  reconciliation_lease_until DateTime?    @db.Timestamptz(6)
+  cadastro         cadastros              @relation(fields: [cadastro_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_checkout_attempts_cadastro_fk")
+  invitation       onboarding_invitations @relation(fields: [invitation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_checkout_attempts_invitation_fk")
+  initial_payment  onboarding_initial_payments?
+
+  @@unique([cadastro_id], map: "onboarding_checkout_attempts_active_cadastro_uk", where: raw("(state = ANY (ARRAY['requested'::text, 'dispatching'::text, 'created'::text, 'unknown'::text]))"))
+  @@index([state, created_at], map: "onboarding_checkout_attempts_queue_idx", where: raw("(state = 'requested'::text)"))
+  @@index([email_next_attempt_at, email_lease_until], map: "onboarding_checkout_attempts_email_pending_idx", where: raw("((state = 'created'::text) AND (checkout_link IS NOT NULL) AND (email_sent_at IS NULL))"))
+}
+
+/// Inbox for authenticated Asaas events; resource contains only the parser projection.
+model asaas_webhook_inbox {
+  event_id                    String                       @id
+  event_type                  String
+  provider_created_at         String?
+  kind                        String
+  resource                    Json?                        @db.JsonB
+  status                      String
+  reason                      String?
+  received_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  reconciliation_attempted_at DateTime?                    @db.Timestamptz(6)
+  initial_payment             onboarding_initial_payments?
+  paid_access_payment         onboarding_paid_access_payments? @relation("paid_access_source_event")
+
+  @@index([status, received_at], map: "asaas_webhook_inbox_pending_idx")
+  @@index([kind, reconciliation_attempted_at, received_at], map: "asaas_webhook_inbox_queue_idx", where: raw("((kind = 'payment'::text) AND (status = ANY (ARRAY['pending_reconciliation'::text, 'reconciled'::text])))"))
+}
+
+model onboarding_initial_payments {
+  id                       String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cadastro_id              String                      @unique(map: "onboarding_initial_payments_cadastro_uk") @db.Uuid
+  checkout_attempt_id      String                      @unique(map: "onboarding_initial_payments_attempt_uk") @db.Uuid
+  source_event_id          String                      @unique(map: "onboarding_initial_payments_event_uk")
+  payment_id               String                      @unique(map: "onboarding_initial_payments_payment_uk")
+  subscription_id          String                      @unique(map: "onboarding_initial_payments_subscription_uk")
+  checkout_id              String
+  payment_status           String
+  payment_value            Decimal                     @db.Decimal(10, 2)
+  payment_billing_type      String
+  subscription_status       String
+  subscription_value       Decimal                     @db.Decimal(10, 2)
+  cycle                    String
+  state                    String                      @default("paid_pending_activation")
+  observed_at              DateTime                    @db.Timestamptz(6)
+  activation_invitation_id String?                     @unique(map: "onboarding_initial_payments_activation_invitation_uk") @db.Uuid
+  cadastro                 cadastros                   @relation(fields: [cadastro_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_initial_payments_cadastro_fk")
+  checkout_attempt         onboarding_checkout_attempts @relation(fields: [checkout_attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_initial_payments_attempt_fk")
+  source_event             asaas_webhook_inbox         @relation(fields: [source_event_id], references: [event_id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_initial_payments_event_fk")
+  activation_invitation    onboarding_invitations?     @relation("onboarding_initial_payment_activation", fields: [activation_invitation_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "onboarding_initial_payments_activation_invitation_fk")
+  paid_access_payments     onboarding_paid_access_payments[]
+
+  @@index([state, observed_at], map: "onboarding_initial_payments_state_idx")
+}
+
+model onboarding_paid_access_payments {
+  payment_id         String                      @id
+  initial_payment_id String                      @db.Uuid
+  source_event_id    String                      @unique
+  confirmed_date     DateTime                    @db.Date
+  starts_at          DateTime                    @db.Timestamptz(6)
+  ends_at            DateTime                    @db.Timestamptz(6)
+  created_at         DateTime                    @default(now()) @db.Timestamptz(6)
+  initial_payment    onboarding_initial_payments @relation(fields: [initial_payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_paid_access_payments_initial_fk")
+  source_event       asaas_webhook_inbox         @relation("paid_access_source_event", fields: [source_event_id], references: [event_id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_paid_access_payments_event_fk")
+
+  @@index([initial_payment_id, confirmed_date, payment_id], map: "onboarding_paid_access_payments_owner_date_idx")
+  @@map("onboarding_paid_access_payments")
+}
+
+model onboarding_activation_intents {
+  id                String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invitation_id     String                       @unique(map: "onboarding_activation_intents_invitation_uk") @db.Uuid
+  cadastro_id       String                       @unique(map: "onboarding_activation_intents_cadastro_uk") @db.Uuid
+  state_hash        String                       @unique(map: "onboarding_activation_intents_state_hash_uk")
+  browser_token_hash String                      @unique(map: "onboarding_activation_intents_browser_hash_uk")
+  nonce             String
+  encrypted_verifier Bytes?                      @db.ByteA
+  issuer            String
+  client_id         String
+  redirect_uri      String
+  expires_at        DateTime                     @db.Timestamptz(6)
+  state             String                       @default("pending")
+  consumed_at       DateTime?                    @db.Timestamptz(6)
+  created_at        DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                     @default(now()) @db.Timestamptz(6)
+  cadastro          cadastros                    @relation(fields: [cadastro_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_activation_intents_cadastro_fk")
+  invitation        onboarding_invitations       @relation(fields: [invitation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_activation_intents_invitation_fk")
+  binding           onboarding_identity_bindings?
+
+  @@index([state, expires_at], map: "onboarding_activation_intents_state_idx")
+}
+
+model onboarding_identity_bindings {
+  cadastro_id String                        @id @db.Uuid
+  user_id     BigInt                        @unique(map: "onboarding_identity_bindings_user_uk")
+  intent_id   String                        @unique(map: "onboarding_identity_bindings_intent_uk") @db.Uuid
+  issuer      String
+  subject     String
+  bound_at    DateTime                      @default(now()) @db.Timestamptz(6)
+  cadastro    cadastros                     @relation(fields: [cadastro_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_identity_bindings_cadastro_fk")
+  user        users                         @relation(fields: [user_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "onboarding_identity_bindings_user_fk")
+  intent      onboarding_activation_intents @relation(fields: [intent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "onboarding_identity_bindings_intent_fk")
+
+  @@unique([issuer, subject], map: "onboarding_identity_bindings_issuer_subject_uk")
 }
 
 model collection_runs {
@@ -318,4 +491,26 @@ model users {
   favorites          favorites[]
   push_subscriptions push_subscriptions[]
   saved_searches     saved_searches[]
+  onboarding_identity_bindings onboarding_identity_bindings[]
+  onboarding_staging_baseline onboarding_staging_baseline_users?
+}
+
+model onboarding_staging_admission {
+  id                 Int                               @id
+  issuer             String
+  initialized_at     DateTime                          @default(now()) @db.Timestamptz(6)
+  baseline_initialized Boolean                         @default(true)
+  baseline_users     onboarding_staging_baseline_users[]
+
+  @@map("onboarding_staging_admission")
+}
+
+model onboarding_staging_baseline_users {
+  user_id    BigInt                      @id
+  policy_id  Int                         @default(1)
+  marked_at  DateTime                    @default(now()) @db.Timestamptz(6)
+  user       users                       @relation(fields: [user_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  policy     onboarding_staging_admission @relation(fields: [policy_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("onboarding_staging_baseline_users")
 }

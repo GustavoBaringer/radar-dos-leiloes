@@ -1,0 +1,46 @@
+:root {
+  color-scheme: dark;
+  --canvas: #05070f;
+  --panel: #0b1120;
+  --hairline: #1e2941;
+  --brand: #2f6bff;
+  --brand-bright: #5b8cff;
+  --signal: #22d3ee;
+  --ink: #eef3ff;
+  --muted: #93a4c4;
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  font: 15px/1.6 var(--font);
+  background: radial-gradient(52rem 32rem at 8% 0%, rgba(47,107,255,.2), transparent 62%),
+    radial-gradient(44rem 30rem at 96% 30%, rgba(34,211,238,.1), transparent 64%), var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+.pagina { width: min(100% - 32px, 1080px); min-height: 100vh; margin: 0 auto; display: flex; flex-direction: column; }
+.marca { display: flex; align-items: center; gap: 10px; padding: 28px 0; font: 600 16px/1.2 var(--display); }
+.marca-icone { position: relative; display: grid; width: 36px; height: 36px; place-items: center; overflow: hidden; border: 1px solid rgba(47,107,255,.4); border-radius: 12px; background: linear-gradient(150deg,#13224a,#070c18); }
+.marca-icone::before { position: absolute; inset: 0; content: ""; background: conic-gradient(from 0deg,rgba(47,107,255,.55),transparent 38%); }
+.marca-icone span { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 10px 2px rgba(34,211,238,.8); }
+.convite { width: min(100%, 520px); margin: auto; padding: clamp(26px, 6vw, 42px); border: 1px solid var(--hairline); border-radius: 20px; background: linear-gradient(155deg, rgba(13,23,48,.96), rgba(7,11,22,.96)); box-shadow: 0 32px 80px -48px rgba(47,107,255,.7); }
+.rotulo { margin: 0 0 12px; color: var(--signal); font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+h1 { margin: 0; font: 600 clamp(27px, 6vw, 38px)/1.12 var(--display); letter-spacing: -.03em; }
+.introducao { margin: 16px 0 0; color: #c3cde0; font-size: 16px; }
+.aviso { margin: 24px 0; padding: 13px 15px; border: 1px solid rgba(251,191,36,.25); border-radius: 10px; background: rgba(251,191,36,.07); color: #e8d8a8; font-size: 13px; }
+.botao { width: 100%; min-height: 50px; padding: 12px 18px; border: 0; border-radius: 999px; color: #fff; background: linear-gradient(110deg,var(--brand),var(--signal)); box-shadow: 0 10px 30px -10px rgba(47,107,255,.7); font: 700 15px/1.3 var(--font); cursor: pointer; transition: filter .15s, transform .15s; }
+.botao:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.botao:focus-visible, a:focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
+.botao:disabled { cursor: not-allowed; filter: saturate(.55); opacity: .65; box-shadow: none; }
+.estado { min-height: 1.6em; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+.estado[data-tipo="sucesso"] { color: #6ee7b7; }
+.retorno { margin: 24px 0 0; text-align: center; }
+.retorno a { color: var(--brand-bright); text-decoration: underline; text-underline-offset: 3px; }
+footer { padding: 28px 0; color: #6f809f; font-size: 12px; text-align: center; }
+@media (max-width: 480px) { .pagina { width: min(100% - 24px, 1080px); } .marca { padding: 20px 0; } .convite { border-radius: 16px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

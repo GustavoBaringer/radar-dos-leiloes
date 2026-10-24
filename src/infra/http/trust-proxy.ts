@@ -84,7 +84,7 @@ export function loadProxyTrustConfig(env: NodeJS.ProcessEnv): ProxyTrustConfig {
   if (entries.length > 20) throw new Error('ANTIBOT_TRUST_PROXY_CIDRS aceita no máximo 20 entradas');
   const cidrs = [...new Set(entries)];
   const confirmed = env.ANTIBOT_ORIGIN_PROTECTION_CONFIRMED === '1';
-  if (env.NODE_ENV === 'production' && cidrs.length > 0 && !confirmed) {
+  if ((env.NODE_ENV === 'production' || env.RADAR_PUBLIC_DEPLOYMENT === 'true') && cidrs.length > 0 && !confirmed) {
     throw new Error('Trust proxy em produção exige ANTIBOT_ORIGIN_PROTECTION_CONFIRMED=1');
   }
   return {

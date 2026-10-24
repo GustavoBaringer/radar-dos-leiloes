@@ -9,6 +9,7 @@ import { PagesModule } from './application/modules/pages/pages.module.js';
 import { PlatformModule } from './application/modules/platform/platform.module.js';
 import { MediaModule } from './application/modules/media/media.module.js';
 import { RealtimeModule } from './application/modules/realtime/realtime.module.js';
+import { BillingModule } from './application/modules/billing/billing.module.js';
 
 @Module({ imports: [HealthModule] })
 export class AppModule {
@@ -17,7 +18,7 @@ export class AppModule {
       module: AppModule,
       imports: [
         HttpPlatformModule.forRoot(options), AuthModule, AccountsModule, CatalogModule,
-        PagesModule, PlatformModule, MediaModule.forRoot(), RealtimeModule,
+        PagesModule, PlatformModule, MediaModule.forRoot(), RealtimeModule, BillingModule,
       ],
     };
   }

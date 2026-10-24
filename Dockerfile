@@ -30,6 +30,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=backend-build --chown=node:node /app/dist ./dist
+COPY --from=backend-build --chown=node:node /app/prisma ./prisma
+COPY --from=backend-build --chown=node:node /app/prisma.config.ts ./prisma.config.ts
 COPY --from=busca-build --chown=node:node /app/app-busca/dist ./app-busca/dist
 COPY --from=busca-build --chown=node:node /app/app-busca/node_modules ./app-busca/node_modules
 COPY db ./dist/db

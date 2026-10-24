@@ -92,6 +92,54 @@ export class RadarHttpContext {
 
   setReadAdmission(admit: () => import('../../application/security/resource-limits.js').ResourceLease | null): void { this.readAdmission = admit; }
 
+  async assertOnboardingAdmission(): Promise<void> {
+    const activationEnabled = this.env.ONBOARDING_ACTIVATION_ENABLED === 'true';
+    if (activationEnabled && (this.env.NODE_ENV !== 'staging' || this.env.ONBOARDING_MODE !== 'staging')) {
+      throw new Error('Onboarding activation is restricted to staging.');
+    }
+    const admission = this.dependencies.onboardingAdmission;
+    if (!admission) {
+      if (activationEnabled) throw new Error('Staging admission policy is unavailable.');
+      return;
+    }
+    const policy = await admission.readPolicy();
+    if (policy.mode === 'legacy') {
+      if (activationEnabled) throw new Error('Staging admission baseline is not initialized.');
+      return;
+    }
+    if (this.env.NODE_ENV !== 'staging' || this.env.ONBOARDING_MODE !== 'staging') {
+      throw new Error('Staging admission policy requires the staging host.');
+    }
+    const issuer = (this.env.OIDC_ISSUER ?? '').trim();
+    if (!issuer) throw new Error('Staging admission issuer is not configured.');
+    await admission.assertInitialized(issuer);
+  }
+
+  async allowsOnboardingSubject(sub?: string | null): Promise<boolean> {
+    const activationEnabled = this.env.ONBOARDING_ACTIVATION_ENABLED === 'true';
+    if (activationEnabled && (this.env.NODE_ENV !== 'staging' || this.env.ONBOARDING_MODE !== 'staging')) {
+      throw new Error('Onboarding activation is restricted to staging.');
+    }
+    const admission = this.dependencies.onboardingAdmission;
+    if (!admission) {
+      if (activationEnabled) throw new Error('Staging admission policy is unavailable.');
+      return true;
+    }
+    const policy = await admission.readPolicy();
+    if (policy.mode === 'legacy') {
+      if (activationEnabled) throw new Error('Staging admission baseline is not initialized.');
+      return true;
+    }
+    if (this.env.NODE_ENV !== 'staging' || this.env.ONBOARDING_MODE !== 'staging') {
+      throw new Error('Staging admission policy requires the staging host.');
+    }
+    const issuer = (this.env.OIDC_ISSUER ?? '').trim();
+    if (!issuer) throw new Error('Staging admission issuer is not configured.');
+    await admission.assertInitialized(issuer);
+    if (typeof sub !== 'string' || !sub.trim()) return false;
+    return admission.allowsSubject(sub, issuer);
+  }
+
   async redisResource(kind: 'login' | 'signup' | 'subscriber' | 'ws'): Promise<ReturnType<RadarHttpOptions['dependencies']['runtime']['makeRedis']>> {
     if (this.closing) throw new Error('HTTP resources are closed.');
     let pending = this.redisClients.get(kind);

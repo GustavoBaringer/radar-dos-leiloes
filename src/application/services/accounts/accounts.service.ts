@@ -7,6 +7,8 @@ import { toPublicAlert, toPublicFavorite, toPublicHit } from '../../../domain/lo
 import { celularValido, documento, emailValido } from '../../../domain/identity/cadastro.js';
 import { BoundedInputError, paginateRows, parsePagination, safePositiveId, ValidateAlertInput } from '../../../domain/search/request-bounds.js';
 import { AccountsRepository } from '../../../infra/database/repositories/accounts.repository.js';
+import { ONBOARDING_SERVICE } from '../onboarding/onboarding.service.js';
+import type { OnboardingService } from '../onboarding/onboarding.service.js';
 
 export const REGISTRATION_THROTTLE = 'REGISTRATION_THROTTLE';
 export const ALERT_CANDIDATE_COUNTER = 'ALERT_CANDIDATE_COUNTER';
@@ -23,7 +25,7 @@ export interface AccountsRuntimeConfig {
 }
 
 export class AccountsServiceError extends Error {
-  constructor(readonly statusCode: 400 | 401 | 404 | 429, message: string, readonly field?: string) {
+  constructor(readonly statusCode: 400 | 401 | 404 | 429 | 503, message: string, readonly field?: string) {
     super(message);
     this.name = 'AccountsServiceError';
   }
@@ -52,6 +54,7 @@ export class AccountsService {
     @Inject(REGISTRATION_THROTTLE) private readonly throttle: RegistrationThrottle,
     @Inject(ALERT_CANDIDATE_COUNTER) private readonly countCandidates: AlertCandidateCounter,
     @Inject(ACCOUNTS_RUNTIME_CONFIG) private readonly runtime: AccountsRuntimeConfig,
+    @Inject(ONBOARDING_SERVICE) private readonly onboarding: OnboardingService | null = null,
   ) {}
 
   async me(actorInput: AccountActor, context: { oidc: boolean; saiuEmDev: boolean }) {
@@ -251,6 +254,7 @@ export class AccountsService {
         if (await this.throttle.consume(ip)) throw new AccountsServiceError(429, 'Muitas tentativas. Tente novamente em alguns minutos.');
       } catch (error) {
         if (error instanceof AccountsServiceError) throw error;
+        if (this.onboarding) throw new AccountsServiceError(503, 'Cadastro temporariamente indisponível.');
         // The legacy registration path is fail-open when Redis is unavailable.
       }
     }
@@ -266,6 +270,18 @@ export class AccountsService {
     const consentimento = texto(body.consentimento, 2000);
     const versao = texto(body.consentimentoVersao, 40);
     if (!consentimento || !versao) throw new AccountsServiceError(400, 'É preciso aceitar os termos para continuar.', 'consentimento');
+    if (this.onboarding) {
+      await this.onboarding.createInvitationForValidatedRegistration({
+        nome, documento: doc.digitos, tipoDocumento: doc.tipo, email, celular,
+        versao, consentimento, ip: ip || null, marketing: body.marketing === true,
+        origem: texto(body.origem, 40) || null,
+      });
+      return {
+        ok: true as const,
+        proximoPasso: 'email' as const,
+        mensagem: 'Se elegível, você receberá instruções por email.',
+      };
+    }
     await this.repository.register({
       nome, documento: doc.digitos, tipoDocumento: doc.tipo, email, celular,
       versao, consentimento, ip: ip || null, marketing: body.marketing === true,

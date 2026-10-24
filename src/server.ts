@@ -30,6 +30,9 @@ function closeTlsServer(server: import('node:https').Server): Promise<void> {
 
 async function start() {
   try {
+    if (process.env.ONBOARDING_ACTIVATION_ENABLED === 'true') {
+      throw new Error('Activation staging requires the native HTTP host.');
+    }
     const { resolveHttpPaths } = await import('./bootstrap/paths.js');
     ensureStartupActive();
     const paths = resolveHttpPaths(import.meta.url);

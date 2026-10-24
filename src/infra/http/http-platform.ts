@@ -16,6 +16,12 @@ export function createRadarHttpContext(options: RadarHttpOptions): RadarHttpCont
 
 const FREE = new Set(['/login', '/api/login', '/auth/login', '/auth/callback', '/auth/logout', '/sw.js', '/nopic.svg', '/nopic-imovel.svg', '/ca.crt', '/login-hero.jpg', '/api/security-config', '/challenge.js', '/challenge.css', '/landing-antibot.js', '/landing-antibot.html']);
 const PUBLIC = new Set(['/', '/robots.txt', '/sitemap.xml', '/api/vitrine', '/api/espera', '/api/cadastro', '/api/security-config', '/api/img', '/landing.css', '/landing.js', '/challenge.js', '/challenge.css', '/landing-antibot.js', '/landing-antibot.html', '/cartao.js', '/cartao.css', '/slug.js', '/nopic.svg', '/nopic-imovel.svg', '/mapa-lotes.jpg']);
+const ONBOARDING_PUBLIC_GET = new Set(['/onboarding/convite', '/onboarding-invitation.css', '/onboarding-invitation.js']);
+const ONBOARDING_CONFIRM = '/api/onboarding/invitations/confirm';
+const ACTIVATION_START = '/api/onboarding/activation/start';
+const ACTIVATION_CALLBACK = '/auth/onboarding/callback';
+const ACTIVATION_PUBLIC_GET = new Set(['/onboarding/ativacao', '/onboarding-activation.js', '/onboarding-activation.css']);
+const ACTIVATION_ROUTES = new Set([...ACTIVATION_PUBLIC_GET, ACTIVATION_START, ACTIVATION_CALLBACK]);
 const crawler = /facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|Slack-ImgProxy|TelegramBot|Googlebot|bingbot|Applebot/i;
 const PAGE_404 = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
@@ -37,7 +43,7 @@ export class RadarHttpExceptionFilter implements ExceptionFilter {
     const statusCode = exception instanceof HttpException
       ? exception.getStatus()
       : (exception as { statusCode?: number } | null)?.statusCode;
-    const status = statusCode && statusCode >= 400 && statusCode < 500 ? statusCode : 500;
+    const status = statusCode && statusCode >= 400 && statusCode < 600 ? statusCode : 500;
     const message = exception instanceof HttpException ? exception.message : (exception as Error)?.message ?? 'erro';
     if (htmlRequest(req)) {
       reply.code(status).type('text/html; charset=utf-8').send(PAGE_404);
@@ -51,6 +57,7 @@ export class RadarHttpExceptionFilter implements ExceptionFilter {
 
 /** Configure shared transport/security on Nest's existing Fastify instance before app.init(). */
 export async function configureHttpPlatform(app: NestFastifyApplication, context: RadarHttpContext): Promise<void> {
+  await context.assertOnboardingAdmission();
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
   loadProxyTrustConfig(context.env);
   if (fastify.initialConfig.bodyLimit !== 16 * 1024) throw new Error('FastifyAdapter must be created with radarHttpAdapterOptions(env).');
@@ -58,8 +65,12 @@ export async function configureHttpPlatform(app: NestFastifyApplication, context
   await fastify.register(fastifyStatic, { root: context.paths.webRoot, prefix: '/', index: false });
   app.useGlobalFilters(new RadarHttpExceptionFilter());
   fastify.addHook('onSend', async (req, reply, payload) => {
+    const path = req.url.split('?')[0]!;
+    const activationSensitive = ACTIVATION_ROUTES.has(path);
+    const onboardingSensitive = path === '/onboarding/convite' || path === ONBOARDING_CONFIRM || activationSensitive;
     const challengeOrigins = loadChallengeConfig(context.env).mode === 'enforce' ? ' https://challenges.cloudflare.com' : '';
-    const csp = [
+    const csp = activationSensitive ? "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'"
+      : onboardingSensitive ? "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'" : [
       "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'", "img-src 'self' data: blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
       `script-src 'self' 'unsafe-inline'${challengeOrigins}`,
@@ -67,9 +78,9 @@ export async function configureHttpPlatform(app: NestFastifyApplication, context
       `connect-src 'self' ws: wss:${challengeOrigins}`,
     ].join('; ');
     reply.header('x-content-type-options', 'nosniff').header('x-frame-options', 'SAMEORIGIN')
-      .header('referrer-policy', 'strict-origin-when-cross-origin')
+      .header('referrer-policy', onboardingSensitive ? 'no-referrer' : 'strict-origin-when-cross-origin')
       .header('content-security-policy', csp);
-    if (req.url.startsWith('/api/') || req.url === '/ws') reply.header('cache-control', 'no-store');
+    if (onboardingSensitive || req.url.startsWith('/api/') || req.url === '/ws') reply.header('cache-control', 'no-store');
     return payload;
   });
 
@@ -90,6 +101,25 @@ export async function configureHttpPlatform(app: NestFastifyApplication, context
   fastify.addHook('onRequest', async (req, reply) => {
     const actorRequest = req as RadarHttpRequest;
     const path = req.url.split('?')[0]!;
+    if (path === '/api/webhooks/asaas' && req.method === 'POST') {
+      Object.assign(actorRequest, { eu: context.identity.ANONIMO, papel: 'comum' }); return;
+    }
+    if (path === ONBOARDING_CONFIRM && req.method !== 'POST') return reply.code(404).header('cache-control', 'no-store').send({ erro: 'não encontrado' });
+    if (ACTIVATION_ROUTES.has(path)) {
+      const enabled = context.env.ONBOARDING_ACTIVATION_HTTP_ENABLED === 'true';
+      const allowedMethod = (ACTIVATION_PUBLIC_GET.has(path) || path === ACTIVATION_CALLBACK)
+        ? req.method === 'GET' : path === ACTIVATION_START && req.method === 'POST';
+      if (!enabled || !allowedMethod) return reply.code(404).header('cache-control', 'no-store').send({ erro: 'não encontrado' });
+      Object.assign(actorRequest, { eu: context.identity.ANONIMO, papel: 'comum' });
+      return;
+    }
+    if (path === '/api/cadastro' && req.method === 'POST' && context.env.ONBOARDING_ENABLED === 'true') {
+      Object.assign(actorRequest, { eu: context.identity.ANONIMO, papel: 'comum' }); return;
+    }
+    if ((ONBOARDING_PUBLIC_GET.has(path) && req.method === 'GET')
+      || (path === ONBOARDING_CONFIRM && req.method === 'POST')) {
+      Object.assign(actorRequest, { eu: context.identity.ANONIMO, papel: 'comum' }); return;
+    }
     if (FREE.has(path)) return;
     const noSession = !/(?:^|;)\s*radar_sessao=/.test(String(req.headers.cookie ?? ''));
     if ((PUBLIC.has(path) || path.startsWith('/assets/')) && noSession && (req.method === 'GET' || path === '/api/espera' || path === '/api/cadastro')) {
@@ -101,6 +131,13 @@ export async function configureHttpPlatform(app: NestFastifyApplication, context
     const token = String(req.headers.cookie ?? '').split(';').map(part => part.trim().split('=')).find(([key]) => key === COOKIE)?.[1];
     const session = lerToken(token);
     if (session.valido && session.papel) {
+      let admitted: boolean;
+      try { admitted = await context.allowsOnboardingSubject(session.sub); }
+      catch { return reply.code(503).header('cache-control', 'no-store').send({ erro: 'temporariamente indisponível' }); }
+      if (!admitted) {
+        if (path.startsWith('/api/') || path === '/ws') return reply.code(401).header('cache-control', 'no-store').send({ error: 'unauthorized' });
+        return reply.code(302).header('location', '/login').send();
+      }
       const identity = session.sub ? await context.identity.identidadePorSub(session.sub) : await context.identity.usuarioDoPortao(session.papel);
       if (!identity) {
         if (path.startsWith('/api/') || path === '/ws') return reply.code(401).header('cache-control', 'no-store').send({ error: 'unauthorized' });

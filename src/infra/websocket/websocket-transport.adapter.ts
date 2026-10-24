@@ -25,13 +25,17 @@ class FastifyRealtimePeer {
 }
 
 /** WebSocket is the deliberate transport-only exception to native Nest HTTP routes. */
+export async function registerWebsocketPlugin(app: NestFastifyApplication): Promise<void> {
+  const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
+  await fastify.register(fastifyWebsocket, { options: { maxPayload: 64 * 1024 } });
+}
+
 export async function configureWebsocketTransport(
   app: NestFastifyApplication,
   _context: RadarHttpContext,
   service: RealtimeService,
 ): Promise<void> {
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
-  await fastify.register(fastifyWebsocket, { options: { maxPayload: 64 * 1024 } });
   fastify.get('/ws', {
     websocket: true,
     preHandler: async (request: WsRequest, reply: FastifyReply) => {

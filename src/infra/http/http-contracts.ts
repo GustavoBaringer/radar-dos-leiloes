@@ -2,6 +2,8 @@ import type { query as DbQuery } from '../../core/db.js';
 import type { Identidade } from '../../domain/identity/identidade.js';
 
 export interface RadarHttpDependencies {
+  onboardingAdmission?: Pick<import('../database/repositories/onboarding-admission.repository.js').OnboardingAdmissionRepository,
+    'readPolicy' | 'assertInitialized' | 'allowsSubject' | 'allowsUser'>;
   data: {
     query: typeof DbQuery;
     searchLots: typeof import('../../core/repo.js').searchLots;
@@ -22,6 +24,8 @@ export interface RadarHttpDependencies {
     oidcLigado: () => boolean;
     iniciarLogin: typeof import('../../infra/auth/oidc.adapter.js').iniciarLogin;
     concluirLogin: typeof import('../../infra/auth/oidc.adapter.js').concluirLogin;
+    prepareActivationAuthorization?: typeof import('../../infra/auth/oidc.adapter.js').prepareActivationAuthorization;
+    completeActivationAuthorization?: typeof import('../../infra/auth/oidc.adapter.js').completeActivationAuthorization;
     loginPorSenha: typeof import('../../infra/auth/oidc.adapter.js').loginPorSenha;
     urlDeLogout: typeof import('../../infra/auth/oidc.adapter.js').urlDeLogout;
     COOKIE_OIDC: string;
