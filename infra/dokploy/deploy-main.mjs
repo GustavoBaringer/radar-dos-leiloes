@@ -113,7 +113,10 @@ if (existsSync(dokployEnvPath)) {
 }
 const webEnv = new Map();
 for (const key of deployKeys) {
-  const value = dokployEnv.get(key) ?? process.env[key];
+  const savedValue = dokployEnv.get(key);
+  const value = key === 'ASAAS_API_KEY' && /^\\\$aact_hmlg_/.test(savedValue ?? '')
+    ? savedValue.replace(/\\\$/g, '$')
+    : savedValue ?? process.env[key];
   if (value !== undefined && value !== '') webEnv.set(key, value);
 }
 webEnv.set('NODE_ENV', 'staging');
