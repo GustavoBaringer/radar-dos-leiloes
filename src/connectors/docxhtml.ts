@@ -616,6 +616,18 @@ export const docxhtml: Connector = {
           ...(r.note ? { note: r.note } : {}),
         };
       }
+      if (tenant === 'centralsuldeleiloes.com.br') {
+        const r = await coletarCentral(limit);
+        return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched - r.lots.length), httpStatus: r.status };
+      }
+      if (tenant === 'cristianoescolaleiloes.com.br') {
+        const r = await coletarCristiano(limit);
+        return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched - r.lots.length), httpStatus: r.status };
+      }
+      if (tenant === 'arremate.lel.br') {
+        const r = await coletarArremate(limit);
+        return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched - r.lots.length), httpStatus: r.status };
+      }
       if (tenant === 'leiloariasmart.com.br') {
         const r = await coletarLeiloariaSmart(limit);
         return { lots: r.lots, fetched: r.fetched, skipped: Math.max(0, r.fetched - r.lots.length), httpStatus: r.status };
