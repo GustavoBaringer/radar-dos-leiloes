@@ -8,6 +8,48 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const runtime = process.env.RADAR_RUNTIME_DIR ?? '/etc/dokploy/radar-runtime/059af2b';
 const docker = (args, quiet = false) => execFileSync('docker', args, { encoding: 'utf8', stdio: quiet ? 'pipe' : 'inherit' });
 const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+function ensureRawWebEnv(block) {
+  const lines = block.split('\n');
+  const key = lines.findIndex(line => /^ {4}env_file:\s*$/.test(line));
+  if (key < 0) {
+    if (lines.some(line => /^ {4}env_file:/.test(line))) throw Error('Unsupported inline web env_file');
+    return block.replace(/(\n    networks:)/, '\n    env_file:\n    - path: web.env\n      format: raw$1');
+  }
+  let end = key + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (!line.trim()) { end++; continue; }
+    const indent = line.match(/^ */)[0].length;
+    if (indent > 4 || (indent === 4 && line.trimStart().startsWith('-'))) { end++; continue; }
+    break;
+  }
+  const entries = lines.slice(key + 1, end);
+  if (entries.some(line => line.includes('#') || (line.trim() && !/^ {4,8}(?:-|(?:path|format|required):)/.test(line)))
+    || /^ {4}#/.test(lines[end] ?? '')) {
+    throw Error('Unsupported web env_file layout');
+  }
+  for (let i = key + 1; i < end; i++) {
+    if (/web\.env/.test(lines[i]) && !/^ {4,6}- (?:path: )?web\.env$/.test(lines[i])) {
+      throw Error('Unsupported web.env entry');
+    }
+    if (/^ {4,6}- (?:path: )?web\.env$/.test(lines[i])) {
+      const indent = lines[i].match(/^ */)[0];
+      if (/path:/.test(lines[i])) {
+        let next = i + 1;
+        while (next < end && lines[next].match(/^ */)[0].length > indent.length && !/^\s*-/.test(lines[next])) next++;
+        const format = lines.findIndex((line, index) => index > i && index < next && /^\s*format\s*:/.test(line));
+        if (format >= 0) lines[format] = `${indent}  format: raw`;
+        else lines.splice(next, 0, `${indent}  format: raw`);
+      } else {
+        lines.splice(i, 1, `${indent}- path: web.env`, `${indent}  format: raw`);
+      }
+      return lines.join('\n');
+    }
+  }
+  const itemIndent = lines.slice(key + 1, end).find(line => /^\s*-\s/.test(line))?.match(/^ */)[0] ?? '    ';
+  lines.splice(end, 0, `${itemIndent}- path: web.env`, `${itemIndent}  format: raw`);
+  return lines.join('\n');
+}
 const revision = git('rev-parse', 'HEAD');
 if (!/^[a-f0-9]{40}$/.test(revision) || revision !== git('rev-parse', 'origin/main')) throw Error('Deploy requires the fetched main revision');
 const release = join(dirname(runtime), 'releases', revision);
@@ -79,7 +121,15 @@ webEnv.set('ONBOARDING_MODE', 'staging');
 webEnv.set('NEST_BOOTSTRAP', '1');
 webEnv.set('RADAR_PUBLIC_DEPLOYMENT', 'true');
 const webEnvFile = join(runtime, 'web.env');
-writeFileSync(webEnvFile, [...webEnv].map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
+const previousWebEnv = existsSync(webEnvFile) ? readFileSync(webEnvFile) : null;
+let webEnvWriteAttempted = false;
+const restoreWebEnv = () => {
+  if (!webEnvWriteAttempted) return;
+  if (previousWebEnv === null) {
+    if (existsSync(webEnvFile)) unlinkSync(webEnvFile);
+  } else writeFileSync(webEnvFile, previousWebEnv);
+  webEnvWriteAttempted = false;
+};
 const liveWeb = inspect('radar-stack-m9wohj-web-1');
 const envFile = join(release, 'candidate.env');
 const candidate = `radar-candidate-${revision.slice(0, 12)}`;
@@ -136,17 +186,34 @@ nextWeb = nextWeb.replace('exec node dist/src/server.js', 'exec node dist/src/ma
 nextWeb = nextWeb.replace(/(\n  web:\n[\s\S]*?)(?=\n  [A-Za-z0-9_-]+:\n|\n[A-Za-z]|$)/, block => {
   let web = block;
   for (const key of webEnv.keys()) web = web.replace(new RegExp(`\\n      ${key}: [^\\n]*`, 'g'), '');
-  if (!web.includes('web.env')) web = web.replace(/(\n    networks:)/, `\n    env_file:\n    - web.env$1`);
-  return web;
+  return ensureRawWebEnv(web);
 });
-if (!nextWeb.includes('- web.env')) throw Error('Web env_file injection failed');
+const webBlock = nextWeb.match(/\n  web:\n[\s\S]*?(?=\n  [A-Za-z0-9_-]+:\n|\n[A-Za-z]|$)/)?.[0] ?? '';
+if (!/^([ ]{4,6})- path: web\.env\n\1  format: raw$/m.test(webBlock)) throw Error('Raw web env_file injection failed');
 const nextWorker = beforeWorker.replace(/(\n    image:) [^\n]+/, `$1 ${workerId}`);
 if (!nextWorker.includes(`image: ${workerId}`)) throw Error('Worker image replacement failed');
+// Exercise the actual Compose parser before queue drain or live compose-file replacement.
+const preflightWebFile = join(runtime, `compose-preflight-${revision}.yml`);
+try {
+  webEnvWriteAttempted = true;
+  writeFileSync(webEnvFile, [...webEnv].map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
+  writeFileSync(preflightWebFile, nextWeb, { mode: 0o600 });
+  docker(['compose', '--env-file', join(runtime, 'production.env'), '-f', preflightWebFile, 'config', '--quiet'], true);
+  docker(['compose', '--env-file', join(runtime, 'production.env'), '-f', workerFile, 'config', '--quiet'], true);
+  if (existsSync(preflightWebFile)) unlinkSync(preflightWebFile);
+} catch {
+  try { if (existsSync(preflightWebFile)) unlinkSync(preflightWebFile); } catch {}
+  try { restoreWebEnv(); } catch {
+    throw new Error('Compose preflight failed; prior web environment could not be restored.');
+  }
+  throw new Error('Compose preflight or cleanup failed; deployment stopped before queue drain.');
+}
 const queuePrefix = 'import {Queue} from "bullmq";import {makeRedis} from "./dist/src/queue/runtime.js";import {collectQueue,refreshQueue,discoverQueue} from "./dist/src/queue/queues.js";const dailyQueue=new Queue("collect-daily-sites",{connection:makeRedis()});const queues=[collectQueue,refreshQueue,discoverQueue,dailyQueue];';
 const queues = code => docker(['exec', 'radar-worker', 'node', '--input-type=module', '-e', queuePrefix + code + ';process.exit(0)'], true);
-const pausedBefore = JSON.parse(queues('console.log(JSON.stringify(await Promise.all(queues.map(q=>q.isPaused()))))'));
+let pausedBefore;
 let activationStarted = false;
 try {
+  pausedBefore = JSON.parse(queues('console.log(JSON.stringify(await Promise.all(queues.map(q=>q.isPaused()))))'));
   queues('for(const q of queues)await q.pause()');
   for (let i = 0; i < 360; i++) {
     const active = JSON.parse(queues('console.log(JSON.stringify(await Promise.all(queues.map(q=>q.getActiveCount()))))'));
@@ -158,7 +225,6 @@ try {
   writeFileSync(join(release, 'web-before.log'), docker(['logs', 'radar-stack-m9wohj-web-1'], true), { mode: 0o600 });
   activationStarted = true;
   writeFileSync(webFile, nextWeb); writeFileSync(workerFile, nextWorker);
-  for (const file of [webFile, workerFile]) docker(['compose', '--env-file', join(runtime, 'production.env'), '-f', file, 'config', '--quiet']);
   compose('radar-stack-m9wohj', webFile, 'web');
   try { await health('radar-stack-m9wohj-web-1'); }
   catch (err) {
@@ -172,11 +238,12 @@ try {
   writeFileSync(join(release, 'deployment.json'), JSON.stringify({ revision, webId, workerId, deployedAt: new Date().toISOString(), healthy: true }, null, 2));
   console.log(`Published main ${revision}; web and worker healthy`);
 } catch (error) {
+  restoreWebEnv();
   if (activationStarted) {
     writeFileSync(webFile, beforeWeb); writeFileSync(workerFile, beforeWorker);
     compose('radar-stack-m9wohj', webFile, 'web'); compose('radar-workers', workerFile, 'worker');
   }
   throw error;
 } finally {
-  queues(`const before=${JSON.stringify(pausedBefore)};for(let i=0;i<queues.length;i++)if(!before[i])await queues[i].resume()`);
+  if (pausedBefore) queues(`const before=${JSON.stringify(pausedBefore)};for(let i=0;i<queues.length;i++)if(!before[i])await queues[i].resume()`);
 }
